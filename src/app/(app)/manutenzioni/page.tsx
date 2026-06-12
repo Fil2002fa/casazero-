@@ -25,10 +25,8 @@ type ItemRow = {
 export default async function ManutenzioniPage() {
   const profile = await requireProfile()
 
-  // Admin e super_admin vedono la vista amministratore
-  if (profile.role === 'admin' || profile.role === 'super_admin') {
-    redirect('/admin/manutenzioni')
-  }
+  if (profile.role === 'super_admin') redirect('/admin/residences')
+  if (profile.role === 'admin') redirect('/admin/manutenzioni')
 
   const supabase = await createClient()
 
