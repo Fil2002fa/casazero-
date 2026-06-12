@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+@theme {
+  /* Brand */
+  --color-brand-dark: #04342C;
+  --color-brand-medium: #0F6E56;
+  --color-brand-light: #E1F5EE;
+  --color-brand-accent: #9FE1CB;
+
+  /* Surface */
+  --color-background: #F4F3EF;
+  --color-surface: #FFFFFF;
+  --color-border: #E4E6E2;
+
+  /* Text */
+  --color-text-primary: #20302A;
+  --color-text-secondary: #6B7A74;
+
+  /* Semantici */
+  --color-semantic-red: #A32D2D;
+  --color-semantic-red-bg: #FCEBEB;
+  --color-semantic-amber: #854F0B;
+  --color-semantic-amber-bg: #FAEEDA;
+  --color-semantic-blue: #185FA5;
+  --color-semantic-blue-bg: #E6F1FB;
+
+  /* Tipografia */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* White-label CSS custom properties — override per costruttore */
+:root {
+  --wl-brand-dark: #04342C;
+  --wl-brand-medium: #0F6E56;
+}
+
+/* Safe area bottom nav per dispositivi con notch */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
