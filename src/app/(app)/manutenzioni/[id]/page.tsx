@@ -7,6 +7,7 @@ import { requireProfile } from '@/lib/auth'
 import { PriorityBadge } from '@/components/PriorityBadge'
 import { CompleteN2Form } from '@/components/CompleteN2Form'
 import { N3AdminActions } from '@/components/N3AdminActions'
+import { CommentsSection } from '@/components/CommentsSection'
 import type { MaintenancePriority, MaintenanceStatus } from '@/types/database'
 
 export const metadata: Metadata = { title: 'Dettaglio manutenzione' }
@@ -204,6 +205,11 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
             </div>
           </div>
         )}
+
+        {/* Commenti */}
+        <div className="bg-surface rounded-xl border border-border p-4">
+          <CommentsSection itemId={id} />
+        </div>
       </div>
     </div>
   )

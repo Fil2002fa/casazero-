@@ -64,3 +64,25 @@ export async function completeN2(
   revalidatePath(`/manutenzioni/${itemId}`)
   return { success: true }
 }
+
+export async function addComment(
+  formData: FormData
+): Promise<{ error?: string; success?: boolean }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non autenticato' }
+
+  const itemId = formData.get('itemId') as string
+  const body   = (formData.get('body') as string)?.trim()
+
+  if (!itemId || !body) return { error: 'Il commento non può essere vuoto' }
+
+  const { error } = await supabase
+    .from('comments')
+    .insert({ item_id: itemId, profile_id: user.id, body })
+
+  if (error) return { error: error.message }
+
+  revalidatePath(`/manutenzioni/${itemId}`)
+  return { success: true }
+}

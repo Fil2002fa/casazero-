@@ -89,7 +89,7 @@ BEGIN
     ) VALUES (
       v_template.id, v_residence_id, NULL,
       v_due,
-      CASE WHEN v_due < CURRENT_DATE THEN 'in_attesa' ELSE 'in_attesa' END
+      'in_attesa'::maintenance_status
     );
   END LOOP;
 
@@ -120,7 +120,7 @@ BEGIN
       ) VALUES (
         v_template.id, v_residence_id, v_unit_id,
         v_due,
-        'in_attesa'
+        'in_attesa'::maintenance_status
       );
     END LOOP;
   END LOOP;
