@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { takeChargeN3, completeN3 } from '@/app/(app)/admin/manutenzioni/actions'
+import { takeChargeN3, completeN3 } from '@/app/(dashboard)/admin/manutenzioni/actions'
 import type { MaintenanceStatus } from '@/types/database'
 
 interface Props {
