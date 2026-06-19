@@ -3,10 +3,14 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
-export function LoginForm({ invite }: { invite: string | null }) {
+export function LoginForm({ invite, error }: { invite: string | null; error: string | null }) {
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
-  const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null)
+  const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(
+    error === 'no_access'
+      ? { text: 'Per accedere serve un invito. Contatta il tuo costruttore.', ok: false }
+      : null
+  )
   const supabase = createClient()
 
   const nextPath = invite ? `/welcome/${invite}/accept` : '/'

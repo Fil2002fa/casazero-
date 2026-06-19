@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { Download, Paperclip } from 'lucide-react'
-import { createClient } from '@/lib/supabase/server'
+import { Download, Paperclip, FileDown } from 'lucide-react'
+import { createServiceClient } from '@/lib/supabase/admin'
 import { requireProfile } from '@/lib/auth'
 import type { MaintenancePriority } from '@/types/database'
 
@@ -25,16 +25,70 @@ type CompletionRow = {
 
 export default async function FascicoloPage({ searchParams }: { searchParams: SearchParams }) {
   const { scope = 'all' } = await searchParams
-  await requireProfile()
-  const supabase = await createClient()
+  const profile = await requireProfile()
+  const adminClient = createServiceClient()
 
-  // ── Conformità: N2+N3 items accessibili ─────────────────────────────────
-  const { data: rawItems } = await supabase
+  // ── Determina scope primario: usato sia per reportHref sia per conformità ──
+  // Scopo: schermo e PDF mostrano ESATTAMENTE lo stesso perimetro e gli stessi numeri.
+  // Definizione uniforme: scadute = status 'scaduta' (= dopo trigger czero_recalc_due).
+  let reportHref: string | null = null
+  let primaryResidenceId: string | null = null
+  let primaryUnitId: string | null = null
+
+  if (profile.role === 'client') {
+    const { data: mem } = await adminClient
+      .from('unit_members')
+      .select('unit_id, units(id, residence_id)')
+      .eq('profile_id', profile.id)
+      .is('ended_at', null)
+      .limit(1)
+      .single()
+    const unitRow = mem?.units as unknown as { id: string; residence_id: string } | null
+    if (unitRow) {
+      primaryUnitId      = unitRow.id
+      primaryResidenceId = unitRow.residence_id
+      reportHref = `/api/report?scope=unit&id=${primaryUnitId}`
+    }
+  } else if (profile.role === 'admin') {
+    const { data: assignment } = await adminClient
+      .from('admin_assignments')
+      .select('residence_id')
+      .eq('profile_id', profile.id)
+      .limit(1)
+      .single()
+    if (assignment) {
+      primaryResidenceId = assignment.residence_id
+      reportHref = `/api/report?scope=residence&id=${primaryResidenceId}`
+    }
+  } else if (profile.role === 'super_admin' && profile.builder_id) {
+    const { data: residence } = await adminClient
+      .from('residences')
+      .select('id')
+      .eq('builder_id', profile.builder_id)
+      .limit(1)
+      .single()
+    if (residence) {
+      primaryResidenceId = residence.id
+      reportHref = `/api/report?scope=residence&id=${primaryResidenceId}`
+    }
+  }
+
+  // ── Conformità: stesso scope del PDF ─────────────────────────────────────
+  type ItemMin = { status: string; priority: string | null; maintenance_templates: { priority: string } | null }
+
+  let itemsQuery = adminClient
     .from('maintenance_items')
-    .select('id, status, priority, maintenance_templates(priority)')
+    .select('status, priority, maintenance_templates(priority)')
     .neq('status', 'completata')
 
-  type ItemMin = { status: string; priority: string | null; maintenance_templates: { priority: string } | null }
+  if (primaryResidenceId) {
+    itemsQuery = itemsQuery.eq('residence_id', primaryResidenceId)
+    if (primaryUnitId) {
+      itemsQuery = itemsQuery.or(`unit_id.eq.${primaryUnitId},unit_id.is.null`)
+    }
+  }
+
+  const { data: rawItems } = await itemsQuery
   const allItems = (rawItems ?? []) as unknown as ItemMin[]
   const n2n3 = allItems.filter(i => {
     const p = i.priority ?? i.maintenance_templates?.priority
@@ -45,8 +99,10 @@ export default async function FascicoloPage({ searchParams }: { searchParams: Se
     ? Math.round(((n2n3.length - scaduteCount) / n2n3.length) * 100)
     : 100
 
-  // ── Completions ─────────────────────────────────────────────────────────
-  let completionsQuery = supabase
+  // ── Completions ──────────────────────────────────────────────────────────
+  // Usa adminClient per evitare dipendenza da RLS e applicare esplicitamente
+  // lo stesso perimetro usato per conformità e PDF (residence_id + unit_id).
+  let completionsQuery = adminClient
     .from('completions')
     .select(`
       id, completed_at, performed_by_name, notes, unit_id, residence_id,
@@ -58,8 +114,22 @@ export default async function FascicoloPage({ searchParams }: { searchParams: Se
     `)
     .order('completed_at', { ascending: false })
 
-  if (scope === 'unit')       completionsQuery = completionsQuery.not('unit_id', 'is', null)
-  if (scope === 'condominium') completionsQuery = completionsQuery.is('unit_id', null)
+  if (primaryResidenceId) {
+    completionsQuery = completionsQuery.eq('residence_id', primaryResidenceId)
+  }
+
+  if (scope === 'unit') {
+    // Tab "Unità": solo completions della propria unità (o di qualsiasi unità per admin)
+    completionsQuery = primaryUnitId
+      ? completionsQuery.eq('unit_id', primaryUnitId)
+      : completionsQuery.not('unit_id', 'is', null)
+  } else if (scope === 'condominium') {
+    completionsQuery = completionsQuery.is('unit_id', null)
+  } else if (primaryUnitId) {
+    // Tab "Tutti" per un client: la propria unità + parti condominiali
+    completionsQuery = completionsQuery.or(`unit_id.eq.${primaryUnitId},unit_id.is.null`)
+  }
+  // Tab "Tutti" per admin/super_admin: nessun filtro ulteriore (tutte le completions della residenza)
 
   const { data: rawCompletions } = await completionsQuery
   const completions = (rawCompletions ?? []) as unknown as CompletionRow[]
@@ -72,9 +142,21 @@ export default async function FascicoloPage({ searchParams }: { searchParams: Se
 
   return (
     <div className="p-6 space-y-6 pb-safe">
-      <header>
-        <h1 className="text-xl font-medium text-text-primary">Fascicolo</h1>
-        <p className="text-xs text-text-secondary mt-0.5">Registro permanente degli interventi</p>
+      <header className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-medium text-text-primary">Fascicolo</h1>
+          <p className="text-xs text-text-secondary mt-0.5">Registro permanente degli interventi</p>
+        </div>
+        {reportHref && (
+          <a
+            href={reportHref}
+            download
+            className="flex items-center gap-1.5 px-3 py-2 border border-brand-medium rounded-lg text-xs font-medium text-brand-dark flex-shrink-0"
+          >
+            <FileDown className="w-3.5 h-3.5" strokeWidth={1.8} />
+            Report PDF
+          </a>
+        )}
       </header>
 
       {/* Conformità */}

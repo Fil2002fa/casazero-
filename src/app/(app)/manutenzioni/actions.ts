@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/admin'
 
 export async function completeN2(
   formData: FormData
@@ -60,8 +61,30 @@ export async function completeN2(
     }
   }
 
+  // Aggiorna status e next_due_date — usa l'override di frequenza dell'item
+  // se presente, altrimenti cade sul default del template.
+  const admin = createServiceClient()
+  const { data: itemRow } = await admin
+    .from('maintenance_items')
+    .select('frequency_months, maintenance_templates(frequency_months)')
+    .eq('id', itemId)
+    .single()
+  type ItemFreq = { frequency_months: number | null; maintenance_templates: { frequency_months: number } | null }
+  const row = itemRow as unknown as ItemFreq | null
+  const freq = row?.frequency_months
+    ?? (row?.maintenance_templates as { frequency_months?: number } | null)?.frequency_months
+    ?? 12
+  const base = new Date(completedAt)
+  base.setMonth(base.getMonth() + freq)
+  const newDue = base.toISOString().split('T')[0]
+  await admin
+    .from('maintenance_items')
+    .update({ status: 'in_attesa', next_due_date: newDue })
+    .eq('id', itemId)
+
   revalidatePath('/manutenzioni')
   revalidatePath(`/manutenzioni/${itemId}`)
+  revalidatePath('/fascicolo')
   return { success: true }
 }
 

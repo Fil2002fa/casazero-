@@ -44,6 +44,7 @@ export async function middleware(request: NextRequest) {
   if (!user && !isPublicPath) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
+    url.search = ''
     return NextResponse.redirect(url)
   }
 

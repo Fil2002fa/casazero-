@@ -5,9 +5,15 @@ import Link from 'next/link'
 import { ChevronLeft, ChevronDown, ChevronUp } from 'lucide-react'
 import { createResidence } from './actions'
 
-const CATEGORIES = [
-  'Coperture', 'Ventilazione', 'Termico e clima', 'Elettrico',
-  'Fotovoltaico', 'Finiture e serramenti', 'Sicurezza in copertura', 'Scarichi e spurghi',
+const WIZARD_CATEGORIES = [
+  { label: 'Coperture e tetto',      value: 'Coperture'    },
+  { label: 'Ventilazione',           value: 'Ventilazione' },
+  { label: 'Termico e clima',        value: 'Termico'      },
+  { label: 'Elettrico',              value: 'Elettrico'    },
+  { label: 'Fotovoltaico',           value: 'Fotovoltaico' },
+  { label: 'Finiture e serramenti',  value: 'Finiture'     },
+  { label: 'Sicurezza in copertura', value: 'Sicurezza'    },
+  { label: 'Scarichi e spurghi',     value: 'Spurghi'      },
 ]
 
 export default function NewResidencePage() {
@@ -84,12 +90,12 @@ export default function NewResidencePage() {
                     Lascia vuoto per usare la data di consegna come base. La scadenza sarà calcolata
                     come <em>data base + frequenza template</em>.
                   </p>
-                  {CATEGORIES.map(cat => (
-                    <div key={cat} className="flex items-center gap-3">
-                      <label className="text-xs text-text-secondary w-40 flex-shrink-0">{cat}</label>
+                  {WIZARD_CATEGORIES.map(({ label, value }) => (
+                    <div key={value} className="flex items-center gap-3">
+                      <label className="text-xs text-text-secondary w-40 flex-shrink-0">{label}</label>
                       <input
                         type="date"
-                        name={`date_${cat}`}
+                        name={`date_${value}`}
                         className="flex-1 border border-border rounded-lg px-3 py-1.5 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
                       />
                     </div>

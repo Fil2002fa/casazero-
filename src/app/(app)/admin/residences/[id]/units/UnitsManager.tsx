@@ -21,10 +21,8 @@ export function UnitsManager({
   const [newUnitFloor, setNewUnitFloor] = useState('')
   const [showNewUnitForm, setShowNewUnitForm] = useState(false)
   const [localError, setLocalError] = useState<string | null>(null)
-  const [localUnits, setLocalUnits] = useState(units)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [expandedUnit, setExpandedUnit] = useState<string | null>(null)
-  const [inviteTokens, setInviteTokens] = useState<Record<string, string>>({}) // unitId → token
 
   function handleAddUnit() {
     if (!newUnitLabel.trim()) return
@@ -49,8 +47,7 @@ export function UnitsManager({
       const res = await createInvite(unitId, residenceId)
       if (res.error) {
         setLocalError(res.error)
-      } else if (res.token) {
-        setInviteTokens(prev => ({ ...prev, [unitId]: res.token! }))
+      } else {
         window.location.reload()
       }
     })
@@ -74,7 +71,7 @@ export function UnitsManager({
     <div className="space-y-4">
       {/* Aggiungi unità */}
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-text-primary">{localUnits.length} unità</p>
+        <p className="text-sm font-medium text-text-primary">{units.length} unità</p>
         <button
           onClick={() => setShowNewUnitForm(!showNewUnitForm)}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-dark text-white rounded-lg text-xs font-medium"

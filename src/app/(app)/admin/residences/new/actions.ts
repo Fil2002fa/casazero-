@@ -58,26 +58,34 @@ export async function createResidence(formData: FormData) {
     redirect(`/admin/residences/${residence.id}`)
   }
 
-  // Calcola next_due_date: usa override di categoria se presente, altrimenti delivery_date
-  function calcDue(category: string, freqMonths: number): string {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  // Calcola next_due_date e status iniziale.
+  // Se la data calcolata è già nel passato → 'scaduta', altrimenti 'in_attesa'.
+  // Il field name nel wizard è date_${category} con il valore esatto del template.
+  function calcDue(category: string, freqMonths: number): { date: string; status: 'in_attesa' | 'scaduta' } {
     const override = formData.get(`date_${category}`) as string | null
     const base = override?.trim() ? override.trim() : deliveryDate
     const d = new Date(base)
     d.setMonth(d.getMonth() + freqMonths)
-    return d.toISOString().split('T')[0]
+    return {
+      date: d.toISOString().split('T')[0],
+      status: d < today ? 'scaduta' : 'in_attesa',
+    }
   }
 
   // 4. Crea maintenance_items
   const itemInserts: object[] = []
   for (const tpl of templates) {
-    const nextDue = calcDue(tpl.category, tpl.frequency_months)
+    const { date: nextDue, status } = calcDue(tpl.category, tpl.frequency_months)
     if (tpl.scope === 'condominium') {
       itemInserts.push({
         template_id: tpl.id,
         residence_id: residence.id,
         unit_id: null,
         next_due_date: nextDue,
-        status: 'in_attesa',
+        status,
       })
     } else {
       for (const unit of (units ?? [])) {
@@ -86,7 +94,7 @@ export async function createResidence(formData: FormData) {
           residence_id: residence.id,
           unit_id: unit.id,
           next_due_date: nextDue,
-          status: 'in_attesa',
+          status,
         })
       }
     }

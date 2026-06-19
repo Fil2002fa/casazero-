@@ -76,6 +76,28 @@ export interface MaintenanceItem {
   updated_at: string
 }
 
+// Preferenze di notifica memorizzate in profiles.notification_prefs (JSONB).
+// email_maintenance_due non è incluso: è sempre true (invariante di business).
+export interface NotificationPrefs {
+  push_maintenance_due: boolean
+  push_reminders:       boolean
+  email_reminders:      boolean
+  push_n3_status:       boolean
+  email_n3_status:      boolean
+  push_new_document:    boolean
+  push_new_comment:     boolean
+}
+
+export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
+  push_maintenance_due: true,
+  push_reminders:       true,
+  email_reminders:      true,
+  push_n3_status:       true,
+  email_n3_status:      true,
+  push_new_document:    true,
+  push_new_comment:     true,
+}
+
 export interface Completion {
   id: string
   item_id: string
