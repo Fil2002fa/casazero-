@@ -402,8 +402,7 @@ function Toggle({
       role="switch"
       aria-checked={on}
       aria-disabled={locked || disabled}
-      disabled={disabled}
-      onClick={locked ? undefined : onToggle}
+      onClick={locked || disabled ? undefined : onToggle}
       className={`relative inline-flex w-9 h-5 rounded-full transition-colors flex-shrink-0 focus-visible:outline-none ${
         on ? 'bg-brand-dark' : 'bg-border'
       } ${
