@@ -3,10 +3,11 @@ import { createClient } from '@/lib/supabase/server'
 export interface WhitelabelBrand {
   brandDark: string
   logoUrl: string | null
+  builderName: string
 }
 
 export async function getWhitelabelBrand(): Promise<WhitelabelBrand> {
-  const DEFAULT: WhitelabelBrand = { brandDark: '#04342C', logoUrl: null }
+  const DEFAULT: WhitelabelBrand = { brandDark: '#04342C', logoUrl: null, builderName: 'CasaZero' }
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -22,12 +23,13 @@ export async function getWhitelabelBrand(): Promise<WhitelabelBrand> {
 
   const { data: builder } = await supabase
     .from('builders')
-    .select('primary_color, logo_url')
+    .select('primary_color, logo_url, name')
     .eq('id', profile.builder_id)
     .single()
 
   return {
     brandDark: builder?.primary_color ?? DEFAULT.brandDark,
     logoUrl: builder?.logo_url ?? null,
+    builderName: builder?.name ?? DEFAULT.builderName,
   }
 }

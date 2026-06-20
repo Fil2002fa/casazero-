@@ -16,7 +16,7 @@ type ResidenceRow = {
 }
 
 export default async function ResidencesPage() {
-  await requireRole(['super_admin'])
+  await requireRole(['super_admin'], '/admin/manutenzioni')
   const supabase = await createClient()
 
   const { data: residences } = await supabase

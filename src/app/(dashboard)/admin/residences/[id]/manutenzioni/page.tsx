@@ -28,7 +28,7 @@ type ItemRow = {
 
 export default async function ResidenceManutenzioniPage({ params }: { params: Params }) {
   const { id: residenceId } = await params
-  await requireRole(['super_admin'])
+  await requireRole(['super_admin'], '/admin/manutenzioni')
   const supabase = await createClient()
 
   const { data: residence } = await supabase

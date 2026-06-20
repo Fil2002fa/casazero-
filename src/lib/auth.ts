@@ -25,8 +25,8 @@ export async function requireProfile(): Promise<Profile> {
   return profile
 }
 
-export async function requireRole(roles: UserRole[]): Promise<Profile> {
+export async function requireRole(roles: UserRole[], fallbackPath = '/'): Promise<Profile> {
   const profile = await requireProfile()
-  if (!roles.includes(profile.role)) redirect('/')
+  if (!roles.includes(profile.role)) redirect(fallbackPath)
   return profile
 }

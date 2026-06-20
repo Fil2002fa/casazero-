@@ -3,15 +3,25 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Building2, Wrench, Settings } from 'lucide-react'
+import type { UserRole } from '@/types/database'
 
-const NAV_ITEMS = [
+const SUPER_ADMIN_ITEMS = [
   { href: '/admin/residences', icon: Building2, label: 'Residenze' },
   { href: '/admin/manutenzioni', icon: Wrench, label: 'Manutenzioni' },
   { href: '/admin/settings', icon: Settings, label: 'Impostazioni' },
 ] as const
 
-export default function AdminSidebar() {
+const ADMIN_ITEMS = [
+  { href: '/admin/manutenzioni', icon: Wrench, label: 'Manutenzioni' },
+] as const
+
+interface Props {
+  role: UserRole | string
+}
+
+export default function AdminSidebar({ role }: Props) {
   const pathname = usePathname()
+  const items = role === 'super_admin' ? SUPER_ADMIN_ITEMS : ADMIN_ITEMS
 
   return (
     <aside
@@ -19,7 +29,7 @@ export default function AdminSidebar() {
       style={{ backgroundColor: 'var(--wl-brand-dark, #04342C)' }}
     >
       <nav className="flex-1 p-3 pt-4 space-y-0.5" aria-label="Navigazione admin">
-        {NAV_ITEMS.map(({ href, icon: Icon, label }) => {
+        {items.map(({ href, icon: Icon, label }) => {
           const isActive = pathname === href || pathname.startsWith(href + '/')
           return (
             <Link
