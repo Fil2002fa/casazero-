@@ -2,6 +2,11 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import type { Profile, UserRole } from '@/types/database'
 
+export function homePathForRole(role: string | null | undefined): string {
+  if (role === 'admin' || role === 'super_admin') return '/admin'
+  return '/'
+}
+
 export async function getProfile(): Promise<Profile | null> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

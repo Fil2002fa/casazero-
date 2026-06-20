@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import type { CookieMethodsServer } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
+import { homePathForRole } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
@@ -61,7 +62,7 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      return NextResponse.redirect(`${origin}${next}`)
+      return NextResponse.redirect(`${origin}${homePathForRole(profile?.role)}`)
     }
   }
 
