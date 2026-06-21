@@ -12,7 +12,17 @@ type ResidenceRow = {
   address: string | null
   energy_class: string | null
   delivery_date: string | null
-  _count: { units: number; scadute: number; in_corso: number }
+  _count: { units: number; n2_scadute: number; n3_scadute: number; in_corso: number }
+}
+
+type ScaduteRow = {
+  id: string
+  priority: string | null
+  maintenance_templates: { priority: string } | null
+}
+
+function effPriority(i: ScaduteRow): string {
+  return i.priority ?? i.maintenance_templates?.priority ?? 'N2'
 }
 
 export default async function ResidencesPage() {
@@ -24,20 +34,32 @@ export default async function ResidencesPage() {
     .select('id, name, address, energy_class, delivery_date')
     .order('name')
 
-  // Per ogni residenza conta unità e manutenzioni urgenti
   const rows: ResidenceRow[] = await Promise.all(
     (residences ?? []).map(async (r) => {
-      const [{ count: unitCount }, { count: scaduteCount }, { count: inCorsoCount }] =
+      const [{ count: unitCount }, { data: scaduteData }, { count: inCorsoCount }] =
         await Promise.all([
           supabase.from('units').select('id', { count: 'exact', head: true }).eq('residence_id', r.id),
-          supabase.from('maintenance_items').select('id', { count: 'exact', head: true })
-            .eq('residence_id', r.id).eq('status', 'scaduta'),
+          // Fetch scadute con join template per calcolare priorità effettiva (item.priority può essere null)
+          supabase.from('maintenance_items')
+            .select('id, priority, maintenance_templates!inner(priority)')
+            .eq('residence_id', r.id)
+            .eq('status', 'scaduta'),
           supabase.from('maintenance_items').select('id', { count: 'exact', head: true })
             .eq('residence_id', r.id).eq('status', 'in_corso'),
         ])
+
+      const scadute = (scaduteData ?? []) as unknown as ScaduteRow[]
+      const n2Scadute = scadute.filter(i => effPriority(i) === 'N2').length
+      const n3Scadute = scadute.filter(i => effPriority(i) === 'N3').length
+
       return {
         ...r,
-        _count: { units: unitCount ?? 0, scadute: scaduteCount ?? 0, in_corso: inCorsoCount ?? 0 },
+        _count: {
+          units: unitCount ?? 0,
+          n2_scadute: n2Scadute,
+          n3_scadute: n3Scadute,
+          in_corso: inCorsoCount ?? 0,
+        },
       }
     })
   )
@@ -64,7 +86,7 @@ export default async function ResidencesPage() {
           Impostazioni white-label
         </Link>
         <Link href="/admin/manutenzioni" className="px-3 py-1.5 text-xs border border-border rounded-full text-text-secondary bg-surface">
-          Vista N3
+          Vista condominiale
         </Link>
       </div>
 
@@ -78,32 +100,36 @@ export default async function ResidencesPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {rows.map(r => (
-            <Link
-              key={r.id}
-              href={`/admin/residences/${r.id}`}
-              className="block bg-surface rounded-xl border border-border p-4 active:scale-[0.99] transition-transform"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <h2 className="text-sm font-medium text-text-primary truncate">{r.name}</h2>
-                  {r.address && <p className="text-xs text-text-secondary mt-0.5 truncate">{r.address}</p>}
-                </div>
-                {r._count.scadute > 0 && (
-                  <div className="flex items-center gap-1 text-semantic-red flex-shrink-0">
-                    <AlertTriangle className="w-3.5 h-3.5" strokeWidth={1.8} />
-                    <span className="text-xs font-medium">{r._count.scadute}</span>
+          {rows.map(r => {
+            const totalScadute = r._count.n2_scadute + r._count.n3_scadute
+            return (
+              <Link
+                key={r.id}
+                href={`/admin/residences/${r.id}`}
+                className="block bg-surface rounded-xl border border-border p-4 active:scale-[0.99] transition-transform"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-sm font-medium text-text-primary truncate">{r.name}</h2>
+                    {r.address && <p className="text-xs text-text-secondary mt-0.5 truncate">{r.address}</p>}
                   </div>
-                )}
-              </div>
-              <div className="flex gap-3 mt-3">
-                <Stat label="Unità" value={r._count.units} />
-                <Stat label="Scadute" value={r._count.scadute} alert={r._count.scadute > 0} />
-                <Stat label="In corso" value={r._count.in_corso} />
-                {r.energy_class && <Stat label="Classe" value={r.energy_class} />}
-              </div>
-            </Link>
-          ))}
+                  {totalScadute > 0 && (
+                    <div className="flex items-center gap-1 text-semantic-red flex-shrink-0">
+                      <AlertTriangle className="w-3.5 h-3.5" strokeWidth={1.8} />
+                      <span className="text-xs font-medium">{totalScadute}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex gap-3 mt-3">
+                  <Stat label="Unità" value={r._count.units} />
+                  <Stat label="A tuo carico" value={r._count.n2_scadute} alert={r._count.n2_scadute > 0} />
+                  <Stat label="Condominiali" value={r._count.n3_scadute} alert={r._count.n3_scadute > 0} />
+                  <Stat label="In corso" value={r._count.in_corso} />
+                  {r.energy_class && <Stat label="Classe" value={r.energy_class} />}
+                </div>
+              </Link>
+            )
+          })}
         </div>
       )}
     </div>
