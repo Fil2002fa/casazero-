@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { ChevronLeft, Home, Wrench, Users, Settings } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
+import { effPriority, ScaduteRow } from '@/lib/residence-stats'
 
 export const metadata: Metadata = { title: 'Residenza' }
 
@@ -22,12 +23,20 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
 
   if (!residence) notFound()
 
-  const [{ count: unitCount }, { count: scaduteCount }, { count: docCount }] = await Promise.all([
-    supabase.from('units').select('id', { count: 'exact', head: true }).eq('residence_id', id),
-    supabase.from('maintenance_items').select('id', { count: 'exact', head: true })
-      .eq('residence_id', id).eq('status', 'scaduta'),
-    supabase.from('documents').select('id', { count: 'exact', head: true }).eq('residence_id', id),
-  ])
+  const [{ count: unitCount }, { data: scaduteData }, { count: inCorsoCount }, { count: docCount }] =
+    await Promise.all([
+      supabase.from('units').select('id', { count: 'exact', head: true }).eq('residence_id', id),
+      supabase.from('maintenance_items')
+        .select('id, priority, maintenance_templates!inner(priority)')
+        .eq('residence_id', id).eq('status', 'scaduta'),
+      supabase.from('maintenance_items').select('id', { count: 'exact', head: true })
+        .eq('residence_id', id).eq('status', 'in_corso'),
+      supabase.from('documents').select('id', { count: 'exact', head: true }).eq('residence_id', id),
+    ])
+
+  const scadute = (scaduteData ?? []) as unknown as ScaduteRow[]
+  const n2Scadute = scadute.filter(i => effPriority(i) === 'N2').length
+  const n3Scadute = scadute.filter(i => effPriority(i) === 'N3').length
 
   const tabs = [
     { href: `/admin/residences/${id}/units`, icon: Users, label: 'Unità e inviti' },
@@ -51,10 +60,12 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
 
       <div className="p-4 space-y-4">
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-3">
-          <StatCard label="Unità" value={unitCount ?? 0} icon={<Home className="w-4 h-4" />} />
-          <StatCard label="Scadute" value={scaduteCount ?? 0} icon={<Wrench className="w-4 h-4" />} alert={(scaduteCount ?? 0) > 0} />
-          <StatCard label="Documenti" value={docCount ?? 0} icon={<Users className="w-4 h-4" />} />
+        <div className="grid grid-cols-5 gap-3">
+          <StatCard label="Unità"        value={unitCount ?? 0}    icon={<Home className="w-4 h-4" />} />
+          <StatCard label="A tuo carico" value={n2Scadute}         icon={<Wrench className="w-4 h-4" />} alert={n2Scadute > 0} />
+          <StatCard label="Condominiali" value={n3Scadute}         icon={<Wrench className="w-4 h-4" />} alert={n3Scadute > 0} />
+          <StatCard label="In corso"     value={inCorsoCount ?? 0} icon={<Wrench className="w-4 h-4" />} />
+          <StatCard label="Documenti"    value={docCount ?? 0}     icon={<Users className="w-4 h-4" />} />
         </div>
 
         {/* Dettagli */}

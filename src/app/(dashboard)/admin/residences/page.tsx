@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { Plus, Home, AlertTriangle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
+import { effPriority, ScaduteRow } from '@/lib/residence-stats'
 
 export const metadata: Metadata = { title: 'Residenze' }
 
@@ -13,16 +14,6 @@ type ResidenceRow = {
   energy_class: string | null
   delivery_date: string | null
   _count: { units: number; n2_scadute: number; n3_scadute: number; in_corso: number }
-}
-
-type ScaduteRow = {
-  id: string
-  priority: string | null
-  maintenance_templates: { priority: string } | null
-}
-
-function effPriority(i: ScaduteRow): string {
-  return i.priority ?? i.maintenance_templates?.priority ?? 'N2'
 }
 
 export default async function ResidencesPage() {
