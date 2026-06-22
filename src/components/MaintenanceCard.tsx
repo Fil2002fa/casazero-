@@ -11,9 +11,10 @@ interface Props {
   status: MaintenanceStatus
   nextDueDate: string | null
   scope: 'unit' | 'condominium'
+  href?: string
 }
 
-export function MaintenanceCard({ id, title, category, priority, status, nextDueDate, scope }: Props) {
+export function MaintenanceCard({ id, title, category, priority, status, nextDueDate, scope, href }: Props) {
   const isUrgent = status === 'scaduta'
   const isInProgress = status === 'in_corso'
 
@@ -28,7 +29,7 @@ export function MaintenanceCard({ id, title, category, priority, status, nextDue
     : null
 
   return (
-    <Link href={`/manutenzioni/${id}`} className="block">
+    <Link href={href ?? `/manutenzioni/${id}`} className="block">
       <div className={`bg-surface rounded-xl border border-border border-l-4 ${borderColor} p-4 flex items-center gap-3 active:scale-[0.98] transition-transform`}>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1 flex-wrap">

@@ -11,8 +11,25 @@ export async function takeChargeN3(
   itemId: string
 ): Promise<{ error?: string; success?: boolean }> {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non autenticato' }
 
-  // RLS verifica che l'admin abbia accesso alla residenza dell'item
+  const { data: profile } = await supabase
+    .from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') return { error: 'Azione non consentita' }
+
+  const { data: item } = await supabase
+    .from('maintenance_items').select('residence_id').eq('id', itemId).single()
+  if (!item) return { error: 'Manutenzione non trovata' }
+
+  const { data: assignment } = await supabase
+    .from('admin_assignments')
+    .select('id')
+    .eq('profile_id', user.id)
+    .eq('residence_id', item.residence_id)
+    .maybeSingle()
+  if (!assignment) return { error: 'Azione non consentita' }
+
   const { error } = await supabase
     .from('maintenance_items')
     .update({ status: 'in_corso' })
@@ -21,6 +38,7 @@ export async function takeChargeN3(
   if (error) return { error: error.message }
 
   revalidatePath('/admin/manutenzioni')
+  revalidatePath(`/admin/manutenzioni/${itemId}`)
   revalidatePath(`/manutenzioni/${itemId}`)
   return { success: true }
 }
@@ -32,23 +50,40 @@ export async function completeN3(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Non autenticato' }
 
-  const itemId         = formData.get('itemId') as string
-  const residenceId    = formData.get('residenceId') as string
-  const completedAt    = formData.get('completedAt') as string
-  const notes          = (formData.get('notes') as string) || null
+  const { data: profile } = await supabase
+    .from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') return { error: 'Azione non consentita' }
+
+  const itemId          = formData.get('itemId') as string
+  const formResidenceId = (formData.get('residenceId') as string) || null
+  const completedAt     = formData.get('completedAt') as string
+  const notes           = (formData.get('notes') as string) || null
   const performedByName = (formData.get('performedByName') as string) || null
-  const file           = formData.get('verbale') as File | null
+  const file            = formData.get('verbale') as File | null
 
-  if (!itemId || !residenceId || !completedAt) {
-    return { error: 'Dati obbligatori mancanti' }
-  }
+  if (!itemId || !completedAt) return { error: 'Dati obbligatori mancanti' }
 
-  // Ottieni titolo item per la notifica ai residenti
+  // Deriva residence e title dall'item lato server (non dal formData)
   const { data: item } = await supabase
     .from('maintenance_items')
-    .select('maintenance_templates(title)')
+    .select('residence_id, maintenance_templates(title)')
     .eq('id', itemId)
     .single()
+  if (!item) return { error: 'Manutenzione non trovata' }
+
+  const residenceId = item.residence_id
+
+  if (formResidenceId && formResidenceId !== residenceId) {
+    return { error: 'Azione non consentita' }
+  }
+
+  const { data: assignment } = await supabase
+    .from('admin_assignments')
+    .select('id')
+    .eq('profile_id', user.id)
+    .eq('residence_id', residenceId)
+    .maybeSingle()
+  if (!assignment) return { error: 'Azione non consentita' }
 
   const { data: completion, error } = await supabase
     .from('completions')
@@ -86,11 +121,12 @@ export async function completeN3(
     }
   }
 
-  // Notifica i residenti in background (fire and forget)
-  const title = (item?.maintenance_templates as { title?: string } | null)?.title ?? 'Manutenzione condominiale'
+  const title = (item.maintenance_templates as { title?: string } | null)?.title
+    ?? 'Manutenzione condominiale'
   notifyResidents(residenceId, itemId, title).catch(console.error)
 
   revalidatePath('/admin/manutenzioni')
+  revalidatePath(`/admin/manutenzioni/${itemId}`)
   revalidatePath('/manutenzioni')
   return { success: true }
 }

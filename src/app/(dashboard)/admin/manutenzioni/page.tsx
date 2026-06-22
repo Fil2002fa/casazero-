@@ -1,4 +1,6 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
+import { ChevronRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import { MaintenanceCard } from '@/components/MaintenanceCard'
@@ -95,6 +97,7 @@ export default async function AdminManutenzioniPage() {
               status={item.status}
               nextDueDate={item.next_due_date}
               scope="condominium"
+              href={`/admin/manutenzioni/${item.id}`}
             />
           ))}
         </Section>
@@ -124,26 +127,33 @@ function ItemCard({ item }: { item: ItemRow }) {
     : 'border-l-transparent'
 
   return (
-    <div className={`bg-surface rounded-xl border border-border border-l-4 ${borderColor} p-4 space-y-3`}>
-      <div>
-        <p className="text-xs text-text-secondary">{item.maintenance_templates?.category}</p>
-        <p className="text-sm font-medium text-text-primary">{item.maintenance_templates?.title ?? '—'}</p>
-        {item.residences?.name && (
-          <p className="text-xs text-text-secondary mt-0.5">{item.residences.name}</p>
-        )}
-        {formattedDue && (
-          <p className={`text-xs mt-1 font-medium ${
-            item.status === 'scaduta' ? 'text-semantic-red' : 'text-text-secondary'
-          }`}>
-            {item.status === 'scaduta' ? 'Scaduta il ' : 'Scadenza: '}{formattedDue}
-          </p>
-        )}
+    <div className={`bg-surface rounded-xl border border-border border-l-4 ${borderColor} overflow-hidden`}>
+      <Link href={`/admin/manutenzioni/${item.id}`} className="block p-4 pb-2">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-xs text-text-secondary">{item.maintenance_templates?.category}</p>
+            <p className="text-sm font-medium text-text-primary">{item.maintenance_templates?.title ?? '—'}</p>
+            {item.residences?.name && (
+              <p className="text-xs text-text-secondary mt-0.5">{item.residences.name}</p>
+            )}
+            {formattedDue && (
+              <p className={`text-xs mt-1 font-medium ${
+                item.status === 'scaduta' ? 'text-semantic-red' : 'text-text-secondary'
+              }`}>
+                {item.status === 'scaduta' ? 'Scaduta il ' : 'Scadenza: '}{formattedDue}
+              </p>
+            )}
+          </div>
+          <ChevronRight className="w-4 h-4 text-text-secondary flex-shrink-0 mt-0.5" strokeWidth={1.6} />
+        </div>
+      </Link>
+      <div className="px-4 pb-4">
+        <N3AdminActions
+          itemId={item.id}
+          residenceId={item.residence_id}
+          status={item.status}
+        />
       </div>
-      <N3AdminActions
-        itemId={item.id}
-        residenceId={item.residence_id}
-        status={item.status}
-      />
     </div>
   )
 }
