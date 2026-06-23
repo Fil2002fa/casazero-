@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { Plus, Trash2, Phone, Mail, Tag } from 'lucide-react'
 import { createSupplier, deleteSupplier } from './actions'
 
@@ -13,34 +14,90 @@ export function FornitoriManager({
   residenceId: string
   suppliers: Supplier[]
 }) {
-  const [pending, startTransition] = useTransition()
+  const router = useRouter()
+  const [addPending, startAddTransition] = useTransition()
+  const [deletePending, startDeleteTransition] = useTransition()
   const [showForm, setShowForm] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [addError, setAddError] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   function handleAdd(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    setError(null)
+    setAddError(null)
     const formData = new FormData(e.currentTarget)
-    startTransition(async () => {
+    startAddTransition(async () => {
       const res = await createSupplier(residenceId, formData)
-      if (res.error) setError(res.error)
+      if (res.error) setAddError(res.error)
       else {
         setShowForm(false)
-        window.location.reload()
+        router.refresh()
       }
     })
   }
 
-  function handleDelete(id: string) {
-    if (!confirm('Rimuovere questo fornitore?')) return
-    startTransition(async () => {
-      await deleteSupplier(id, residenceId)
-      window.location.reload()
+  function openDeleteModal(id: string) {
+    setConfirmDeleteId(id)
+    setDeleteError(null)
+  }
+
+  function closeDeleteModal() {
+    if (deletePending) return
+    setConfirmDeleteId(null)
+    setDeleteError(null)
+  }
+
+  function handleConfirmDelete() {
+    if (!confirmDeleteId) return
+    startDeleteTransition(async () => {
+      const res = await deleteSupplier(confirmDeleteId, residenceId)
+      if (res.error) {
+        const isFk = res.error.toLowerCase().includes('foreign key')
+          || res.error.toLowerCase().includes('violates')
+        setDeleteError(isFk
+          ? 'Impossibile rimuovere: fornitore collegato a manutenzioni esistenti.'
+          : res.error)
+      } else {
+        setConfirmDeleteId(null)
+        router.refresh()
+      }
     })
   }
 
   return (
     <div className="space-y-4">
+
+      {/* Modale conferma rimozione */}
+      {confirmDeleteId && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl border border-[#E4E6E2] p-5 max-w-sm w-full shadow-lg space-y-3">
+            <p className="text-sm font-medium text-[#20302A]">Rimuovere questo fornitore?</p>
+            <p className="text-xs text-text-secondary">L&apos;operazione non è reversibile.</p>
+            {deleteError && (
+              <p className="text-xs text-semantic-red bg-semantic-red-bg rounded-lg px-3 py-2">
+                {deleteError}
+              </p>
+            )}
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={closeDeleteModal}
+                disabled={deletePending}
+                className="flex-1 border border-[#E4E6E2] rounded-xl py-2.5 text-sm text-text-secondary disabled:opacity-50"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={deletePending}
+                className="flex-1 bg-[#04342C] text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-50"
+              >
+                {deletePending ? '…' : 'Rimuovi'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium text-text-primary">{suppliers.length} fornitore/i</p>
         <button
@@ -83,10 +140,10 @@ export function FornitoriManager({
               className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
             />
           </div>
-          {error && <p className="text-xs text-semantic-red">{error}</p>}
+          {addError && <p className="text-xs text-semantic-red">{addError}</p>}
           <div className="flex gap-2">
-            <button type="submit" disabled={pending} className="flex-1 py-2 bg-brand-dark text-white rounded-lg text-sm disabled:opacity-50">
-              {pending ? '…' : 'Salva'}
+            <button type="submit" disabled={addPending} className="flex-1 py-2 bg-brand-dark text-white rounded-lg text-sm disabled:opacity-50">
+              {addPending ? '…' : 'Salva'}
             </button>
             <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 border border-border rounded-lg text-sm text-text-secondary">
               Annulla
@@ -130,8 +187,8 @@ export function FornitoriManager({
                   )}
                 </div>
                 <button
-                  onClick={() => handleDelete(s.id)}
-                  disabled={pending}
+                  onClick={() => openDeleteModal(s.id)}
+                  disabled={deletePending}
                   className="p-1.5 text-text-secondary hover:text-semantic-red transition-colors"
                   title="Rimuovi"
                 >

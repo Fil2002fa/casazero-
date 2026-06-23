@@ -82,9 +82,32 @@ export async function updateMaintenanceItemConfig(
     return { error: 'Permessi insufficienti' }
   }
 
+  const updatePayload: Record<string, unknown> = { ...data }
+
+  // N1 (Consigliata) non può mai risultare scaduta per design.
+  // Al cambio di priorità verso N1: resetta status e ricalcola next_due_date.
+  if (data.priority === 'N1') {
+    let freq = data.frequency_months ?? null
+    if (!freq) {
+      const { data: itemRow } = await supabase
+        .from('maintenance_items')
+        .select('frequency_months, maintenance_templates(frequency_months)')
+        .eq('id', itemId)
+        .single()
+      const tpl = itemRow?.maintenance_templates as unknown as { frequency_months: number } | null
+      freq = itemRow?.frequency_months ?? tpl?.frequency_months ?? null
+    }
+    updatePayload.status = 'in_attesa'
+    if (freq) {
+      const nextDue = new Date()
+      nextDue.setMonth(nextDue.getMonth() + freq)
+      updatePayload.next_due_date = nextDue.toISOString().split('T')[0]
+    }
+  }
+
   const { error } = await supabase
     .from('maintenance_items')
-    .update(data)
+    .update(updatePayload)
     .eq('id', itemId)
 
   if (error) return { error: error.message }
