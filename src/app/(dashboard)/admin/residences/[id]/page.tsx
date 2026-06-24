@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ChevronLeft, Home, Wrench, Users, Settings } from 'lucide-react'
+import { ChevronLeft, Home, Wrench, Users, Settings, FileText } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import { effPriority, ScaduteRow } from '@/lib/residence-stats'
@@ -41,6 +41,7 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
   const tabs = [
     { href: `/admin/residences/${id}/units`, icon: Users, label: 'Unità e inviti' },
     { href: `/admin/residences/${id}/manutenzioni`, icon: Wrench, label: 'Manutenzioni' },
+    { href: `/admin/residences/${id}/documenti`, icon: FileText, label: 'Documenti' },
     { href: `/admin/residences/${id}/fornitori`, icon: Settings, label: 'Fornitori' },
   ]
 
@@ -65,7 +66,7 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
           <StatCard label="A tuo carico" value={n2Scadute}         icon={<Wrench className="w-4 h-4" />} alert={n2Scadute > 0} />
           <StatCard label="Condominiali" value={n3Scadute}         icon={<Wrench className="w-4 h-4" />} alert={n3Scadute > 0} />
           <StatCard label="In corso"     value={inCorsoCount ?? 0} icon={<Wrench className="w-4 h-4" />} />
-          <StatCard label="Documenti"    value={docCount ?? 0}     icon={<Users className="w-4 h-4" />} />
+          <StatCard label="Documenti"    value={docCount ?? 0}     icon={<FileText className="w-4 h-4" />} href={`/admin/residences/${id}/documenti`} />
         </div>
 
         {/* Dettagli */}
@@ -101,14 +102,15 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
   )
 }
 
-function StatCard({ label, value, icon, alert }: { label: string; value: number; icon: React.ReactNode; alert?: boolean }) {
-  return (
-    <div className={`rounded-xl p-3 text-center border ${alert ? 'bg-semantic-red-bg border-semantic-red/20' : 'bg-surface border-border'}`}>
+function StatCard({ label, value, icon, alert, href }: { label: string; value: number; icon: React.ReactNode; alert?: boolean; href?: string }) {
+  const inner = (
+    <div className={`rounded-xl p-3 text-center border transition-colors ${alert ? 'bg-semantic-red-bg border-semantic-red/20' : 'bg-surface border-border'} ${href ? 'hover:border-brand-medium cursor-pointer' : ''}`}>
       <div className={`flex justify-center mb-1 ${alert ? 'text-semantic-red' : 'text-text-secondary'}`}>{icon}</div>
       <p className={`text-xl font-medium ${alert ? 'text-semantic-red' : 'text-text-primary'}`}>{value}</p>
       <p className="text-[10px] text-text-secondary">{label}</p>
     </div>
   )
+  return href ? <Link href={href}>{inner}</Link> : inner
 }
 
 function Detail({ label, value }: { label: string; value: string }) {
