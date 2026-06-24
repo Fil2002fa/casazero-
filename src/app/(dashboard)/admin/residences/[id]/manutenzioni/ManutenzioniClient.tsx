@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { PriorityBadge } from '@/components/PriorityBadge'
 import { ItemConfigForm } from './ItemConfigForm'
 import type { MaintenancePriority, MaintenanceStatus } from '@/types/database'
+import { formatUnitLabel } from '@/lib/formatUnitLabel'
 
 export type ItemRow = {
   id: string
@@ -191,7 +192,7 @@ export function ManutenzioniClient({ residenceId, items, completions, suppliers 
                       </div>
                       <div className="flex gap-3 mt-1 flex-wrap">
                         {item.units && (
-                          <span className="text-xs text-text-secondary">{item.units.label}</span>
+                          <span className="text-xs text-text-secondary">{formatUnitLabel(item.units.label)}</span>
                         )}
                         <span className="text-xs text-brand-medium font-medium">
                           Completata il {dateStr}
@@ -241,7 +242,7 @@ export function ManutenzioniClient({ residenceId, items, completions, suppliers 
                           </div>
                           <div className="flex gap-3 mt-1 flex-wrap">
                             {item.units && (
-                              <span className="text-xs text-text-secondary">{item.units.label}</span>
+                              <span className="text-xs text-text-secondary">{formatUnitLabel(item.units.label)}</span>
                             )}
                             {effPriority === 'N1' ? (
                               <span className="text-xs text-semantic-blue">

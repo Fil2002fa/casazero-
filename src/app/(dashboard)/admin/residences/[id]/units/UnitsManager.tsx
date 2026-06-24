@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import { Plus, QrCode, Trash2, UserPlus, Copy, Check } from 'lucide-react'
 import { createUnit, createInvite, revokeInvite } from './actions'
 import Image from 'next/image'
+import { formatUnitLabel } from '@/lib/formatUnitLabel'
 
 type MemberRow = { profile_id: string; profiles: { full_name: string | null } | null }
 type InviteRow = { id: string; token: string; expires_at: string; used_at: string | null }
@@ -136,7 +137,7 @@ export function UnitsManager({
               className="w-full flex items-center justify-between p-4 text-left"
             >
               <div>
-                <p className="text-sm font-medium text-text-primary">{unit.label}</p>
+                <p className="text-sm font-medium text-text-primary">{formatUnitLabel(unit.label, unit.floor)}</p>
                 <p className="text-xs text-text-secondary mt-0.5">
                   {unit.floor ? `Piano ${unit.floor} · ` : ''}
                   {unit.members.length > 0

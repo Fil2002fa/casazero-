@@ -7,6 +7,7 @@ import { requireRole } from '@/lib/auth'
 import { PriorityBadge } from '@/components/PriorityBadge'
 import { N3AdminActions } from '@/components/N3AdminActions'
 import type { MaintenancePriority, MaintenanceStatus } from '@/types/database'
+import { formatUnitLabel } from '@/lib/formatUnitLabel'
 
 export const metadata: Metadata = { title: 'Dettaglio manutenzione' }
 
@@ -115,7 +116,7 @@ export default async function AdminItemDetailPage({ params }: { params: Params }
             <p className="text-sm font-medium text-text-primary">{item.residences.name}</p>
           )}
           <p className="text-xs text-text-secondary mt-0.5">
-            {item.units?.label ? `Unità: ${item.units.label}` : 'Ambito condominiale'}
+            {item.units?.label ? `Unità: ${formatUnitLabel(item.units.label)}` : 'Ambito condominiale'}
           </p>
         </div>
 

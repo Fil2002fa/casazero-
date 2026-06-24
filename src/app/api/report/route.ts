@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/admin'
 import { ReportDocument } from '@/lib/pdf/ReportDocument'
 import type { ReportData, CompletionEntry, OverdueEntry } from '@/lib/pdf/ReportDocument'
+import { formatUnitLabel } from '@/lib/formatUnitLabel'
 
 // Forza runtime Node.js — @react-pdf/renderer non è compatibile con Edge
 export const runtime = 'nodejs'
@@ -257,7 +258,7 @@ export async function GET(req: NextRequest) {
   const buffer = new Uint8Array(pdfBuffer)
 
   const filename = unitLabel
-    ? `fascicolo-${unitLabel.replace(/\s+/g, '-').toLowerCase()}.pdf`
+    ? `fascicolo-${formatUnitLabel(unitLabel).replace(/\s+/g, '-').toLowerCase()}.pdf`
     : `fascicolo-${residenceName.replace(/\s+/g, '-').toLowerCase()}.pdf`
 
   return new NextResponse(buffer, {

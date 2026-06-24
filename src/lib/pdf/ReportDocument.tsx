@@ -2,6 +2,7 @@ import React from 'react'
 import {
   Document, Page, Text, View, StyleSheet,
 } from '@react-pdf/renderer'
+import { formatUnitLabel } from '@/lib/formatUnitLabel'
 
 // ── Palette C ────────────────────────────────────────────────────────────────
 const C = {
@@ -370,7 +371,7 @@ export function ReportDocument(data: ReportData) {
   const thisYear = new Date().getFullYear()
 
   const scopeTitle = data.scope === 'unit' && data.unitLabel
-    ? `${data.unitLabel} — ${data.residenceName}`
+    ? `${formatUnitLabel(data.unitLabel)} — ${data.residenceName}`
     : data.residenceName
 
   // Group completions by year
@@ -421,7 +422,7 @@ export function ReportDocument(data: ReportData) {
             {data.unitLabel && (
               <View style={S.infoItem}>
                 <Text style={S.infoLabel}>Unità</Text>
-                <Text style={S.infoValue}>{data.unitLabel}</Text>
+                <Text style={S.infoValue}>{formatUnitLabel(data.unitLabel!)}</Text>
               </View>
             )}
             {data.energyClass && (

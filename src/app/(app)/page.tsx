@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { requireProfile } from '@/lib/auth'
 import { MaintenanceCard } from '@/components/MaintenanceCard'
 import type { MaintenancePriority, MaintenanceStatus } from '@/types/database'
+import { formatUnitLabel } from '@/lib/formatUnitLabel'
 
 type ItemRow = {
   id: string
@@ -81,7 +82,7 @@ export default async function HomePage() {
         <div className="px-4 py-3">
           <p className="text-sm font-medium text-text-primary">{residenceName}</p>
           {unit && (
-            <p className="text-xs text-text-secondary mt-0.5">{unit.label}</p>
+            <p className="text-xs text-text-secondary mt-0.5">{formatUnitLabel(unit.label)}</p>
           )}
         </div>
       </div>

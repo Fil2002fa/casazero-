@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { Edit2, Check, X, Copy, Trash2, UserPlus, Users, Bell, LogOut, Smartphone, Mail, Lock } from 'lucide-react'
 import { updateProfile, createFamilyInvite, revokeFamilyInvite, signOut, updateNotificationPrefs } from './actions'
 import type { NotificationPrefs } from '@/types/database'
+import { formatUnitLabel } from '@/lib/formatUnitLabel'
 
 type InviteRow = { id: string; token: string; expires_at: string; qrCode: string }
 type MemberRow = { profile_id: string; full_name: string | null }
@@ -210,7 +211,7 @@ export function ProfiloClient({
               </div>
               <div>
                 <p className="text-xs text-text-secondary">Unità</p>
-                <p className="text-sm font-medium text-text-primary">{unit.label}</p>
+                <p className="text-sm font-medium text-text-primary">{formatUnitLabel(unit.label)}</p>
               </div>
             </div>
           </section>
