@@ -53,6 +53,7 @@ export default async function ResidenceDocumentiPage({ params }: { params: Param
       </div>
 
       <DocumentiClient
+        residenceId={residenceId}
         docs={(rawDocs ?? []) as DocRow[]}
         units={(rawUnits ?? []) as UnitRow[]}
       />
