@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Plus, QrCode, Trash2, UserPlus, Copy, Check } from 'lucide-react'
+import { Plus, QrCode, Trash2, UserPlus, Copy, Check, MessageCircle, Mail } from 'lucide-react'
 import { createUnit, createInvite, revokeInvite } from './actions'
 import Image from 'next/image'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
@@ -201,7 +201,7 @@ export function UnitsManager({
                             <p className="text-[10px] text-text-secondary">
                               Scade il {new Date(inv.expires_at).toLocaleDateString('it-IT')}
                             </p>
-                            <div className="flex gap-2">
+                            <div className="flex flex-wrap gap-2">
                               <button
                                 onClick={() => copyInviteUrl(inv.token, inv.id)}
                                 className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-dark text-white rounded-lg text-xs"
@@ -209,6 +209,22 @@ export function UnitsManager({
                                 {copiedId === inv.id ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                                 {copiedId === inv.id ? 'Copiato' : 'Copia URL'}
                               </button>
+                              <a
+                                href={`https://wa.me/?text=${encodeURIComponent(`Benvenuto in CasaZero! Attiva il tuo accesso da qui: ${url}`)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-dark text-white rounded-lg text-xs"
+                              >
+                                <MessageCircle className="w-3 h-3" />
+                                WhatsApp
+                              </a>
+                              <a
+                                href={`mailto:?subject=${encodeURIComponent('Il tuo invito a CasaZero')}&body=${encodeURIComponent(`Benvenuto in CasaZero.\n\nAttiva il tuo accesso da questo link:\n${url}\n\nA presto.`)}`}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-dark text-white rounded-lg text-xs"
+                              >
+                                <Mail className="w-3 h-3" />
+                                Email
+                              </a>
                               <button
                                 onClick={() => handleRevokeInvite(inv.id)}
                                 disabled={pending}
