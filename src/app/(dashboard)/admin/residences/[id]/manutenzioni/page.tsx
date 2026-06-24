@@ -47,6 +47,26 @@ export default async function ResidenceManutenzioniPage({ params }: { params: Pa
       .order('name'),
   ])
 
+  // Mappa unit_id → nome residente primary attivo (per colpo d'occhio nelle card)
+  const unitIds = [...new Set(
+    (rawItems ?? []).filter(i => i.unit_id != null).map(i => i.unit_id as string)
+  )]
+  const unitPrimaryNames: Record<string, string> = {}
+  if (unitIds.length > 0) {
+    const { data: membersData } = await supabase
+      .from('unit_members')
+      .select('unit_id, is_primary, profiles(full_name)')
+      .in('unit_id', unitIds)
+      .is('ended_at', null)
+      .order('is_primary', { ascending: false })
+    for (const m of (membersData ?? []) as unknown as { unit_id: string; is_primary: boolean; profiles: { full_name: string | null } | null }[]) {
+      if (!unitPrimaryNames[m.unit_id]) {
+        const name = m.profiles?.full_name
+        if (name) unitPrimaryNames[m.unit_id] = name
+      }
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background pb-24">
       <div className="bg-surface border-b border-border px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
@@ -64,6 +84,7 @@ export default async function ResidenceManutenzioniPage({ params }: { params: Pa
         items={(rawItems ?? []) as unknown as ItemRow[]}
         completions={(rawCompletions ?? []) as unknown as CompletionRow[]}
         suppliers={(suppliers ?? []) as { id: string; name: string }[]}
+        unitPrimaryNames={unitPrimaryNames}
       />
     </div>
   )

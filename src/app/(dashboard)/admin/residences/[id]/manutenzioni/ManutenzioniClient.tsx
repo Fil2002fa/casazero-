@@ -40,9 +40,10 @@ interface Props {
   items: ItemRow[]
   completions: CompletionRow[]
   suppliers: { id: string; name: string }[]
+  unitPrimaryNames: Record<string, string>
 }
 
-export function ManutenzioniClient({ residenceId, items, completions, suppliers }: Props) {
+export function ManutenzioniClient({ residenceId, items, completions, suppliers, unitPrimaryNames }: Props) {
   const [activeFilter, setActiveFilter] = useState<FilterState>(null)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
 
@@ -242,7 +243,12 @@ export function ManutenzioniClient({ residenceId, items, completions, suppliers 
                           </div>
                           <div className="flex gap-3 mt-1 flex-wrap">
                             {item.units && (
-                              <span className="text-xs text-text-secondary">{formatUnitLabel(item.units.label)}</span>
+                              <span className="text-xs text-text-secondary">
+                                {formatUnitLabel(item.units.label)}
+                                {item.unit_id && unitPrimaryNames[item.unit_id]
+                                  ? ` · ${unitPrimaryNames[item.unit_id]}`
+                                  : null}
+                              </span>
                             )}
                             {effPriority === 'N1' ? (
                               <span className="text-xs text-semantic-blue">

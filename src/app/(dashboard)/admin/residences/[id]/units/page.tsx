@@ -15,7 +15,7 @@ type UnitRow = {
   id: string
   label: string
   floor: number | null
-  members: { profile_id: string; profiles: { full_name: string | null } | null }[]
+  members: { profile_id: string; is_primary: boolean; profiles: { full_name: string | null } | null }[]
   invites: { id: string; token: string; expires_at: string; used_at: string | null }[]
 }
 
@@ -46,8 +46,9 @@ export default async function UnitsPage({ params }: { params: Params }) {
 
   const units: (UnitRow & { qrCodes: Record<string, string> })[] = await Promise.all(
     (rawUnitsAll ?? []).map(async (u) => {
-      const members = ((u.unit_members as unknown as { profile_id: string; ended_at: string | null; profiles: { full_name: string | null } | null }[]) ?? [])
+      const members = ((u.unit_members as unknown as { profile_id: string; is_primary: boolean; ended_at: string | null; profiles: { full_name: string | null } | null }[]) ?? [])
         .filter(m => !m.ended_at)
+        .sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0))
       const invites = (u.invites as unknown as { id: string; token: string; expires_at: string; used_at: string | null }[]) ?? []
 
       // Genera QR per inviti attivi

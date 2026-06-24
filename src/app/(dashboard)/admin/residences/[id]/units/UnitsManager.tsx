@@ -6,7 +6,7 @@ import { createUnit, createInvite, revokeInvite } from './actions'
 import Image from 'next/image'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 
-type MemberRow = { profile_id: string; profiles: { full_name: string | null } | null }
+type MemberRow = { profile_id: string; is_primary: boolean; profiles: { full_name: string | null } | null }
 type InviteRow = { id: string; token: string; expires_at: string; used_at: string | null }
 type UnitRow = { id: string; label: string; floor: number | null; members: MemberRow[]; invites: InviteRow[]; qrCodes: Record<string, string> }
 
@@ -141,7 +141,14 @@ export function UnitsManager({
                 <p className="text-xs text-text-secondary mt-0.5">
                   {unit.floor ? `Piano ${unit.floor} · ` : ''}
                   {unit.members.length > 0
-                    ? unit.members.map(m => m.profiles?.full_name ?? 'Utente').join(', ')
+                    ? unit.members.map((m, i) => (
+                        <span key={m.profile_id}>
+                          {i > 0 && ', '}
+                          <span className={m.is_primary ? 'font-medium text-text-primary' : ''}>
+                            {m.profiles?.full_name ?? 'Utente'}
+                          </span>
+                        </span>
+                      ))
                     : 'Nessun residente'}
                 </p>
               </div>
