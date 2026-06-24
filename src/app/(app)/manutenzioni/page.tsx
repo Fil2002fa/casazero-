@@ -14,11 +14,13 @@ type ItemRow = {
   unit_id: string | null
   residence_id: string
   priority: MaintenancePriority | null
+  frequency_months: number | null
   maintenance_templates: {
     title: string
     category: string
     priority: MaintenancePriority
     scope: string
+    frequency_months: number
   } | null
 }
 
@@ -56,8 +58,8 @@ export default async function ManutenzioniPage() {
   const { data: rawItems } = await supabase
     .from('maintenance_items')
     .select(`
-      id, status, next_due_date, unit_id, residence_id, priority,
-      maintenance_templates(title, category, priority, scope)
+      id, status, next_due_date, unit_id, residence_id, priority, frequency_months,
+      maintenance_templates(title, category, priority, scope, frequency_months)
     `)
     .neq('status', 'completata')
     .order('next_due_date', { ascending: true, nullsFirst: false })
@@ -143,6 +145,7 @@ export default async function ManutenzioniPage() {
             priority="N1"
             status={i.status}
             nextDueDate={i.next_due_date}
+            frequencyMonths={i.frequency_months ?? i.maintenance_templates?.frequency_months ?? null}
             scope={(i.maintenance_templates?.scope ?? 'unit') as 'unit' | 'condominium'}
           />
         ))}

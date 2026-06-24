@@ -10,12 +10,13 @@ interface Props {
   priority: MaintenancePriority
   status: MaintenanceStatus
   nextDueDate: string | null
+  frequencyMonths?: number | null
   scope: 'unit' | 'condominium'
   href?: string
 }
 
-export function MaintenanceCard({ id, title, category, priority, status, nextDueDate, scope, href }: Props) {
-  const isUrgent = status === 'scaduta'
+export function MaintenanceCard({ id, title, category, priority, status, nextDueDate, frequencyMonths, scope, href }: Props) {
+  const isUrgent = status === 'scaduta' && priority !== 'N1'
   const isInProgress = status === 'in_corso'
 
   const borderColor = isUrgent
@@ -42,12 +43,16 @@ export function MaintenanceCard({ id, title, category, priority, status, nextDue
           </div>
           <p className="text-sm font-medium text-text-primary truncate">{title}</p>
           <p className="text-xs text-text-secondary mt-0.5">{category}</p>
-          {formattedDate && (
+          {priority === 'N1' ? (
+            <p className="text-xs mt-1 font-medium text-semantic-blue">
+              Consigliata · ogni {frequencyMonths ?? '?'} mesi
+            </p>
+          ) : formattedDate ? (
             <p className={`text-xs mt-1 font-medium ${isUrgent ? 'text-semantic-red' : 'text-text-secondary'}`}>
               {isUrgent ? 'Scaduta il ' : isInProgress ? 'In corso · scaduta il ' : 'Prossima scadenza: '}
               {formattedDate}
             </p>
-          )}
+          ) : null}
         </div>
         <ChevronRight className="w-4 h-4 text-text-secondary flex-shrink-0" strokeWidth={1.6} />
       </div>

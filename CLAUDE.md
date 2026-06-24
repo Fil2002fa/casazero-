@@ -213,6 +213,46 @@ benvenuto al report annuale scaricato.
 
 ---
 
+---
+
+## 13. Convenzioni di sviluppo (per Claude Code)
+
+> Regole operative ricavate da bug e decisioni reali. Non sono spec di prodotto:
+> servono a non riscoprire ogni volta dove sono le trappole. Leggere prima di toccare il codice.
+
+### Data consistency (conteggi e conformità)
+- La logica di **conformità %** è definita in `src/app/api/report/route.ts` ed è la
+  **fonte di verità**: la schermata Fascicolo e il PDF devono usare lo **stesso scope**.
+  Se i numeri divergono tra due viste, confronta prima lo **scope della query**
+  (builder-wide vs singola residenza, filtrata vs non filtrata) **prima** di assumere
+  un mismatch di definizione o di calcolo.
+- Per i conteggi cross-scope usa `adminClient` con filtro **`residence_id` esplicito**,
+  non il client RLS. (Causa-radice del bug "conteggio scaduti diverso tra schermo e PDF".)
+
+### Stack & build
+- Progetto **TypeScript**: mantieni type safety. **Build verde prima di ogni commit**
+  (`npm run build`). Committa solo su build pulita.
+- `/api/report` gira con **`runtime = 'nodejs'`** (non Edge) per via di
+  `@react-pdf/renderer`. **Non "correggere" questo a Edge**: rompe la generazione PDF.
+- Ambiente di sviluppo: **Windows / PowerShell**. Usa comandi shell compatibili PowerShell,
+  non bash.
+
+### Routing
+- Route group **`(app)`** = shell mobile residente · **`(dashboard)`** = shell desktop builder,
+  con routing per ruolo. Tieni sidebar/nav in sync con la struttura dei route group.
+- I route group Next.js **non compaiono nell'URL**: gli URL `/admin/*` restano invariati
+  nonostante il route group. **Non "aggiustare" questi path**: non sono rotti.
+
+### Workflow di sessione
+- A **inizio sessione**: leggi l'ultimo file in `docs/handoffs/` per il contesto.
+- A **fine lavoro**: genera un handoff con `/handoff`, e committa solo su build verde.
+- Le **migrazioni** in `supabase/migrations/` vanno applicate **a mano** nel SQL Editor
+  di Supabase. **Non assumere che siano già applicate**: segnalalo prima di scrivere
+  codice che dipende dal nuovo schema.
+- Il **dev server** gira in una **finestra PowerShell separata e persistente**
+  (`cd C:\progetti\casazero` poi `npm run dev`), indipendente dai processi di Claude Code.
+  Non avviarlo dentro la propria sessione.
+
 ## Appendice A — Catalogo 27 manutenzioni (seed)
 
 Formato: titolo — categoria — frequenza — priorità — ambito.
