@@ -9,7 +9,10 @@
       "Bash(curl *)",
       "PowerShell(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(32\\).toString\\('hex'\\)\\)\")",
       "PowerShell(Receive-Job *)",
-      "PowerShell(Get-Process *)"
+      "PowerShell(Get-Process *)",
+      "PowerShell(cd C:\\\\progetti\\\\casazero; git add src/app/\\(dashboard\\)/admin/residences/[id]/page.tsx \"src/app/\\(dashboard\\)/admin/residences/[id]/documenti/page.tsx\" \"src/app/\\(dashboard\\)/admin/residences/[id]/documenti/DocumentiClient.tsx\")",
+      "Bash(git commit *)",
+      "Bash(git add *)"
     ]
   }
 }
