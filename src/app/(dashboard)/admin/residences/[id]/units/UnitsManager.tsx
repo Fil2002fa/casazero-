@@ -2,8 +2,8 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, QrCode, Trash2, UserPlus, Copy, Check, MessageCircle, Mail } from 'lucide-react'
-import { createUnit, createInvite, revokeInvite } from './actions'
+import { Plus, QrCode, Trash2, UserPlus, Copy, Check, MessageCircle, Mail, Pencil, X } from 'lucide-react'
+import { createUnit, createInvite, revokeInvite, updateUnitLabel } from './actions'
 import Image from 'next/image'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 
@@ -26,6 +26,8 @@ export function UnitsManager({
   const [localError, setLocalError] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [expandedUnit, setExpandedUnit] = useState<string | null>(null)
+  const [editingUnitId, setEditingUnitId] = useState<string | null>(null)
+  const [editLabel, setEditLabel] = useState('')
 
   function handleAddUnit() {
     if (!newUnitLabel.trim()) return
@@ -51,6 +53,20 @@ export function UnitsManager({
       if (res.error) {
         setLocalError(res.error)
       } else {
+        router.refresh()
+      }
+    })
+  }
+
+  function handleSaveLabel(unitId: string) {
+    const trimmed = editLabel.trim()
+    if (!trimmed) return
+    startTransition(async () => {
+      const res = await updateUnitLabel(unitId, trimmed, residenceId)
+      if (res.error) {
+        setLocalError(res.error)
+      } else {
+        setEditingUnitId(null)
         router.refresh()
       }
     })
@@ -135,11 +151,48 @@ export function UnitsManager({
           <div key={unit.id} className="bg-surface rounded-xl border border-border overflow-hidden">
             {/* Header unità */}
             <button
-              onClick={() => setExpandedUnit(isExpanded ? null : unit.id)}
+              onClick={() => { if (editingUnitId !== unit.id) setExpandedUnit(isExpanded ? null : unit.id) }}
               className="w-full flex items-center justify-between p-4 text-left"
             >
-              <div>
-                <p className="text-sm font-medium text-text-primary">{formatUnitLabel(unit.label, unit.floor)}</p>
+              <div className="flex-1 min-w-0">
+                {editingUnitId === unit.id ? (
+                  <div onClick={e => e.stopPropagation()} className="flex items-center gap-1.5 mb-1">
+                    <input
+                      value={editLabel}
+                      onChange={e => setEditLabel(e.target.value)}
+                      maxLength={60}
+                      autoFocus
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') handleSaveLabel(unit.id)
+                        if (e.key === 'Escape') setEditingUnitId(null)
+                      }}
+                      className="flex-1 min-w-0 border border-brand-medium rounded-lg px-2 py-1 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
+                    />
+                    <button
+                      onClick={() => handleSaveLabel(unit.id)}
+                      disabled={pending || !editLabel.trim()}
+                      className="p-1.5 rounded-lg bg-brand-dark text-white disabled:opacity-40"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setEditingUnitId(null)}
+                      className="p-1.5 rounded-lg border border-border text-text-secondary"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-medium text-text-primary">{formatUnitLabel(unit.label, unit.floor)}</p>
+                    <button
+                      onClick={e => { e.stopPropagation(); setEditingUnitId(unit.id); setEditLabel(unit.label) }}
+                      className="p-0.5 rounded text-text-secondary hover:text-text-primary transition-colors"
+                    >
+                      <Pencil className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
                 <p className="text-xs text-text-secondary mt-0.5">
                   {unit.floor ? `Piano ${unit.floor} · ` : ''}
                   {unit.members.length > 0

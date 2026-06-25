@@ -106,6 +106,35 @@ export async function createInvite(
   return { token: invite.token }
 }
 
+export async function updateUnitLabel(
+  unitId: string,
+  label: string,
+  residenceId: string
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non autenticato' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (profile?.role !== 'super_admin') return { error: 'Permessi insufficienti' }
+
+  const trimmed = label.trim()
+  if (!trimmed) return { error: 'L\'etichetta non può essere vuota' }
+  if (trimmed.length > 60) return { error: 'Etichetta troppo lunga (max 60 caratteri)' }
+
+  const admin = createServiceClient()
+  const { error } = await admin.from('units').update({ label: trimmed }).eq('id', unitId)
+  if (error) return { error: error.message }
+
+  revalidatePath(`/admin/residences/${residenceId}/units`)
+  return {}
+}
+
 export async function revokeInvite(inviteId: string, residenceId: string): Promise<{ error?: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
