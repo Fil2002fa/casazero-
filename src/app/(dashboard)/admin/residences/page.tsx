@@ -71,16 +71,6 @@ export default async function ResidencesPage() {
         </Link>
       </header>
 
-      {/* Links admin globali */}
-      <div className="flex gap-2">
-        <Link href="/admin/settings" className="px-3 py-1.5 text-xs border border-border rounded-full text-text-secondary bg-surface">
-          Impostazioni white-label
-        </Link>
-        <Link href="/admin/manutenzioni" className="px-3 py-1.5 text-xs border border-border rounded-full text-text-secondary bg-surface">
-          Vista condominiale
-        </Link>
-      </div>
-
       {rows.length === 0 ? (
         <div className="bg-surface rounded-xl border border-border p-8 text-center space-y-3">
           <Home className="w-10 h-10 text-text-secondary mx-auto" strokeWidth={1.2} />
