@@ -150,9 +150,12 @@ export function UnitsManager({
         return (
           <div key={unit.id} className="bg-surface rounded-xl border border-border overflow-hidden">
             {/* Header unità */}
-            <button
+            <div
+              role="button"
+              tabIndex={0}
               onClick={() => { if (editingUnitId !== unit.id) setExpandedUnit(isExpanded ? null : unit.id) }}
-              className="w-full flex items-center justify-between p-4 text-left"
+              onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && editingUnitId !== unit.id) setExpandedUnit(isExpanded ? null : unit.id) }}
+              className="w-full flex items-center justify-between p-4 text-left cursor-pointer"
             >
               <div className="flex-1 min-w-0">
                 {editingUnitId === unit.id ? (
@@ -215,7 +218,7 @@ export function UnitsManager({
                 )}
                 <span className="text-text-secondary text-xs">{isExpanded ? '▲' : '▼'}</span>
               </div>
-            </button>
+            </div>
 
             {/* Contenuto espanso */}
             {isExpanded && (
