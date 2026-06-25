@@ -40,7 +40,8 @@ export default async function UnitsPage({ params }: { params: Params }) {
       invites(id, token, expires_at, used_at)
     `)
     .eq('residence_id', residenceId)
-    .order('label')
+    .order('floor', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: true })
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
 
