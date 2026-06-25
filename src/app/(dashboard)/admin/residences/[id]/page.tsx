@@ -62,7 +62,7 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
       <div className="p-4 space-y-4">
         {/* Stats */}
         <div className="grid grid-cols-5 gap-3">
-          <StatCard label="Unità"        value={unitCount ?? 0}    icon={<Home className="w-4 h-4" />} />
+          <StatCard label="Unità"        value={unitCount ?? 0}    icon={<Home className="w-4 h-4" />} href={`/admin/residences/${id}/units`} />
           <StatCard label="A tuo carico" value={n2Scadute}         icon={<Wrench className="w-4 h-4" />} alert={n2Scadute > 0} />
           <StatCard label="Condominiali" value={n3Scadute}         icon={<Wrench className="w-4 h-4" />} alert={n3Scadute > 0} />
           <StatCard label="In corso"     value={inCorsoCount ?? 0} icon={<Wrench className="w-4 h-4" />} />
