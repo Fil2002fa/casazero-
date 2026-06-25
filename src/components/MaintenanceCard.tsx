@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
 import { PriorityBadge } from './PriorityBadge'
 import type { MaintenancePriority, MaintenanceStatus } from '@/types/database'
+import { formatFrequency } from '@/lib/formatFrequency'
 
 interface Props {
   id: string
@@ -45,7 +46,7 @@ export function MaintenanceCard({ id, title, category, priority, status, nextDue
           <p className="text-xs text-text-secondary mt-0.5">{category}</p>
           {priority === 'N1' ? (
             <p className="text-xs mt-1 font-medium text-semantic-blue">
-              Consigliata · ogni {frequencyMonths ?? '?'} mesi
+              Consigliata · {formatFrequency(frequencyMonths)}
             </p>
           ) : formattedDate ? (
             <p className={`text-xs mt-1 font-medium ${isUrgent ? 'text-semantic-red' : 'text-text-secondary'}`}>

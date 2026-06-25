@@ -5,6 +5,7 @@ import { PriorityBadge } from '@/components/PriorityBadge'
 import { ItemConfigForm } from './ItemConfigForm'
 import type { MaintenancePriority, MaintenanceStatus } from '@/types/database'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
+import { formatFrequency } from '@/lib/formatFrequency'
 
 export type ItemRow = {
   id: string
@@ -252,7 +253,7 @@ export function ManutenzioniClient({ residenceId, items, completions, suppliers,
                             )}
                             {effPriority === 'N1' ? (
                               <span className="text-xs text-semantic-blue">
-                                Consigliata · ogni {item.frequency_months ?? tpl?.frequency_months ?? '?'} mesi
+                                Consigliata · {formatFrequency(item.frequency_months ?? tpl?.frequency_months)}
                               </span>
                             ) : formattedDue ? (
                               <span className={`text-xs ${item.status === 'scaduta' ? 'text-semantic-red' : 'text-text-secondary'}`}>
