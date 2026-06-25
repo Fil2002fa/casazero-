@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { Plus, QrCode, Trash2, UserPlus, Copy, Check, MessageCircle, Mail } from 'lucide-react'
 import { createUnit, createInvite, revokeInvite } from './actions'
 import Image from 'next/image'
@@ -17,6 +18,7 @@ export function UnitsManager({
   units: UnitRow[]
   appUrl: string
 }) {
+  const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [newUnitLabel, setNewUnitLabel] = useState('')
   const [newUnitFloor, setNewUnitFloor] = useState('')
@@ -49,7 +51,7 @@ export function UnitsManager({
       if (res.error) {
         setLocalError(res.error)
       } else {
-        window.location.reload()
+        router.refresh()
       }
     })
   }
@@ -57,7 +59,7 @@ export function UnitsManager({
   function handleRevokeInvite(inviteId: string) {
     startTransition(async () => {
       await revokeInvite(inviteId, residenceId)
-      window.location.reload()
+      router.refresh()
     })
   }
 
@@ -197,7 +199,6 @@ export function UnitsManager({
                                 <Image src={qrSrc} alt="QR invito" width={120} height={120} className="rounded" />
                               </div>
                             )}
-                            <p className="text-xs text-text-secondary break-all">{url}</p>
                             <p className="text-[10px] text-text-secondary">
                               Scade il {new Date(inv.expires_at).toLocaleDateString('it-IT')}
                             </p>
@@ -218,13 +219,15 @@ export function UnitsManager({
                                 <MessageCircle className="w-3 h-3" />
                                 WhatsApp
                               </a>
-                              <a
-                                href={`mailto:?subject=${encodeURIComponent('Il tuo invito a CasaZero')}&body=${encodeURIComponent(`Benvenuto in CasaZero.\n\nAttiva il tuo accesso da questo link:\n${url}\n\nA presto.`)}`}
+                              <button
+                                onClick={() => {
+                                  window.location.href = `mailto:?subject=${encodeURIComponent('Il tuo invito a CasaZero')}&body=${encodeURIComponent(`Benvenuto in CasaZero.\n\nAttiva il tuo accesso da questo link:\n${url}\n\nA presto.`)}`
+                                }}
                                 className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-dark text-white rounded-lg text-xs"
                               >
                                 <Mail className="w-3 h-3" />
                                 Email
-                              </a>
+                              </button>
                               <button
                                 onClick={() => handleRevokeInvite(inv.id)}
                                 disabled={pending}
