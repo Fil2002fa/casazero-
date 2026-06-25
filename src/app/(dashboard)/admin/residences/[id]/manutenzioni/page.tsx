@@ -5,14 +5,21 @@ import { ChevronLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import { ManutenzioniClient } from './ManutenzioniClient'
-import type { ItemRow, CompletionRow } from './ManutenzioniClient'
+import type { ItemRow, CompletionRow, FilterState } from './ManutenzioniClient'
 
 export const metadata: Metadata = { title: 'Panoramica manutenzioni' }
 
 type Params = Promise<{ id: string }>
+type SearchParams = Promise<{ filtro?: string }>
 
-export default async function ResidenceManutenzioniPage({ params }: { params: Params }) {
+const VALID_FILTERS = ['scaduta', 'in_corso', 'completate'] as const
+
+export default async function ResidenceManutenzioniPage({ params, searchParams }: { params: Params; searchParams: SearchParams }) {
   const { id: residenceId } = await params
+  const { filtro } = await searchParams
+  const initialFilter: FilterState = VALID_FILTERS.includes(filtro as typeof VALID_FILTERS[number])
+    ? (filtro as FilterState)
+    : null
   await requireRole(['super_admin'], '/admin/manutenzioni')
   const supabase = await createClient()
 
@@ -85,6 +92,7 @@ export default async function ResidenceManutenzioniPage({ params }: { params: Pa
         completions={(rawCompletions ?? []) as unknown as CompletionRow[]}
         suppliers={(suppliers ?? []) as { id: string; name: string }[]}
         unitPrimaryNames={unitPrimaryNames}
+        initialFilter={initialFilter}
       />
     </div>
   )

@@ -34,7 +34,7 @@ export type CompletionRow = {
   performed_by_name: string | null
 }
 
-type FilterState = 'scaduta' | 'in_corso' | 'completate' | null
+export type FilterState = 'scaduta' | 'in_corso' | 'completate' | null
 
 interface Props {
   residenceId: string
@@ -42,10 +42,11 @@ interface Props {
   completions: CompletionRow[]
   suppliers: { id: string; name: string }[]
   unitPrimaryNames: Record<string, string>
+  initialFilter?: FilterState
 }
 
-export function ManutenzioniClient({ residenceId, items, completions, suppliers, unitPrimaryNames }: Props) {
-  const [activeFilter, setActiveFilter] = useState<FilterState>(null)
+export function ManutenzioniClient({ residenceId, items, completions, suppliers, unitPrimaryNames, initialFilter = null }: Props) {
+  const [activeFilter, setActiveFilter] = useState<FilterState>(initialFilter)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
 
   // Contatori dalle sorgenti canoniche
