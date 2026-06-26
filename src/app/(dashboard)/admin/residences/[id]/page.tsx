@@ -73,30 +73,21 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
   const adminProfile = (adminRaw as unknown as AdminRow)?.profiles
   const noAdmin = !adminProfile
 
-  const hasRitardi = n3Scadute > 0 || n2ScaduteUnits > 0
-  const hasBuchi = noAdmin || unitsSenzaAccount > 0
-  const inRegola = !hasRitardi && !hasBuchi
 
   const porte = [
-    { href: `/admin/residences/${id}/units`,        icon: Users,     label: 'Unità e inviti', meta: String(unitCount) },
-    { href: `/admin/residences/${id}/manutenzioni`, icon: Wrench,    label: 'Manutenzioni',   meta: null },
-    { href: `/admin/residences/${id}/documenti`,    icon: FileText,  label: 'Documenti',      meta: docCount ? String(docCount) : null },
-    { href: `/admin/residences/${id}/fornitori`,    icon: Settings,  label: 'Fornitori',      meta: supplierCount ? String(supplierCount) : null },
+    { href: `/admin/residences/${id}/units`,        icon: Users,     label: 'Unità e inviti', sub: `${unitCount} unità` },
+    { href: `/admin/residences/${id}/manutenzioni`, icon: Wrench,    label: 'Manutenzioni',   sub: null },
+    { href: `/admin/residences/${id}/documenti`,    icon: FileText,  label: 'Documenti',      sub: docCount ? `${docCount} file` : null },
+    { href: `/admin/residences/${id}/fornitori`,    icon: Settings,  label: 'Fornitori',      sub: supplierCount ? `${supplierCount} fornitori` : null },
   ]
 
   return (
     <div className="min-h-screen bg-background pb-24">
       {/* header */}
-      <div className="bg-surface border-b border-border px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
-        <Link href="/admin/residences" className="text-text-secondary p-1 -ml-1 rounded-lg">
+      <div className="bg-surface border-b border-border px-4 py-4 sticky top-0 z-10">
+        <Link href="/admin/residences" className="text-text-secondary p-1 -ml-1 rounded-lg inline-block">
           <ChevronLeft className="w-5 h-5" strokeWidth={1.6} />
         </Link>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-base font-medium text-text-primary truncate">{residence.name}</h1>
-          {residence.address && (
-            <p className="text-xs text-text-secondary truncate">{residence.address}</p>
-          )}
-        </div>
       </div>
 
       <div className="p-4 space-y-4">
@@ -143,52 +134,51 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
         </div>
 
         {/* Zona 2 — Richiede attenzione */}
-        {inRegola ? (
-          <div className="bg-surface rounded-xl border border-border px-4 py-3 flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-[#E1F5EE] flex items-center justify-center flex-shrink-0">
-              <CheckCircle className="w-4 h-4 text-[#0F6E56]" strokeWidth={1.6} />
+        <div className="space-y-2">
+          {n3Scadute > 0 && (
+            <AttenzioneCard
+              color="red"
+              icon={<AlertCircle className="w-4 h-4 text-[#A32D2D]" strokeWidth={1.6} />}
+              title={`N3 in ritardo · ${n3Scadute} ${n3Scadute === 1 ? 'voce' : 'voci'}`}
+              sub="Sollecita l'amministratore"
+            />
+          )}
+          {n2ScaduteUnits > 0 && (
+            <AttenzioneCard
+              color="red"
+              icon={<AlertCircle className="w-4 h-4 text-[#A32D2D]" strokeWidth={1.6} />}
+              title={`N2 in ritardo · ${n2ScaduteUnits} unità`}
+              sub="Clienti coinvolti"
+            />
+          )}
+          {n3Scadute === 0 && n2ScaduteUnits === 0 && (
+            <div className="bg-surface rounded-xl border border-border px-4 py-3 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-[#E1F5EE] flex items-center justify-center flex-shrink-0">
+                <CheckCircle className="w-4 h-4 text-[#0F6E56]" strokeWidth={1.6} />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-[#0F6E56]">In regola</p>
+                <p className="text-xs text-text-secondary">Nessun ritardo in corso</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-medium text-[#0F6E56]">In regola</p>
-              <p className="text-xs text-text-secondary">Nessun ritardo né buco di configurazione</p>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {n3Scadute > 0 && (
-              <AttenzioneCard
-                color="red"
-                icon={<AlertCircle className="w-4 h-4 text-[#A32D2D]" strokeWidth={1.6} />}
-                title={`N3 in ritardo · ${n3Scadute} ${n3Scadute === 1 ? 'voce' : 'voci'}`}
-                sub="Sollecita l'amministratore"
-              />
-            )}
-            {n2ScaduteUnits > 0 && (
-              <AttenzioneCard
-                color="red"
-                icon={<AlertCircle className="w-4 h-4 text-[#A32D2D]" strokeWidth={1.6} />}
-                title={`N2 in ritardo · ${n2ScaduteUnits} unità`}
-                sub="Clienti coinvolti"
-              />
-            )}
-            {noAdmin && (
-              <AttenzioneCard
-                color="amber"
-                icon={<AlertTriangle className="w-4 h-4 text-[#854F0B]" strokeWidth={1.6} />}
-                title="Amministratore non assegnato"
-                sub="Configurazione incompleta"
-              />
-            )}
-            {unitsSenzaAccount > 0 && (
-              <AttenzioneCard
-                color="amber"
-                icon={<AlertTriangle className="w-4 h-4 text-[#854F0B]" strokeWidth={1.6} />}
-                title={`Unità senza account cliente · ${unitsSenzaAccount}`}
-                sub="Inviti non ancora inviati"
-              />
-            )}
-          </div>
-        )}
+          )}
+          {noAdmin && (
+            <AttenzioneCard
+              color="amber"
+              icon={<AlertTriangle className="w-4 h-4 text-[#854F0B]" strokeWidth={1.6} />}
+              title="Amministratore non assegnato"
+              sub="Configurazione incompleta"
+            />
+          )}
+          {unitsSenzaAccount > 0 && (
+            <AttenzioneCard
+              color="amber"
+              icon={<AlertTriangle className="w-4 h-4 text-[#854F0B]" strokeWidth={1.6} />}
+              title={`Unità senza account cliente · ${unitsSenzaAccount}`}
+              sub="Inviti non ancora inviati"
+            />
+          )}
+        </div>
 
         {/* Zona 3 — Gestione */}
         <div className="space-y-2">
@@ -198,14 +188,16 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
               href={porta.href}
               className="flex items-center gap-3 bg-surface rounded-xl border border-border p-4 active:scale-[0.99] transition-transform"
             >
-              <div className="w-9 h-9 bg-background rounded-lg flex items-center justify-center text-text-secondary">
+              <div className="w-9 h-9 bg-background rounded-lg flex items-center justify-center text-text-secondary flex-shrink-0">
                 <porta.icon className="w-4 h-4" strokeWidth={1.6} />
               </div>
-              <span className="text-sm font-medium text-text-primary flex-1">{porta.label}</span>
-              {porta.meta && (
-                <span className="text-xs text-text-secondary mr-1">{porta.meta}</span>
-              )}
-              <ChevronLeft className="w-4 h-4 text-text-secondary rotate-180" strokeWidth={1.6} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-text-primary">{porta.label}</p>
+                {porta.sub && (
+                  <p className="text-xs text-text-secondary mt-0.5">{porta.sub}</p>
+                )}
+              </div>
+              <ChevronLeft className="w-4 h-4 text-text-secondary flex-shrink-0 rotate-180" strokeWidth={1.6} />
             </Link>
           ))}
         </div>
