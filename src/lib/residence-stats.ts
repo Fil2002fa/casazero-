@@ -1,5 +1,6 @@
 export type ScaduteRow = {
   id: string
+  unit_id?: string | null
   priority: string | null
   maintenance_templates: { priority: string } | null
 }

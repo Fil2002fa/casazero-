@@ -1,7 +1,10 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ChevronLeft, Home, Wrench, Users, Settings, FileText } from 'lucide-react'
+import {
+  ChevronLeft, Wrench, Users, Settings, FileText,
+  AlertCircle, AlertTriangle, CheckCircle, Phone, UserCheck,
+} from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import { effPriority, ScaduteRow } from '@/lib/residence-stats'
@@ -17,36 +20,73 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
 
   const { data: residence } = await supabase
     .from('residences')
-    .select('id, name, address, energy_class, delivery_date')
+    .select('id, name, address, energy_class')
     .eq('id', id)
     .single()
 
   if (!residence) notFound()
 
-  const [{ count: unitCount }, { data: scaduteData }, { count: inCorsoCount }, { count: docCount }] =
-    await Promise.all([
-      supabase.from('units').select('id', { count: 'exact', head: true }).eq('residence_id', id),
-      supabase.from('maintenance_items')
-        .select('id, priority, maintenance_templates!inner(priority)')
-        .eq('residence_id', id).eq('status', 'scaduta'),
-      supabase.from('maintenance_items').select('id', { count: 'exact', head: true })
-        .eq('residence_id', id).eq('status', 'in_corso'),
-      supabase.from('documents').select('id', { count: 'exact', head: true }).eq('residence_id', id),
-    ])
+  type UnitRow = { id: string; unit_members: { ended_at: string | null }[] | null }
+  type AdminRow = { profiles: { full_name: string | null } | null } | null
+
+  const [
+    { data: unitsRaw },
+    { data: scaduteData },
+    { count: docCount },
+    { count: supplierCount },
+    { data: adminRaw },
+  ] = await Promise.all([
+    supabase.from('units')
+      .select('id, unit_members!left(ended_at)')
+      .eq('residence_id', id),
+    supabase.from('maintenance_items')
+      .select('id, priority, unit_id, maintenance_templates!inner(priority)')
+      .eq('residence_id', id)
+      .eq('status', 'scaduta'),
+    supabase.from('documents')
+      .select('id', { count: 'exact', head: true })
+      .eq('residence_id', id),
+    supabase.from('suppliers')
+      .select('id', { count: 'exact', head: true })
+      .eq('residence_id', id),
+    supabase.from('admin_assignments')
+      .select('profiles(full_name)')
+      .eq('residence_id', id)
+      .maybeSingle(),
+  ])
+
+  const units = (unitsRaw ?? []) as unknown as UnitRow[]
+  const unitCount = units.length
+  const unitsSenzaAccount = units.filter(u => {
+    const ms = u.unit_members
+    return !ms || ms.length === 0 || !ms.some(m => m.ended_at === null)
+  }).length
 
   const scadute = (scaduteData ?? []) as unknown as ScaduteRow[]
-  const n2Scadute = scadute.filter(i => effPriority(i) === 'N2').length
   const n3Scadute = scadute.filter(i => effPriority(i) === 'N3').length
+  const n2ScaduteUnits = new Set(
+    scadute
+      .filter(i => effPriority(i) === 'N2' && i.unit_id != null)
+      .map(i => i.unit_id as string)
+  ).size
 
-  const tabs = [
-    { href: `/admin/residences/${id}/units`, icon: Users, label: 'Unità e inviti' },
-    { href: `/admin/residences/${id}/manutenzioni`, icon: Wrench, label: 'Manutenzioni' },
-    { href: `/admin/residences/${id}/documenti`, icon: FileText, label: 'Documenti' },
-    { href: `/admin/residences/${id}/fornitori`, icon: Settings, label: 'Fornitori' },
+  const adminProfile = (adminRaw as unknown as AdminRow)?.profiles
+  const noAdmin = !adminProfile
+
+  const hasRitardi = n3Scadute > 0 || n2ScaduteUnits > 0
+  const hasBuchi = noAdmin || unitsSenzaAccount > 0
+  const inRegola = !hasRitardi && !hasBuchi
+
+  const porte = [
+    { href: `/admin/residences/${id}/units`,        icon: Users,     label: 'Unità e inviti', meta: String(unitCount) },
+    { href: `/admin/residences/${id}/manutenzioni`, icon: Wrench,    label: 'Manutenzioni',   meta: null },
+    { href: `/admin/residences/${id}/documenti`,    icon: FileText,  label: 'Documenti',      meta: docCount ? String(docCount) : null },
+    { href: `/admin/residences/${id}/fornitori`,    icon: Settings,  label: 'Fornitori',      meta: supplierCount ? String(supplierCount) : null },
   ]
 
   return (
     <div className="min-h-screen bg-background pb-24">
+      {/* header */}
       <div className="bg-surface border-b border-border px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
         <Link href="/admin/residences" className="text-text-secondary p-1 -ml-1 rounded-lg">
           <ChevronLeft className="w-5 h-5" strokeWidth={1.6} />
@@ -60,40 +100,112 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
       </div>
 
       <div className="p-4 space-y-4">
-        {/* Stats */}
-        <div className="grid grid-cols-5 gap-3">
-          <StatCard label="Unità"        value={unitCount ?? 0}    icon={<Home className="w-4 h-4" />} href={`/admin/residences/${id}/units`} />
-          <StatCard label="A tuo carico" value={n2Scadute}         icon={<Wrench className="w-4 h-4" />} alert={n2Scadute > 0} href={`/admin/residences/${id}/manutenzioni?filtro=scaduta`} />
-          <StatCard label="Condominiali" value={n3Scadute}         icon={<Wrench className="w-4 h-4" />} alert={n3Scadute > 0} href={`/admin/residences/${id}/manutenzioni?filtro=scaduta`} />
-          <StatCard label="In corso"     value={inCorsoCount ?? 0} icon={<Wrench className="w-4 h-4" />} />
-          <StatCard label="Documenti"    value={docCount ?? 0}     icon={<FileText className="w-4 h-4" />} href={`/admin/residences/${id}/documenti`} />
+        {/* Zona 1 — Identità + Amministratore */}
+        <div className="bg-surface rounded-xl border border-border overflow-hidden">
+          <div className="bg-[#04342C] px-4 py-5">
+            <h2 className="text-base font-medium text-white">{residence.name}</h2>
+            {residence.address && (
+              <p className="text-xs text-[#9FE1CB] mt-0.5">{residence.address}</p>
+            )}
+            <div className="flex flex-wrap gap-2 mt-3">
+              {residence.energy_class && (
+                <span className="text-[11px] font-medium bg-white/10 text-[#E1F5EE] px-2.5 py-1 rounded-full">
+                  Classe {residence.energy_class}
+                </span>
+              )}
+              <span className="text-[11px] font-medium bg-white/10 text-[#E1F5EE] px-2.5 py-1 rounded-full">
+                {unitCount} unità
+              </span>
+            </div>
+          </div>
+
+          {adminProfile && (
+            <div className="px-4 py-3 flex items-center gap-3 border-t border-border">
+              <div className="w-8 h-8 rounded-full bg-[#E1F5EE] flex items-center justify-center flex-shrink-0">
+                <UserCheck className="w-4 h-4 text-[#0F6E56]" strokeWidth={1.6} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-text-primary truncate">
+                  {adminProfile.full_name ?? 'Amministratore'}
+                </p>
+                <p className="text-xs text-text-secondary">Amministratore di condominio</p>
+              </div>
+              <div
+                role="button"
+                tabIndex={0}
+                className="flex items-center gap-1.5 text-xs font-medium text-[#0F6E56] border border-[#9FE1CB] rounded-lg px-3 py-1.5 cursor-pointer"
+              >
+                <Phone className="w-3 h-3" strokeWidth={1.6} />
+                Contatta
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Dettagli */}
-        <div className="bg-surface rounded-xl border border-border p-4 space-y-2">
-          {residence.energy_class && (
-            <Detail label="Classe energetica" value={residence.energy_class} />
-          )}
-          {residence.delivery_date && (
-            <Detail label="Data consegna" value={new Date(residence.delivery_date).toLocaleDateString('it-IT', {
-              day: 'numeric', month: 'long', year: 'numeric',
-            })} />
-          )}
-        </div>
+        {/* Zona 2 — Richiede attenzione */}
+        {inRegola ? (
+          <div className="bg-surface rounded-xl border border-border px-4 py-3 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-[#E1F5EE] flex items-center justify-center flex-shrink-0">
+              <CheckCircle className="w-4 h-4 text-[#0F6E56]" strokeWidth={1.6} />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-[#0F6E56]">In regola</p>
+              <p className="text-xs text-text-secondary">Nessun ritardo né buco di configurazione</p>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {n3Scadute > 0 && (
+              <AttenzioneCard
+                color="red"
+                icon={<AlertCircle className="w-4 h-4 text-[#A32D2D]" strokeWidth={1.6} />}
+                title={`N3 in ritardo · ${n3Scadute} ${n3Scadute === 1 ? 'voce' : 'voci'}`}
+                sub="Sollecita l'amministratore"
+              />
+            )}
+            {n2ScaduteUnits > 0 && (
+              <AttenzioneCard
+                color="red"
+                icon={<AlertCircle className="w-4 h-4 text-[#A32D2D]" strokeWidth={1.6} />}
+                title={`N2 in ritardo · ${n2ScaduteUnits} unità`}
+                sub="Clienti coinvolti"
+              />
+            )}
+            {noAdmin && (
+              <AttenzioneCard
+                color="amber"
+                icon={<AlertTriangle className="w-4 h-4 text-[#854F0B]" strokeWidth={1.6} />}
+                title="Amministratore non assegnato"
+                sub="Configurazione incompleta"
+              />
+            )}
+            {unitsSenzaAccount > 0 && (
+              <AttenzioneCard
+                color="amber"
+                icon={<AlertTriangle className="w-4 h-4 text-[#854F0B]" strokeWidth={1.6} />}
+                title={`Unità senza account cliente · ${unitsSenzaAccount}`}
+                sub="Inviti non ancora inviati"
+              />
+            )}
+          </div>
+        )}
 
-        {/* Tab navigation */}
+        {/* Zona 3 — Gestione */}
         <div className="space-y-2">
-          {tabs.map(tab => (
+          {porte.map(porta => (
             <Link
-              key={tab.href}
-              href={tab.href}
+              key={porta.href}
+              href={porta.href}
               className="flex items-center gap-3 bg-surface rounded-xl border border-border p-4 active:scale-[0.99] transition-transform"
             >
               <div className="w-9 h-9 bg-background rounded-lg flex items-center justify-center text-text-secondary">
-                <tab.icon className="w-4 h-4" strokeWidth={1.6} />
+                <porta.icon className="w-4 h-4" strokeWidth={1.6} />
               </div>
-              <span className="text-sm font-medium text-text-primary">{tab.label}</span>
-              <ChevronLeft className="w-4 h-4 text-text-secondary ml-auto rotate-180" strokeWidth={1.6} />
+              <span className="text-sm font-medium text-text-primary flex-1">{porta.label}</span>
+              {porta.meta && (
+                <span className="text-xs text-text-secondary mr-1">{porta.meta}</span>
+              )}
+              <ChevronLeft className="w-4 h-4 text-text-secondary rotate-180" strokeWidth={1.6} />
             </Link>
           ))}
         </div>
@@ -102,22 +214,30 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
   )
 }
 
-function StatCard({ label, value, icon, alert, href }: { label: string; value: number; icon: React.ReactNode; alert?: boolean; href?: string }) {
-  const inner = (
-    <div className={`rounded-xl p-3 text-center border transition-colors ${alert ? 'bg-semantic-red-bg border-semantic-red/20' : 'bg-surface border-border'} ${href ? 'hover:border-brand-medium cursor-pointer' : ''}`}>
-      <div className={`flex justify-center mb-1 ${alert ? 'text-semantic-red' : 'text-text-secondary'}`}>{icon}</div>
-      <p className={`text-xl font-medium ${alert ? 'text-semantic-red' : 'text-text-primary'}`}>{value}</p>
-      <p className="text-[10px] text-text-secondary">{label}</p>
-    </div>
-  )
-  return href ? <Link href={href}>{inner}</Link> : inner
-}
+function AttenzioneCard({
+  color,
+  icon,
+  title,
+  sub,
+}: {
+  color: 'red' | 'amber'
+  icon: React.ReactNode
+  title: string
+  sub: string
+}) {
+  const s = color === 'red'
+    ? { wrap: 'bg-[#FCEBEB] border-[#A32D2D]/20', iconBg: 'bg-[#A32D2D]/10', title: 'text-[#A32D2D]', sub: 'text-[#A32D2D]/70' }
+    : { wrap: 'bg-[#FAEEDA] border-[#854F0B]/20', iconBg: 'bg-[#854F0B]/10', title: 'text-[#854F0B]', sub: 'text-[#854F0B]/70' }
 
-function Detail({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between items-center">
-      <span className="text-xs text-text-secondary">{label}</span>
-      <span className="text-xs font-medium text-text-primary">{value}</span>
+    <div className={`rounded-xl border px-4 py-3 flex items-center gap-3 ${s.wrap}`}>
+      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${s.iconBg}`}>
+        {icon}
+      </div>
+      <div>
+        <p className={`text-sm font-medium ${s.title}`}>{title}</p>
+        <p className={`text-xs ${s.sub}`}>{sub}</p>
+      </div>
     </div>
   )
 }
