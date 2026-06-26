@@ -3,11 +3,12 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import {
   ChevronLeft, Wrench, Users, Settings, FileText,
-  AlertCircle, AlertTriangle, CheckCircle, Phone, UserCheck,
+  AlertCircle, AlertTriangle, CheckCircle,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import { effPriority, ScaduteRow } from '@/lib/residence-stats'
+import { AdminBlock, type AdminProfile } from './AdminBlock'
 
 export const metadata: Metadata = { title: 'Residenza' }
 
@@ -27,7 +28,9 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
   if (!residence) notFound()
 
   type UnitRow = { id: string; unit_members: { ended_at: string | null }[] | null }
-  type AdminRow = { profiles: { full_name: string | null } | null } | null
+  type AdminRow = { profiles: AdminProfile | null } | null
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
 
   const [
     { data: unitsRaw },
@@ -35,6 +38,7 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
     { count: docCount },
     { count: supplierCount },
     { data: adminRaw },
+    { data: adminListRaw },
   ] = await Promise.all([
     supabase.from('units')
       .select('id, unit_members!left(ended_at)')
@@ -50,9 +54,12 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
       .select('id', { count: 'exact', head: true })
       .eq('residence_id', id),
     supabase.from('admin_assignments')
-      .select('profiles(full_name)')
+      .select('profiles(id, full_name, phone)')
       .eq('residence_id', id)
       .maybeSingle(),
+    supabase.from('profiles')
+      .select('id, full_name, phone')
+      .eq('role', 'admin'),
   ])
 
   const units = (unitsRaw ?? []) as unknown as UnitRow[]
@@ -70,9 +77,8 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
       .map(i => i.unit_id as string)
   ).size
 
-  const adminProfile = (adminRaw as unknown as AdminRow)?.profiles
-  const noAdmin = !adminProfile
-
+  const adminProfile = (adminRaw as unknown as AdminRow)?.profiles ?? null
+  const adminList = (adminListRaw ?? []) as AdminProfile[]
 
   const porte = [
     { href: `/admin/residences/${id}/units`,        icon: Users,     label: 'Unità e inviti', sub: `${unitCount} unità` },
@@ -110,27 +116,13 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
             </div>
           </div>
 
-          {adminProfile && (
-            <div className="px-4 py-3 flex items-center gap-3 border-t border-border">
-              <div className="w-8 h-8 rounded-full bg-[#E1F5EE] flex items-center justify-center flex-shrink-0">
-                <UserCheck className="w-4 h-4 text-[#0F6E56]" strokeWidth={1.6} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-text-primary truncate">
-                  {adminProfile.full_name ?? 'Amministratore'}
-                </p>
-                <p className="text-xs text-text-secondary">Amministratore di condominio</p>
-              </div>
-              <div
-                role="button"
-                tabIndex={0}
-                className="flex items-center gap-1.5 text-xs font-medium text-[#0F6E56] border border-[#9FE1CB] rounded-lg px-3 py-1.5 cursor-pointer"
-              >
-                <Phone className="w-3 h-3" strokeWidth={1.6} />
-                Contatta
-              </div>
-            </div>
-          )}
+          <AdminBlock
+            mode="card"
+            residenceId={id}
+            adminProfile={adminProfile}
+            availableAdmins={adminList}
+            appUrl={appUrl}
+          />
         </div>
 
         {/* Zona 2 — Richiede attenzione */}
@@ -162,14 +154,13 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
               </div>
             </div>
           )}
-          {noAdmin && (
-            <AttenzioneCard
-              color="amber"
-              icon={<AlertTriangle className="w-4 h-4 text-[#854F0B]" strokeWidth={1.6} />}
-              title="Amministratore non assegnato"
-              sub="Configurazione incompleta"
-            />
-          )}
+          <AdminBlock
+            mode="tile"
+            residenceId={id}
+            adminProfile={adminProfile}
+            availableAdmins={adminList}
+            appUrl={appUrl}
+          />
           {unitsSenzaAccount > 0 && (
             <AttenzioneCard
               color="amber"
