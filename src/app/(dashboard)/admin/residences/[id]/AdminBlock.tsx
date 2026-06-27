@@ -32,7 +32,7 @@ export function AdminBlock({
 
   // Modal state
   const [open, setOpen] = useState(false)
-  const [view, setView] = useState<'dettaglio' | 'assegnazione'>('dettaglio')
+  const [view, setView] = useState<'dettaglio' | 'assegnazione' | 'conferma_cambio'>('dettaglio')
   // Kept open during the remove→reassign flow even when adminProfile prop becomes null
   const [transitioning, setTransitioning] = useState(false)
 
@@ -85,22 +85,21 @@ export function AdminBlock({
       const res = await assignAdmin(residenceId, profileId)
       if (res.error) { setServerError(res.error); return }
       setTransitioning(false)
+      startTransition(() => router.refresh())
       close()
-      router.refresh()
     })
   }
 
-  function handleChangeAdmin() {
+  function handleConfirmChange() {
     setServerError(null)
     startTransition(async () => {
       const res = await removeAdminAssignment(residenceId)
       if (res.error) { setServerError(res.error); return }
-      // Keep modal open — switch to assegnazione while router refreshes
       setTransitioning(true)
       setAdminEmail(null)
       setInviteToken(null)
       setView('assegnazione')
-      router.refresh()
+      startTransition(() => router.refresh())
     })
   }
 
@@ -195,7 +194,7 @@ export function AdminBlock({
           {/* header */}
           <div className="flex items-center justify-between px-4 py-4 border-b border-[#E4E6E2] sticky top-0 bg-white">
             <h2 className="text-sm font-medium text-[#20302A]">
-              {view === 'dettaglio' ? 'Amministratore' : 'Assegna amministratore'}
+              {view === 'dettaglio' ? 'Amministratore' : view === 'assegnazione' ? 'Assegna amministratore' : 'Cambia amministratore'}
             </h2>
             <div
               role="button"
@@ -278,16 +277,43 @@ export function AdminBlock({
                   <div
                     role="button"
                     tabIndex={0}
-                    onClick={() => { if (!pending) handleChangeAdmin() }}
-                    onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && !pending) handleChangeAdmin() }}
-                    aria-disabled={pending}
+                    onClick={() => setView('conferma_cambio')}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setView('conferma_cambio') }}
                     className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 border border-[#E4E6E2] rounded-lg text-sm text-[#20302A]/60 cursor-pointer hover:bg-[#F4F3EF] transition-colors"
                   >
-                    {pending
-                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      : <UserPlus className="w-3.5 h-3.5" strokeWidth={1.6} />
-                    }
+                    <UserPlus className="w-3.5 h-3.5" strokeWidth={1.6} />
                     Cambia amministratore
+                  </div>
+                </div>
+              </>
+            ) : view === 'conferma_cambio' ? (
+              <>
+                <div>
+                  <p className="text-sm font-medium text-[#20302A]">Cambia amministratore?</p>
+                  <p className="text-sm text-[#20302A]/60 mt-1">
+                    L&apos;amministratore attuale verrà rimosso. Potrai assegnarne uno nuovo subito dopo.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setView('dettaglio')}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setView('dettaglio') }}
+                    className="flex-1 flex items-center justify-center px-3 py-2.5 border border-[#E4E6E2] rounded-lg text-sm text-[#20302A] cursor-pointer hover:bg-[#F4F3EF] transition-colors"
+                  >
+                    Annulla
+                  </div>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => { if (!pending) handleConfirmChange() }}
+                    onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && !pending) handleConfirmChange() }}
+                    aria-disabled={pending}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-[#04342C] text-white rounded-lg text-sm font-medium cursor-pointer"
+                  >
+                    {pending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    Conferma
                   </div>
                 </div>
               </>
