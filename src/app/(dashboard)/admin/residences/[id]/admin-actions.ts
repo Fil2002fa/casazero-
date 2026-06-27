@@ -23,9 +23,12 @@ export async function assignAdmin(
   const supabase = await createClient()
   const { error } = await supabase
     .from('admin_assignments')
-    .insert({ profile_id: profileId, residence_id: residenceId })
+    .upsert({ profile_id: profileId, residence_id: residenceId }, { onConflict: 'residence_id' })
 
-  if (error) return { error: error.message }
+  if (error) {
+    if (error.code === '23505') return { error: 'Amministratore già assegnato a questa residenza.' }
+    return { error: 'Errore durante l\'assegnazione. Riprova.' }
+  }
   revalidatePath(`/admin/residences/${residenceId}`)
   return {}
 }
