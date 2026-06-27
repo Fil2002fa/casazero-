@@ -8,6 +8,7 @@ import {
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import { effPriority, ScaduteRow } from '@/lib/residence-stats'
+import { unitHasNoActiveAccount } from '@/lib/unit-utils'
 import { AdminBlock, type AdminProfile } from './AdminBlock'
 
 export const metadata: Metadata = { title: 'Residenza' }
@@ -64,10 +65,9 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
 
   const units = (unitsRaw ?? []) as unknown as UnitRow[]
   const unitCount = units.length
-  const unitsSenzaAccount = units.filter(u => {
-    const ms = u.unit_members
-    return !ms || ms.length === 0 || !ms.some(m => m.ended_at === null)
-  }).length
+  const unitsSenzaAccount = units.filter(u =>
+    unitHasNoActiveAccount((u.unit_members ?? []) as { ended_at: string | null }[])
+  ).length
 
   const scadute = (scaduteData ?? []) as unknown as ScaduteRow[]
   const n3Scadute = scadute.filter(i => effPriority(i) === 'N3').length
@@ -167,6 +167,7 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
               icon={<AlertTriangle className="w-4 h-4 text-[#854F0B]" strokeWidth={1.6} />}
               title={`Unità senza account cliente · ${unitsSenzaAccount}`}
               sub="Inviti non ancora inviati"
+              href={`/admin/residences/${id}/units?filter=senza_account`}
             />
           )}
         </div>
@@ -202,18 +203,21 @@ function AttenzioneCard({
   icon,
   title,
   sub,
+  href,
 }: {
   color: 'red' | 'amber'
   icon: React.ReactNode
   title: string
   sub: string
+  href?: string
 }) {
   const s = color === 'red'
     ? { wrap: 'bg-[#FCEBEB] border-[#A32D2D]/20', iconBg: 'bg-[#A32D2D]/10', title: 'text-[#A32D2D]', sub: 'text-[#A32D2D]/70' }
     : { wrap: 'bg-[#FAEEDA] border-[#854F0B]/20', iconBg: 'bg-[#854F0B]/10', title: 'text-[#854F0B]', sub: 'text-[#854F0B]/70' }
 
-  return (
-    <div className={`rounded-xl border px-4 py-3 flex items-center gap-3 ${s.wrap}`}>
+  const className = `rounded-xl border px-4 py-3 flex items-center gap-3 ${s.wrap}`
+  const inner = (
+    <>
       <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${s.iconBg}`}>
         {icon}
       </div>
@@ -221,6 +225,9 @@ function AttenzioneCard({
         <p className={`text-sm font-medium ${s.title}`}>{title}</p>
         <p className={`text-xs ${s.sub}`}>{sub}</p>
       </div>
-    </div>
+    </>
   )
+
+  if (href) return <Link href={href} className={className}>{inner}</Link>
+  return <div className={className}>{inner}</div>
 }

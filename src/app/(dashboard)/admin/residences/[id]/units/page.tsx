@@ -10,17 +10,20 @@ import QRCode from 'qrcode'
 export const metadata: Metadata = { title: 'Unità e inviti' }
 
 type Params = Promise<{ id: string }>
+type SearchParams = Promise<{ filter?: string }>
 
 type UnitRow = {
   id: string
   label: string
   floor: number | null
   members: { profile_id: string; is_primary: boolean; profiles: { full_name: string | null } | null }[]
+  rawMembers: { ended_at: string | null }[]
   invites: { id: string; token: string; expires_at: string; used_at: string | null }[]
 }
 
-export default async function UnitsPage({ params }: { params: Params }) {
+export default async function UnitsPage({ params, searchParams }: { params: Params; searchParams: SearchParams }) {
   const { id: residenceId } = await params
+  const { filter } = await searchParams
   await requireRole(['super_admin'], '/admin/manutenzioni')
   const supabase = await createClient()
 
@@ -47,7 +50,8 @@ export default async function UnitsPage({ params }: { params: Params }) {
 
   const units: (UnitRow & { qrCodes: Record<string, string> })[] = await Promise.all(
     (rawUnitsAll ?? []).map(async (u) => {
-      const members = ((u.unit_members as unknown as { profile_id: string; is_primary: boolean; ended_at: string | null; profiles: { full_name: string | null } | null }[]) ?? [])
+      const rawMembersAll = (u.unit_members as unknown as { profile_id: string; is_primary: boolean; ended_at: string | null; profiles: { full_name: string | null } | null }[]) ?? []
+      const members = rawMembersAll
         .filter(m => !m.ended_at)
         .sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0))
       const invites = (u.invites as unknown as { id: string; token: string; expires_at: string; used_at: string | null }[]) ?? []
@@ -70,6 +74,7 @@ export default async function UnitsPage({ params }: { params: Params }) {
         label: u.label,
         floor: u.floor,
         members: members as UnitRow['members'],
+        rawMembers: rawMembersAll,
         invites,
         qrCodes,
       }
@@ -93,6 +98,7 @@ export default async function UnitsPage({ params }: { params: Params }) {
           residenceId={residenceId}
           units={units}
           appUrl={appUrl}
+          initialFilter={filter}
         />
       </div>
     </div>

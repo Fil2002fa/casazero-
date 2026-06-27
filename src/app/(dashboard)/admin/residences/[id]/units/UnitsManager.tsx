@@ -4,19 +4,21 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, QrCode, Trash2, UserPlus, Copy, Check, MessageCircle, Mail, Pencil, X } from 'lucide-react'
 import { createUnit, createInvite, revokeInvite, updateUnitLabel } from './actions'
+import { unitHasNoActiveAccount } from '@/lib/unit-utils'
 import Image from 'next/image'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 
 type MemberRow = { profile_id: string; is_primary: boolean; profiles: { full_name: string | null } | null }
 type InviteRow = { id: string; token: string; expires_at: string; used_at: string | null }
-type UnitRow = { id: string; label: string; floor: number | null; members: MemberRow[]; invites: InviteRow[]; qrCodes: Record<string, string> }
+type UnitRow = { id: string; label: string; floor: number | null; members: MemberRow[]; rawMembers: { ended_at: string | null }[]; invites: InviteRow[]; qrCodes: Record<string, string> }
 
 export function UnitsManager({
-  residenceId, units, appUrl,
+  residenceId, units, appUrl, initialFilter,
 }: {
   residenceId: string
   units: UnitRow[]
   appUrl: string
+  initialFilter?: string
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -28,6 +30,11 @@ export function UnitsManager({
   const [expandedUnit, setExpandedUnit] = useState<string | null>(null)
   const [editingUnitId, setEditingUnitId] = useState<string | null>(null)
   const [editLabel, setEditLabel] = useState('')
+  const [filterSenzaAccount, setFilterSenzaAccount] = useState(initialFilter === 'senza_account')
+
+  const displayUnits = filterSenzaAccount
+    ? units.filter(u => unitHasNoActiveAccount(u.rawMembers))
+    : units
 
   function handleAddUnit() {
     if (!newUnitLabel.trim()) return
@@ -141,8 +148,23 @@ export function UnitsManager({
         </div>
       )}
 
+      {/* Banner filtro attivo */}
+      {filterSenzaAccount && (
+        <div className="flex items-center justify-between bg-[#FAEEDA] rounded-lg px-3 py-2 border border-[#854F0B]/20">
+          <p className="text-xs text-[#854F0B]">
+            {displayUnits.length} {displayUnits.length === 1 ? 'unità' : 'unità'} senza account cliente
+          </p>
+          <button
+            onClick={() => setFilterSenzaAccount(false)}
+            className="text-xs text-[#854F0B] underline ml-3 flex-shrink-0"
+          >
+            Mostra tutte
+          </button>
+        </div>
+      )}
+
       {/* Lista unità */}
-      {units.map(unit => {
+      {displayUnits.map(unit => {
         const activeInvites = unit.invites.filter(i => !i.used_at && new Date(i.expires_at) > new Date())
         const usedInvites = unit.invites.filter(i => i.used_at)
         const isExpanded = expandedUnit === unit.id
