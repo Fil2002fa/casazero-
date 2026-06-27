@@ -117,7 +117,6 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
           </div>
 
           <AdminBlock
-            mode="card"
             residenceId={id}
             adminProfile={adminProfile}
             availableAdmins={adminList}
@@ -154,13 +153,6 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
               </div>
             </div>
           )}
-          <AdminBlock
-            mode="tile"
-            residenceId={id}
-            adminProfile={adminProfile}
-            availableAdmins={adminList}
-            appUrl={appUrl}
-          />
           {unitsSenzaAccount > 0 && (
             <AttenzioneCard
               color="amber"

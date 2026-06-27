@@ -15,13 +15,11 @@ export type AdminProfile = {
 }
 
 export function AdminBlock({
-  mode,
   residenceId,
   adminProfile,
   availableAdmins,
   appUrl,
 }: {
-  mode: 'card' | 'tile'
   residenceId: string
   adminProfile: AdminProfile | null
   availableAdmins: AdminProfile[]
@@ -119,63 +117,49 @@ export function AdminBlock({
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // ─── MODE: card ───────────────────────────────────────────────
-  if (mode === 'card') {
-    if (!adminProfile && !transitioning) return null
-    return (
-      <>
-        {adminProfile && (
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={openDettaglio}
-            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') openDettaglio() }}
-            className="px-4 py-3 flex items-center gap-3 border-t border-border cursor-pointer hover:bg-background transition-colors"
-          >
-            <div className="w-8 h-8 rounded-full bg-[#E1F5EE] flex items-center justify-center flex-shrink-0">
-              <UserCheck className="w-4 h-4 text-[#0F6E56]" strokeWidth={1.6} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-text-primary truncate">
-                {adminProfile.full_name ?? 'Amministratore'}
-              </p>
-              <p className="text-xs text-text-secondary">Amministratore di condominio</p>
-            </div>
-            <ChevronLeft className="w-4 h-4 text-text-secondary rotate-180 flex-shrink-0" strokeWidth={1.6} />
+  // ─── Card: admin presente o no-admin ─────────────────────────
+  return (
+    <>
+      {adminProfile ? (
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={openDettaglio}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') openDettaglio() }}
+          className="px-4 py-3 flex items-center gap-3 border-t border-border cursor-pointer hover:bg-background transition-colors"
+        >
+          <div className="w-8 h-8 rounded-full bg-[#E1F5EE] flex items-center justify-center flex-shrink-0">
+            <UserCheck className="w-4 h-4 text-[#0F6E56]" strokeWidth={1.6} />
           </div>
-        )}
-        {open && <AdminModal />}
-      </>
-    )
-  }
-
-  // ─── MODE: tile ───────────────────────────────────────────────
-  if (mode === 'tile') {
-    if (adminProfile) return null
-    return (
-      <>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-text-primary truncate">
+              {adminProfile.full_name ?? 'Amministratore'}
+            </p>
+            <p className="text-xs text-text-secondary">Amministratore di condominio</p>
+          </div>
+          <ChevronLeft className="w-4 h-4 text-text-secondary rotate-180 flex-shrink-0" strokeWidth={1.6} />
+        </div>
+      ) : !transitioning ? (
         <div
           role="button"
           tabIndex={0}
           onClick={openAssegnazione}
           onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') openAssegnazione() }}
-          className="bg-[#FAEEDA] rounded-xl border border-[#854F0B]/20 px-4 py-3 flex items-center gap-3 cursor-pointer"
+          className="px-4 py-3 flex items-center gap-3 border-t border-[#854F0B]/20 bg-[#FAEEDA] cursor-pointer hover:brightness-[0.97] transition-colors"
         >
           <div className="w-8 h-8 rounded-full bg-[#854F0B]/10 flex items-center justify-center flex-shrink-0">
             <AlertTriangle className="w-4 h-4 text-[#854F0B]" strokeWidth={1.6} />
           </div>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-[#854F0B]">Amministratore non assegnato</p>
-            <p className="text-xs text-[#854F0B]/70">Tocca per assegnare</p>
+            <p className="text-xs text-[#854F0B]/70">Assegna amministratore</p>
           </div>
           <ChevronLeft className="w-4 h-4 text-[#854F0B]/50 rotate-180 flex-shrink-0" strokeWidth={1.6} />
         </div>
-        {open && <AdminModal />}
-      </>
-    )
-  }
-
-  return null
+      ) : null}
+      {open && <AdminModal />}
+    </>
+  )
 
   // ─── Modal ────────────────────────────────────────────────────
   function AdminModal() {
