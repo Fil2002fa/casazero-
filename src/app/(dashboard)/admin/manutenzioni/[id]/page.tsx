@@ -26,7 +26,7 @@ type CompletionRow = {
 
 export default async function AdminItemDetailPage({ params }: { params: Params }) {
   const { id } = await params
-  const profile = await requireRole(['admin', 'super_admin'])
+  const profile = await requireRole(['admin'])
   const supabase = await createClient()
 
   const { data: rawItem } = await supabase

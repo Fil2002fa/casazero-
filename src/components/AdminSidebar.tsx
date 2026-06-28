@@ -2,12 +2,12 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Building2, Wrench, Settings } from 'lucide-react'
+import { Building2, Users, Wrench, Settings } from 'lucide-react'
 import type { UserRole } from '@/types/database'
 
 const SUPER_ADMIN_ITEMS = [
   { href: '/admin/residences', icon: Building2, label: 'Residenze' },
-  { href: '/admin/manutenzioni', icon: Wrench, label: 'Manutenzioni' },
+  { href: '/admin/administrators', icon: Users, label: 'Amministratori' },
   { href: '/admin/settings', icon: Settings, label: 'Impostazioni' },
 ] as const
 

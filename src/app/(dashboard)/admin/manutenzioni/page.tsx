@@ -26,7 +26,7 @@ type ItemRow = {
 }
 
 export default async function AdminManutenzioniPage() {
-  await requireRole(['admin', 'super_admin'])
+  await requireRole(['admin'])
   const supabase = await createClient()
 
   // Tutti gli item di ambito condominio accessibili (RLS filtra per residenze assegnate)
