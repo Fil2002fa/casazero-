@@ -34,7 +34,6 @@ async function loadAdmins(builderId: string): Promise<AdminSummary[]> {
   const svc = createServiceClient()
   const today = new Date().toISOString().split('T')[0]
 
-  // Residences for this builder
   const { data: residences } = await svc
     .from('residences')
     .select('id, name')
@@ -42,7 +41,6 @@ async function loadAdmins(builderId: string): Promise<AdminSummary[]> {
   const residenceIds = (residences ?? []).map(r => r.id)
   if (residenceIds.length === 0) return []
 
-  // Admin assignments — scoped to these residences (not builder-wide via profile lookup)
   const { data: assignments } = await svc
     .from('admin_assignments')
     .select('profile_id, residence_id')
@@ -51,14 +49,11 @@ async function loadAdmins(builderId: string): Promise<AdminSummary[]> {
   const adminIds = [...new Set((assignments ?? []).map(a => a.profile_id))]
   if (adminIds.length === 0) return []
 
-  // Admin profiles
   const { data: adminProfiles } = await svc
     .from('profiles')
     .select('id, full_name, phone')
     .in('id', adminIds)
 
-  // Overdue N2/N3 items — LIVE from next_due_date (NOT from status field)
-  // Scoped per-residence via residenceIds, filtered to N2/N3 in JS after join
   type OverdueRaw = {
     residence_id: string
     priority: MaintenancePriority | null
@@ -73,7 +68,6 @@ async function loadAdmins(builderId: string): Promise<AdminSummary[]> {
     .not('next_due_date', 'is', null)
   const overdueItems = (overdueRaw ?? []) as unknown as OverdueRaw[]
 
-  // Count overdue per residence (N2/N3 only — N1 non contano come problemi)
   const overdueByResidence: Record<string, number> = {}
   for (const item of overdueItems) {
     const eff = item.priority ?? item.maintenance_templates?.priority
@@ -82,7 +76,6 @@ async function loadAdmins(builderId: string): Promise<AdminSummary[]> {
     }
   }
 
-  // Supplier counts per residence
   const { data: suppliers } = await svc
     .from('suppliers')
     .select('residence_id')
@@ -92,7 +85,6 @@ async function loadAdmins(builderId: string): Promise<AdminSummary[]> {
     suppliersByResidence[s.residence_id] = (suppliersByResidence[s.residence_id] ?? 0) + 1
   }
 
-  // Unit counts per residence
   const { data: units } = await svc
     .from('units')
     .select('residence_id')
@@ -102,7 +94,6 @@ async function loadAdmins(builderId: string): Promise<AdminSummary[]> {
     unitsByResidence[u.residence_id] = (unitsByResidence[u.residence_id] ?? 0) + 1
   }
 
-  // Emails from auth.users — serviceClient bypasses RLS
   const emailMap: Record<string, string | null> = {}
   await Promise.all(
     adminIds.map(async id => {
@@ -111,7 +102,6 @@ async function loadAdmins(builderId: string): Promise<AdminSummary[]> {
     })
   )
 
-  // Aggregate per-admin summary
   return adminIds.map(adminId => {
     const profile = (adminProfiles ?? []).find(p => p.id === adminId)
 
@@ -125,14 +115,7 @@ async function loadAdmins(builderId: string): Promise<AdminSummary[]> {
         const status: ResidenceStatus['status'] =
           overdueCount > 0 ? 'red' :
           supplierCount === 0 || unitCount === 0 ? 'amber' : 'green'
-        return {
-          id: a.residence_id,
-          name: residence?.name ?? '—',
-          overdueCount,
-          supplierCount,
-          unitCount,
-          status,
-        }
+        return { id: a.residence_id, name: residence?.name ?? '—', overdueCount, supplierCount, unitCount, status }
       })
 
     const worstStatus: AdminSummary['worstStatus'] = residenceStatuses.reduce(
@@ -155,7 +138,7 @@ async function loadAdmins(builderId: string): Promise<AdminSummary[]> {
   })
 }
 
-// ─── Page (data layer step — minimal rendering) ───────────────────────────────
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function AdministratorsPage() {
   const profile = await requireRole(['super_admin'])
@@ -165,6 +148,7 @@ export default async function AdministratorsPage() {
   const sorted = [...admins].sort(
     (a, b) => sortOrder[a.worstStatus] - sortOrder[b.worstStatus]
   )
+  const needsAttention = sorted.filter(a => a.worstStatus !== 'green')
 
   return (
     <div className="p-6 space-y-6 pb-safe">
@@ -173,33 +157,113 @@ export default async function AdministratorsPage() {
         <h1 className="text-xl font-medium text-text-primary mt-1">Amministratori</h1>
       </header>
 
-      <div className="bg-surface rounded-xl border border-[#E4E6E2] divide-y divide-[#E4E6E2] overflow-hidden">
-        {sorted.map(admin => (
-          <Link
-            key={admin.profileId}
-            href={`/admin/administrators/${admin.profileId}`}
-            className="flex items-center gap-3 px-4 py-3 hover:bg-[#F4F3EF] transition-colors"
-          >
-            <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-              admin.worstStatus === 'red' ? 'bg-[#A32D2D]' :
-              admin.worstStatus === 'amber' ? 'bg-[#854F0B]' : 'bg-[#0F6E56]'
-            }`} />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-[#20302A]">{admin.fullName ?? 'Amministratore'}</p>
-              <p className="text-xs text-[#20302A]/50">
-                {admin.residences.length} residenz{admin.residences.length === 1 ? 'a' : 'e'}
-                {admin.totalOverdue > 0 ? ` · ${admin.totalOverdue} scadute` : ''}
-              </p>
-            </div>
-            <ChevronRight className="w-4 h-4 text-[#20302A]/30 flex-shrink-0" strokeWidth={1.6} />
-          </Link>
-        ))}
-        {sorted.length === 0 && (
-          <p className="px-4 py-6 text-sm text-text-secondary text-center">
-            Nessun amministratore assegnato.
-          </p>
+      {/* Zona A — Attenzione */}
+      <section className="space-y-2">
+        <h2 className="text-sm font-medium text-[#20302A]">
+          {needsAttention.length === 0
+            ? 'Tutto in regola'
+            : `${needsAttention.length} ${needsAttention.length === 1 ? 'amministratore richiede' : 'amministratori richiedono'} attenzione`}
+        </h2>
+        {needsAttention.length === 0 ? (
+          <div className="bg-[#E1F5EE] rounded-xl p-4 flex items-center gap-3">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#0F6E56] flex-shrink-0" />
+            <p className="text-sm text-[#04342C]">Nessuna azione richiesta al momento.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {needsAttention.map(admin => (
+              <AttentionCard key={admin.profileId} admin={admin} />
+            ))}
+          </div>
         )}
-      </div>
+      </section>
+
+      {/* Zona B — Tutti gli amministratori */}
+      <section className="space-y-2">
+        <h2 className="text-[10px] font-medium text-[#20302A]/50 uppercase tracking-wide">
+          Tutti gli amministratori
+        </h2>
+        <div className="bg-white rounded-xl border border-[#E4E6E2] divide-y divide-[#E4E6E2] overflow-hidden">
+          {sorted.map(admin => (
+            <RosterRow key={admin.profileId} admin={admin} />
+          ))}
+          {sorted.length === 0 && (
+            <p className="px-4 py-6 text-sm text-[#20302A]/50 text-center">
+              Nessun amministratore assegnato.
+            </p>
+          )}
+        </div>
+      </section>
     </div>
+  )
+}
+
+// ─── Componenti ───────────────────────────────────────────────────────────────
+
+function StatusDot({ status }: { status: 'red' | 'amber' | 'green' }) {
+  return (
+    <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+      status === 'red' ? 'bg-[#A32D2D]' :
+      status === 'amber' ? 'bg-[#854F0B]' : 'bg-[#0F6E56]'
+    }`} />
+  )
+}
+
+function AttentionCard({ admin }: { admin: AdminSummary }) {
+  const isRed = admin.worstStatus === 'red'
+  const accentBorder = isRed ? 'border-l-[#A32D2D]' : 'border-l-[#854F0B]'
+  const bg = isRed ? 'bg-[#FCEBEB]' : 'bg-[#FAEEDA]'
+  const textPrimary = isRed ? 'text-[#A32D2D]' : 'text-[#854F0B]'
+  const textSecondary = isRed ? 'text-[#A32D2D]/70' : 'text-[#854F0B]/70'
+
+  const issueLines: string[] = []
+  for (const r of admin.residences) {
+    if (r.status === 'red') {
+      issueLines.push(`${r.overdueCount} scadut${r.overdueCount === 1 ? 'a' : 'e'} · ${r.name}`)
+    } else if (r.status === 'amber') {
+      const gaps: string[] = []
+      if (r.supplierCount === 0) gaps.push('nessun fornitore')
+      if (r.unitCount === 0) gaps.push('nessuna unità')
+      issueLines.push(`${gaps.join(', ')} · ${r.name}`)
+    }
+  }
+
+  return (
+    <Link
+      href={`/admin/administrators/${admin.profileId}`}
+      className={`flex items-start gap-3 p-4 ${bg} rounded-xl border border-[#E4E6E2] border-l-4 ${accentBorder} hover:brightness-[0.97] transition-all`}
+    >
+      <div className="flex-1 min-w-0">
+        <p className={`text-sm font-medium ${textPrimary}`}>
+          {admin.fullName ?? 'Amministratore'}
+        </p>
+        {admin.email && (
+          <p className={`text-xs ${textSecondary} mt-0.5 truncate`}>{admin.email}</p>
+        )}
+        <div className="mt-1.5 space-y-0.5">
+          {issueLines.map((line, i) => (
+            <p key={i} className={`text-xs ${textSecondary}`}>· {line}</p>
+          ))}
+        </div>
+      </div>
+      <ChevronRight className={`w-4 h-4 ${textSecondary} flex-shrink-0 mt-0.5`} strokeWidth={1.6} />
+    </Link>
+  )
+}
+
+function RosterRow({ admin }: { admin: AdminSummary }) {
+  const residenceNames = admin.residences.map(r => r.name).join(', ')
+  return (
+    <Link
+      href={`/admin/administrators/${admin.profileId}`}
+      className="flex items-center gap-3 px-4 py-3 hover:bg-[#F4F3EF] transition-colors"
+    >
+      <StatusDot status={admin.worstStatus} />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-[#20302A]">{admin.fullName ?? 'Amministratore'}</p>
+        <p className="text-xs text-[#20302A]/50 truncate">{residenceNames}</p>
+      </div>
+      <ChevronRight className="w-4 h-4 text-[#20302A]/30 flex-shrink-0" strokeWidth={1.6} />
+    </Link>
   )
 }
