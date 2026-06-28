@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, QrCode, Trash2, UserPlus, Copy, Check, MessageCircle, Mail, Pencil, X } from 'lucide-react'
-import { createUnit, createInvite, revokeInvite, updateUnitLabel } from './actions'
+import { Plus, QrCode, Trash2, UserPlus, Copy, Check, MessageCircle, Mail, Pencil, X, Loader2 } from 'lucide-react'
+import { createUnit, createInvite, revokeInvite, updateUnitLabel, createBulkInvites } from './actions'
 import { unitHasNoActiveAccount } from '@/lib/unit-utils'
 import Image from 'next/image'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
@@ -31,10 +31,21 @@ export function UnitsManager({
   const [editingUnitId, setEditingUnitId] = useState<string | null>(null)
   const [editLabel, setEditLabel] = useState('')
   const [filterSenzaAccount, setFilterSenzaAccount] = useState(initialFilter === 'senza_account')
+  const [showBulkConfirm, setShowBulkConfirm] = useState(false)
 
   const displayUnits = filterSenzaAccount
     ? units.filter(u => unitHasNoActiveAccount(u.rawMembers))
     : units
+
+  const targetsForBulk = useMemo(
+    () => filterSenzaAccount
+      ? displayUnits.filter(u =>
+          unitHasNoActiveAccount(u.rawMembers) &&
+          u.invites.filter(i => !i.used_at && new Date(i.expires_at) > new Date()).length === 0
+        )
+      : [],
+    [displayUnits, filterSenzaAccount]
+  )
 
   function handleAddUnit() {
     if (!newUnitLabel.trim()) return
@@ -83,6 +94,19 @@ export function UnitsManager({
     startTransition(async () => {
       await revokeInvite(inviteId, residenceId)
       router.refresh()
+    })
+  }
+
+  function handleBulkInvite() {
+    setLocalError(null)
+    startTransition(async () => {
+      const res = await createBulkInvites(targetsForBulk.map(u => u.id), residenceId)
+      if (res.error) {
+        setLocalError(res.error)
+      } else {
+        setShowBulkConfirm(false)
+        router.refresh()
+      }
     })
   }
 
@@ -148,18 +172,64 @@ export function UnitsManager({
         </div>
       )}
 
-      {/* Banner filtro attivo */}
+      {/* Banner filtro attivo + azione bulk */}
       {filterSenzaAccount && (
-        <div className="flex items-center justify-between bg-[#FAEEDA] rounded-lg px-3 py-2 border border-[#854F0B]/20">
-          <p className="text-xs text-[#854F0B]">
-            {displayUnits.length} {displayUnits.length === 1 ? 'unità' : 'unità'} senza account cliente
-          </p>
-          <button
-            onClick={() => setFilterSenzaAccount(false)}
-            className="text-xs text-[#854F0B] underline ml-3 flex-shrink-0"
-          >
-            Mostra tutte
-          </button>
+        <div className="bg-[#FAEEDA] rounded-lg border border-[#854F0B]/20 overflow-hidden">
+          {!showBulkConfirm ? (
+            <div className="flex items-center justify-between px-3 py-2 gap-3">
+              <p className="text-xs text-[#854F0B] shrink-0">
+                {displayUnits.length} unità senza account cliente
+              </p>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {targetsForBulk.length > 0 ? (
+                  <button
+                    onClick={() => setShowBulkConfirm(true)}
+                    className="text-[11px] font-medium bg-[#854F0B] text-white px-2.5 py-1 rounded-md"
+                  >
+                    Genera inviti ({targetsForBulk.length})
+                  </button>
+                ) : (
+                  <span className="text-[10px] text-[#854F0B]/60 italic text-right">
+                    Tutte le unità senza account hanno già un invito attivo
+                  </span>
+                )}
+                <button
+                  onClick={() => { setFilterSenzaAccount(false); setShowBulkConfirm(false) }}
+                  className="text-xs text-[#854F0B] underline"
+                >
+                  Mostra tutte
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="px-3 py-3 space-y-2.5">
+              <div>
+                <p className="text-xs font-medium text-[#854F0B]">
+                  Genera inviti per {targetsForBulk.length} {targetsForBulk.length === 1 ? 'unità' : 'unità'}?
+                </p>
+                <p className="text-[10px] text-[#854F0B]/70 mt-0.5">
+                  Verrà generato un link e QR per ogni unità priva di invito attivo.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowBulkConfirm(false)}
+                  disabled={pending}
+                  className="px-3 py-1.5 text-xs text-[#854F0B] border border-[#854F0B]/30 rounded-md disabled:opacity-50"
+                >
+                  Annulla
+                </button>
+                <button
+                  onClick={handleBulkInvite}
+                  disabled={pending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#854F0B] text-white rounded-md disabled:opacity-50"
+                >
+                  {pending && <Loader2 className="w-3 h-3 animate-spin" />}
+                  Conferma
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

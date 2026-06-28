@@ -106,6 +106,59 @@ export async function createInvite(
   return { token: invite.token }
 }
 
+export async function createBulkInvites(
+  unitIds: string[],
+  residenceId: string
+): Promise<{ count: number; skipped: number; error?: string }> {
+  if (unitIds.length === 0) return { count: 0, skipped: 0 }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { count: 0, skipped: 0, error: 'Non autenticato' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile || !['admin', 'super_admin'].includes(profile.role)) {
+    return { count: 0, skipped: 0, error: 'Permessi insufficienti' }
+  }
+
+  const admin = createServiceClient()
+  const now = new Date().toISOString()
+
+  // Idempotency: skip units that already have an active invite
+  const { data: existing } = await admin
+    .from('invites')
+    .select('unit_id')
+    .in('unit_id', unitIds)
+    .is('used_at', null)
+    .gt('expires_at', now)
+
+  const alreadyInvited = new Set((existing ?? []).map(i => i.unit_id as string))
+  const toInvite = unitIds.filter(id => !alreadyInvited.has(id))
+
+  if (toInvite.length === 0) return { count: 0, skipped: alreadyInvited.size }
+
+  const expiresAt = new Date()
+  expiresAt.setDate(expiresAt.getDate() + 30)
+
+  const rows = toInvite.map(unitId => ({
+    unit_id: unitId,
+    residence_id: residenceId,
+    role: 'client',
+    expires_at: expiresAt.toISOString(),
+  }))
+
+  const { error } = await admin.from('invites').insert(rows)
+  if (error) return { count: 0, skipped: alreadyInvited.size, error: error.message }
+
+  revalidatePath(`/admin/residences/${residenceId}/units`)
+  return { count: toInvite.length, skipped: alreadyInvited.size }
+}
+
 export async function updateUnitLabel(
   unitId: string,
   label: string,
