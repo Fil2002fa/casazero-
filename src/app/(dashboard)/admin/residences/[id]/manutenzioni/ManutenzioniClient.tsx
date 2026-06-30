@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { PriorityBadge } from '@/components/PriorityBadge'
+import { MaintenanceBadge } from '@/components/MaintenanceBadge'
 import { ItemConfigForm } from './ItemConfigForm'
 import type { MaintenancePriority, MaintenanceStatus, CompletionMode, ObligationType, ItemActivation } from '@/types/database'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
@@ -188,7 +188,8 @@ export function ManutenzioniClient({ residenceId, items, completions, suppliers,
               <div className="space-y-2">
                 {entries.map(({ completion, item }) => {
                   const tpl = item.maintenance_templates
-                  const effPri = (item.priority ?? tpl?.priority ?? 'N2') as MaintenancePriority
+                  const effMode = (item.completion_mode ?? tpl?.completion_mode) as CompletionMode
+                  const effObl  = (item.obligation_type  ?? tpl?.obligation_type)  as ObligationType
                   const dateStr = new Date(completion.completed_at).toLocaleDateString('it-IT', {
                     day: 'numeric', month: 'short', year: 'numeric',
                   })
@@ -196,7 +197,7 @@ export function ManutenzioniClient({ residenceId, items, completions, suppliers,
                     <div key={completion.id} className="bg-surface rounded-xl border border-border p-3">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-medium text-text-primary truncate">{tpl?.title}</p>
-                        <PriorityBadge priority={effPri} status="completata" />
+                        <MaintenanceBadge mode={effMode} obligation={effObl} status="completata" />
                       </div>
                       <div className="flex gap-3 mt-1 flex-wrap">
                         {item.units && (
@@ -234,6 +235,8 @@ export function ManutenzioniClient({ residenceId, items, completions, suppliers,
                 {catItems.map(item => {
                   const tpl = item.maintenance_templates
                   const effPriority = (item.priority ?? tpl?.priority ?? 'N2') as MaintenancePriority
+                  const effMode = (item.completion_mode ?? tpl?.completion_mode) as CompletionMode
+                  const effObl  = (item.obligation_type  ?? tpl?.obligation_type)  as ObligationType
                   const formattedDue = item.next_due_date
                     ? new Date(item.next_due_date).toLocaleDateString('it-IT', {
                         day: 'numeric', month: 'short', year: 'numeric',
@@ -246,7 +249,7 @@ export function ManutenzioniClient({ residenceId, items, completions, suppliers,
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <p className="text-sm font-medium text-text-primary truncate">{tpl?.title}</p>
-                            <PriorityBadge priority={effPriority} status={item.status} />
+                            <MaintenanceBadge mode={effMode} obligation={effObl} status={item.status} />
                           </div>
                           <div className="flex gap-3 mt-1 flex-wrap">
                             {item.units && (
@@ -257,9 +260,9 @@ export function ManutenzioniClient({ residenceId, items, completions, suppliers,
                                   : null}
                               </span>
                             )}
-                            {effPriority === 'N1' ? (
+                            {effMode === 'promemoria' ? (
                               <span className="text-xs text-semantic-blue">
-                                Consigliata · {formatFrequency(item.frequency_months ?? tpl?.frequency_months)}
+                                Promemoria · {formatFrequency(item.frequency_months ?? tpl?.frequency_months)}
                               </span>
                             ) : formattedDue ? (
                               <span className={`text-xs ${item.status === 'scaduta' ? 'text-semantic-red' : 'text-text-secondary'}`}>
