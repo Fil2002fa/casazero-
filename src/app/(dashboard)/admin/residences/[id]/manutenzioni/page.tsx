@@ -36,7 +36,8 @@ export default async function ResidenceManutenzioniPage({ params, searchParams }
       .from('maintenance_items')
       .select(`
         id, status, next_due_date, unit_id, priority, frequency_months, warranty_info, supplier_id,
-        maintenance_templates(title, category, priority, frequency_months, scope),
+        completion_mode, obligation_type, activation_status,
+        maintenance_templates(title, category, priority, frequency_months, scope, completion_mode, obligation_type),
         units(label),
         suppliers(id, name)
       `)

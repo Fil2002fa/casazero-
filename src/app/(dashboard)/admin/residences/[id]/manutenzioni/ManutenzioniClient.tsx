@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { PriorityBadge } from '@/components/PriorityBadge'
 import { ItemConfigForm } from './ItemConfigForm'
-import type { MaintenancePriority, MaintenanceStatus } from '@/types/database'
+import type { MaintenancePriority, MaintenanceStatus, CompletionMode, ObligationType, ItemActivation } from '@/types/database'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import { formatFrequency } from '@/lib/formatFrequency'
 
@@ -13,6 +13,9 @@ export type ItemRow = {
   next_due_date: string | null
   unit_id: string | null
   priority: MaintenancePriority | null
+  completion_mode: CompletionMode | null
+  obligation_type: ObligationType | null
+  activation_status: ItemActivation
   frequency_months: number | null
   warranty_info: string | null
   supplier_id: string | null
@@ -20,6 +23,8 @@ export type ItemRow = {
     title: string
     category: string
     priority: MaintenancePriority
+    completion_mode: CompletionMode
+    obligation_type: ObligationType
     frequency_months: number
     scope: string
   } | null
