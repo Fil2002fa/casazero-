@@ -54,9 +54,12 @@ export function ManutenzioniClient({ residenceId, items, completions, suppliers,
   const [activeFilter, setActiveFilter] = useState<FilterState>(initialFilter)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
 
+  // Gli item archiviati spariscono dal piano attivo; le loro completion restano nel fascicolo
+  const liveItems = items.filter(i => i.activation_status !== 'archiviata')
+
   // Contatori dalle sorgenti canoniche
-  const scaduteCount = items.filter(i => i.status === 'scaduta').length
-  const inCorsoCount = items.filter(i => i.status === 'in_corso').length
+  const scaduteCount = liveItems.filter(i => i.status === 'scaduta').length
+  const inCorsoCount = liveItems.filter(i => i.status === 'in_corso').length
   const years = [...new Set(completions.map(c => Number(c.completed_at.slice(0, 4))))].sort((a, b) => b - a)
   const yearCompletions = completions.filter(c => Number(c.completed_at.slice(0, 4)) === selectedYear)
   const completedCount = yearCompletions.length
@@ -65,9 +68,9 @@ export function ManutenzioniClient({ residenceId, items, completions, suppliers,
     setActiveFilter(prev => (prev === f ? null : f))
   }
 
-  // Mappa per categoria (tutti gli item)
+  // Mappa per categoria (tutti gli item live)
   const byCategory = new Map<string, ItemRow[]>()
-  for (const item of items) {
+  for (const item of liveItems) {
     const cat = item.maintenance_templates?.category ?? 'Altro'
     if (!byCategory.has(cat)) byCategory.set(cat, [])
     byCategory.get(cat)!.push(item)
