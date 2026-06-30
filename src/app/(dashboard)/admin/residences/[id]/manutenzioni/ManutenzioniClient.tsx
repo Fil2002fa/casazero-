@@ -281,7 +281,8 @@ export function ManutenzioniClient({ residenceId, items, completions, suppliers,
                       <ItemConfigForm
                         itemId={item.id}
                         residenceId={residenceId}
-                        currentPriority={effPriority}
+                        currentMode={effMode}
+                        currentObligation={effObl}
                         currentFrequency={item.frequency_months ?? tpl?.frequency_months ?? null}
                         currentWarranty={item.warranty_info}
                         currentSupplierId={item.supplier_id}

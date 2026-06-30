@@ -3,14 +3,15 @@
 import { useState, useTransition } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { updateMaintenanceItemConfig } from '../fornitori/actions'
-import type { MaintenancePriority } from '@/types/database'
+import type { CompletionMode, ObligationType } from '@/types/database'
 
 export function ItemConfigForm({
-  itemId, residenceId, currentPriority, currentFrequency, currentWarranty, currentSupplierId, suppliers,
+  itemId, residenceId, currentMode, currentObligation, currentFrequency, currentWarranty, currentSupplierId, suppliers,
 }: {
   itemId: string
   residenceId: string
-  currentPriority: MaintenancePriority
+  currentMode: CompletionMode
+  currentObligation: ObligationType
   currentFrequency: number | null
   currentWarranty: string | null
   currentSupplierId: string | null
@@ -19,7 +20,8 @@ export function ItemConfigForm({
   const [open, setOpen] = useState(false)
   const [pending, startTransition] = useTransition()
   const [saved, setSaved] = useState(false)
-  const [priority, setPriority] = useState(currentPriority)
+  const [mode, setMode] = useState(currentMode)
+  const [obligation, setObligation] = useState(currentObligation)
   const [frequency, setFrequency] = useState(currentFrequency?.toString() ?? '')
   const [warranty, setWarranty] = useState(currentWarranty ?? '')
   const [supplierId, setSupplierId] = useState(currentSupplierId ?? '')
@@ -27,7 +29,8 @@ export function ItemConfigForm({
   function handleSave() {
     startTransition(async () => {
       await updateMaintenanceItemConfig(itemId, residenceId, {
-        priority: priority || null,
+        completion_mode: mode,
+        obligation_type: obligation,
         frequency_months: frequency ? parseInt(frequency) : null,
         warranty_info: warranty || null,
         supplier_id: supplierId || null,
@@ -51,28 +54,46 @@ export function ItemConfigForm({
         <div className="px-3 pb-3 space-y-2 bg-background">
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[10px] text-text-secondary block mb-0.5">Priorità</label>
+              <label className="text-[10px] text-text-secondary block mb-0.5">Modalità</label>
               <select
-                value={priority}
-                onChange={e => setPriority(e.target.value as MaintenancePriority)}
+                value={mode}
+                onChange={e => setMode(e.target.value as CompletionMode)}
                 className="w-full border border-border rounded-md px-2 py-1.5 text-xs bg-surface text-text-primary focus:outline-none"
               >
-                <option value="N1">N1 — Consigliata</option>
-                <option value="N2">N2 — Obbligatoria (cliente)</option>
-                <option value="N3">N3 — Amministratore</option>
+                <option value="residente">Residente</option>
+                <option value="amministratore">Amministratore</option>
+                <option value="promemoria">Promemoria</option>
               </select>
             </div>
             <div>
-              <label className="text-[10px] text-text-secondary block mb-0.5">Freq. (mesi)</label>
-              <input
-                type="number"
-                value={frequency}
-                onChange={e => setFrequency(e.target.value)}
-                placeholder="es. 12"
-                min="1"
+              <label className="text-[10px] text-text-secondary block mb-0.5">Tipo</label>
+              <select
+                value={obligation}
+                onChange={e => setObligation(e.target.value as ObligationType)}
                 className="w-full border border-border rounded-md px-2 py-1.5 text-xs bg-surface text-text-primary focus:outline-none"
-              />
+              >
+                <option value="A">Obbligo di legge</option>
+                <option value="B">Raccomandata</option>
+                <option value="C">Consiglio</option>
+              </select>
             </div>
+          </div>
+
+          <div>
+            <label className="text-[10px] text-text-secondary block mb-0.5">Freq. (mesi)</label>
+            <input
+              type="number"
+              value={frequency}
+              onChange={e => setFrequency(e.target.value)}
+              placeholder="es. 12"
+              min="1"
+              className="w-full border border-border rounded-md px-2 py-1.5 text-xs bg-surface text-text-primary focus:outline-none"
+            />
+            {obligation === 'A' && (
+              <p className="mt-0.5 text-[10px] text-semantic-amber">
+                Frequenza ancorata a una norma di legge. Modificala solo dopo verifica tecnica.
+              </p>
+            )}
           </div>
 
           {suppliers.length > 0 && (
