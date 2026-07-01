@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import { MaintenanceBadge } from '@/components/MaintenanceBadge'
 import { ItemConfigForm } from './ItemConfigForm'
 import type { MaintenancePriority, MaintenanceStatus, CompletionMode, ObligationType, ItemActivation } from '@/types/database'
@@ -41,6 +42,22 @@ export type CompletionRow = {
 
 export type FilterState = 'scaduta' | 'in_corso' | 'completate' | null
 
+// Risoluzione assi: item override → template fallback. Unico call-site per testa e corpo,
+// così non nascono calcoli paralleli divergenti. Refactor puro dei calcoli inline preesistenti.
+function resolveAxes(item: ItemRow) {
+  const tpl = item.maintenance_templates
+  return {
+    mode:       (item.completion_mode ?? tpl?.completion_mode) as CompletionMode,
+    obligation: (item.obligation_type ?? tpl?.obligation_type) as ObligationType,
+    priority:   (item.priority ?? tpl?.priority ?? 'N2') as MaintenancePriority,
+  }
+}
+
+function daysOverdue(dateStr: string | null, today: Date): number {
+  if (!dateStr) return 0
+  return Math.floor((today.getTime() - new Date(dateStr).getTime()) / 86400000)
+}
+
 interface Props {
   residenceId: string
   items: ItemRow[]
@@ -53,11 +70,15 @@ interface Props {
 export function ManutenzioniClient({ residenceId, items, completions, suppliers, unitPrimaryNames, initialFilter = null }: Props) {
   const [activeFilter, setActiveFilter] = useState<FilterState>(initialFilter)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null)
+  const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null)
+
+  const today = new Date()
 
   // Gli item archiviati spariscono dal piano attivo; le loro completion restano nel fascicolo
   const liveItems = items.filter(i => i.activation_status !== 'archiviata')
 
-  // Contatori dalle sorgenti canoniche
+  // Contatori dalle sorgenti canoniche (invariati: liveItems e yearCompletions)
   const scaduteCount = liveItems.filter(i => i.status === 'scaduta').length
   const inCorsoCount = liveItems.filter(i => i.status === 'in_corso').length
   const years = [...new Set(completions.map(c => Number(c.completed_at.slice(0, 4))))].sort((a, b) => b - a)
@@ -68,33 +89,66 @@ export function ManutenzioniClient({ residenceId, items, completions, suppliers,
     setActiveFilter(prev => (prev === f ? null : f))
   }
 
-  // Mappa per categoria (tutti gli item live)
-  const byCategory = new Map<string, ItemRow[]>()
-  for (const item of liveItems) {
+  // Opzioni del select-unità: derivate una volta da liveItems (mai da filteredItems),
+  // così restano tutte le unità anche quando il piano è filtrato.
+  const unitOptions = (() => {
+    const seen = new Map<string, string>()
+    for (const i of liveItems) {
+      if (i.unit_id && i.units && !seen.has(i.unit_id)) seen.set(i.unit_id, i.units.label)
+    }
+    return [...seen.entries()]
+      .map(([id, label]) => ({ id, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'it'))
+  })()
+
+  // Filtro-unità come drill-down: gli item scope=condominio (unit_id null) restano sempre visibili.
+  const filteredItems = selectedUnitId
+    ? liveItems.filter(i => i.unit_id === selectedUnitId || i.unit_id === null)
+    : liveItems
+
+  // TESTA — zona attenzione (per-istanza). Guardia promemoria strutturale: N1 non scade mai.
+  const allAttentionItems = filteredItems
+    .filter(i => (i.status === 'scaduta' || i.status === 'in_corso') && resolveAxes(i).mode !== 'promemoria')
+    .sort((a, b) => {
+      if (a.status !== b.status) return a.status === 'scaduta' ? -1 : 1
+      if (a.status === 'scaduta') {
+        const da = a.next_due_date ? new Date(a.next_due_date).getTime() : Infinity
+        const db = b.next_due_date ? new Date(b.next_due_date).getTime() : Infinity
+        return da - db // più in ritardo (data più vecchia) prima
+      }
+      return 0
+    })
+
+  // CORPO — piano per tipo, raggruppato per categoria (esterno) → titolo template (interno).
+  const byTemplate = new Map<string, Map<string, ItemRow[]>>()
+  for (const item of filteredItems) {
     const cat = item.maintenance_templates?.category ?? 'Altro'
-    if (!byCategory.has(cat)) byCategory.set(cat, [])
-    byCategory.get(cat)!.push(item)
+    const title = item.maintenance_templates?.title ?? 'Senza titolo'
+    if (!byTemplate.has(cat)) byTemplate.set(cat, new Map())
+    const inner = byTemplate.get(cat)!
+    if (!inner.has(title)) inner.set(title, [])
+    inner.get(title)!.push(item)
   }
 
-  // Mappa filtrata per scaduta/in_corso
-  let displayMap: Map<string, ItemRow[]>
-  if (activeFilter === null) {
-    displayMap = byCategory
-  } else if (activeFilter !== 'completate') {
-    const status = activeFilter
-    displayMap = new Map(
-      [...byCategory.entries()]
-        .map(([cat, catItems]): [string, ItemRow[]] => [
-          cat,
-          catItems.filter(i => i.status === status),
-        ])
-        .filter(([, catItems]) => catItems.length > 0)
-    )
+  // Filtro Scadute/In corso: mostra solo i tipi con almeno un'istanza in quello stato
+  // (guardia promemoria). Il drill-down mostra comunque TUTTE le istanze del tipo.
+  let displayTemplate: Map<string, Map<string, ItemRow[]>>
+  if (activeFilter === null || activeFilter === 'completate') {
+    displayTemplate = activeFilter === 'completate' ? new Map() : byTemplate
   } else {
-    displayMap = new Map()
+    const status = activeFilter
+    displayTemplate = new Map()
+    for (const [cat, inner] of byTemplate) {
+      const keptInner = new Map<string, ItemRow[]>()
+      for (const [title, typeItems] of inner) {
+        const hasMatch = typeItems.some(i => i.status === status && resolveAxes(i).mode !== 'promemoria')
+        if (hasMatch) keptInner.set(title, typeItems)
+      }
+      if (keptInner.size > 0) displayTemplate.set(cat, keptInner)
+    }
   }
 
-  // Mappa completamenti per categoria (solo quando filtro Completate attivo)
+  // Mappa completamenti per categoria (fascicolo, invariata — lookup su items RAW)
   const completionsByCategory = new Map<string, { completion: CompletionRow; item: ItemRow }[]>()
   if (activeFilter === 'completate') {
     for (const c of yearCompletions) {
@@ -176,7 +230,7 @@ export function ManutenzioniClient({ residenceId, items, completions, suppliers,
         </div>
       )}
 
-      {/* Lista completamenti (filtro Completate) */}
+      {/* Lista completamenti (filtro Completate) — fascicolo invariato */}
       {activeFilter === 'completate' && (
         completionsByCategory.size === 0 ? (
           <div className="bg-surface rounded-xl border border-border p-6 text-center">
@@ -191,8 +245,7 @@ export function ManutenzioniClient({ residenceId, items, completions, suppliers,
               <div className="space-y-2">
                 {entries.map(({ completion, item }) => {
                   const tpl = item.maintenance_templates
-                  const effMode = (item.completion_mode ?? tpl?.completion_mode) as CompletionMode
-                  const effObl  = (item.obligation_type  ?? tpl?.obligation_type)  as ObligationType
+                  const { mode: effMode, obligation: effObl } = resolveAxes(item)
                   const dateStr = new Date(completion.completed_at).toLocaleDateString('it-IT', {
                     day: 'numeric', month: 'short', year: 'numeric',
                   })
@@ -222,72 +275,141 @@ export function ManutenzioniClient({ residenceId, items, completions, suppliers,
         )
       )}
 
-      {/* Lista manutenzioni (nessun filtro o Scadute/In corso) */}
+      {/* Select filtro-unità (drill-down secondario) */}
+      {activeFilter !== 'completate' && unitOptions.length > 0 && (
+        <select
+          value={selectedUnitId ?? ''}
+          onChange={e => { setSelectedUnitId(e.target.value || null); setExpandedTemplate(null) }}
+          className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-surface text-text-primary focus:outline-none"
+        >
+          <option value="">Tutte le unità</option>
+          {unitOptions.map(u => (
+            <option key={u.id} value={u.id}>{formatUnitLabel(u.label)}</option>
+          ))}
+        </select>
+      )}
+
+      {/* TESTA — zona attenzione (per-istanza) */}
       {activeFilter !== 'completate' && (
-        displayMap.size === 0 && activeFilter !== null ? (
+        <section className="space-y-2">
+          <h2 className="text-sm font-medium text-text-primary">
+            {allAttentionItems.length === 0
+              ? 'Tutto in regola'
+              : `${allAttentionItems.length} ${allAttentionItems.length === 1 ? 'intervento richiede' : 'interventi richiedono'} attenzione`}
+          </h2>
+          {allAttentionItems.length === 0 ? (
+            <div className="bg-brand-light rounded-xl p-4 flex items-center gap-3">
+              <span className="w-2.5 h-2.5 rounded-full bg-brand-medium flex-shrink-0" />
+              <p className="text-sm text-brand-dark">Nessun intervento in ritardo.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {allAttentionItems.map(item => {
+                const tpl = item.maintenance_templates
+                const { mode: effMode, obligation: effObl } = resolveAxes(item)
+                const unitLabel = item.unit_id === null
+                  ? 'Condominio'
+                  : (item.units ? formatUnitLabel(item.units.label) : '—')
+                const accent = item.status === 'scaduta' ? 'border-l-semantic-red' : 'border-l-semantic-amber'
+                const n = daysOverdue(item.next_due_date, today)
+                return (
+                  <div key={item.id} className={`bg-surface rounded-xl border border-border border-l-4 ${accent} p-3`}>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-medium text-text-primary truncate">{tpl?.title}</p>
+                      <MaintenanceBadge mode={effMode} obligation={effObl} status={item.status} />
+                    </div>
+                    <div className="flex gap-3 mt-1 flex-wrap">
+                      <span className="text-xs text-text-secondary">{unitLabel}</span>
+                      {item.status === 'scaduta' ? (
+                        <span className="text-xs text-semantic-red">
+                          in ritardo da {n} {n === 1 ? 'giorno' : 'giorni'}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-semantic-amber">in corso</span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* CORPO — piano per tipo (categoria → righe-tipo → drill-down unità) */}
+      {activeFilter !== 'completate' && (
+        displayTemplate.size === 0 && activeFilter !== null ? (
           <div className="bg-surface rounded-xl border border-border p-6 text-center">
             <p className="text-sm text-text-secondary">
               Nessuna voce {activeFilter === 'scaduta' ? 'scaduta' : 'in corso'}.
             </p>
           </div>
         ) : (
-          Array.from(displayMap.entries()).map(([cat, catItems]) => (
+          Array.from(displayTemplate.entries()).map(([cat, inner]) => (
             <section key={cat} className="space-y-2">
               <h2 className="text-sm font-medium text-text-primary">{cat}</h2>
               <div className="space-y-2">
-                {catItems.map(item => {
-                  const tpl = item.maintenance_templates
-                  const effPriority = (item.priority ?? tpl?.priority ?? 'N2') as MaintenancePriority
-                  const effMode = (item.completion_mode ?? tpl?.completion_mode) as CompletionMode
-                  const effObl  = (item.obligation_type  ?? tpl?.obligation_type)  as ObligationType
-                  const formattedDue = item.next_due_date
-                    ? new Date(item.next_due_date).toLocaleDateString('it-IT', {
-                        day: 'numeric', month: 'short', year: 'numeric',
-                      })
-                    : null
+                {Array.from(inner.entries()).map(([title, typeItems]) => {
+                  const rep = typeItems[0]
+                  const { mode, obligation } = resolveAxes(rep)
+                  const isCondominio = typeItems.every(i => i.unit_id === null)
+                  const inRitardo = typeItems.filter(
+                    i => (i.status === 'scaduta' || i.status === 'in_corso') && resolveAxes(i).mode !== 'promemoria'
+                  ).length
+                  const freq = rep.frequency_months ?? rep.maintenance_templates?.frequency_months
+                  const key = `${cat}__${title}`
+                  const isExpanded = expandedTemplate === key
 
                   return (
-                    <div key={item.id} className="bg-surface rounded-xl border border-border overflow-hidden">
-                      <div className="p-3 flex items-start gap-3">
+                    <div key={title} className="bg-surface rounded-xl border border-border overflow-hidden">
+                      <button
+                        onClick={() => setExpandedTemplate(isExpanded ? null : key)}
+                        className="w-full p-3 flex items-center gap-3 text-left"
+                      >
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-sm font-medium text-text-primary truncate">{tpl?.title}</p>
-                            <MaintenanceBadge mode={effMode} obligation={effObl} status={item.status} />
+                            <p className="text-sm font-medium text-text-primary truncate">{title}</p>
+                            <MaintenanceBadge mode={mode} obligation={obligation} status="in_attesa" />
                           </div>
                           <div className="flex gap-3 mt-1 flex-wrap">
-                            {item.units && (
-                              <span className="text-xs text-text-secondary">
-                                {formatUnitLabel(item.units.label)}
-                                {item.unit_id && unitPrimaryNames[item.unit_id]
-                                  ? ` · ${unitPrimaryNames[item.unit_id]}`
-                                  : null}
-                              </span>
-                            )}
-                            {effMode === 'promemoria' ? (
-                              <span className="text-xs text-semantic-blue">
-                                Promemoria · {formatFrequency(item.frequency_months ?? tpl?.frequency_months)}
-                              </span>
-                            ) : formattedDue ? (
-                              <span className={`text-xs ${item.status === 'scaduta' ? 'text-semantic-red' : 'text-text-secondary'}`}>
-                                {item.status === 'scaduta' ? 'Scaduta ' : 'Scade '}{formattedDue}
-                              </span>
-                            ) : null}
-                            {item.suppliers && (
-                              <span className="text-xs text-brand-medium">{item.suppliers.name}</span>
+                            <span className="text-xs text-text-secondary">
+                              {isCondominio ? 'Condominio' : `${typeItems.length} unità`}
+                            </span>
+                            <span className="text-xs text-text-secondary">{formatFrequency(freq)}</span>
+                            {inRitardo > 0 && (
+                              <span className="text-xs text-semantic-red font-medium">{inRitardo} in ritardo</span>
                             )}
                           </div>
                         </div>
-                      </div>
-                      <ItemConfigForm
-                        itemId={item.id}
-                        residenceId={residenceId}
-                        currentMode={effMode}
-                        currentObligation={effObl}
-                        currentFrequency={item.frequency_months ?? tpl?.frequency_months ?? null}
-                        currentWarranty={item.warranty_info}
-                        currentSupplierId={item.supplier_id}
-                        suppliers={suppliers}
-                      />
+                        {isExpanded
+                          ? <ChevronUp className="w-4 h-4 text-text-secondary flex-shrink-0" strokeWidth={1.6} />
+                          : <ChevronDown className="w-4 h-4 text-text-secondary flex-shrink-0" strokeWidth={1.6} />}
+                      </button>
+
+                      {isExpanded && (
+                        <div className="border-t border-border">
+                          {isCondominio ? (
+                            <UnitRow
+                              item={rep}
+                              label="Condominio"
+                              residenceId={residenceId}
+                              suppliers={suppliers}
+                              primaryName={null}
+                            />
+                          ) : (
+                            typeItems.map(item => (
+                              <UnitRow
+                                key={item.id}
+                                item={item}
+                                label={item.units ? formatUnitLabel(item.units.label) : '—'}
+                                residenceId={residenceId}
+                                suppliers={suppliers}
+                                primaryName={item.unit_id ? unitPrimaryNames[item.unit_id] ?? null : null}
+                              />
+                            ))
+                          )}
+                        </div>
+                      )}
                     </div>
                   )
                 })}
@@ -296,6 +418,58 @@ export function ManutenzioniClient({ residenceId, items, completions, suppliers,
           ))
         )
       )}
+    </div>
+  )
+}
+
+// Riga-unità nel drill-down: dettaglio per-istanza + Configura (ItemConfigForm) invariata.
+function UnitRow({ item, label, residenceId, suppliers, primaryName }: {
+  item: ItemRow
+  label: string
+  residenceId: string
+  suppliers: { id: string; name: string }[]
+  primaryName: string | null
+}) {
+  const tpl = item.maintenance_templates
+  const { mode: effMode, obligation: effObl } = resolveAxes(item)
+  const formattedDue = item.next_due_date
+    ? new Date(item.next_due_date).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })
+    : null
+
+  return (
+    <div className="border-b border-border last:border-b-0">
+      <div className="px-3 py-2.5">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm text-text-primary">
+            {label}{primaryName ? ` · ${primaryName}` : ''}
+          </span>
+          <MaintenanceBadge mode={effMode} obligation={effObl} status={item.status} size="xs" />
+        </div>
+        <div className="flex gap-3 mt-1 flex-wrap">
+          {effMode === 'promemoria' ? (
+            <span className="text-xs text-semantic-blue">
+              Promemoria · {formatFrequency(item.frequency_months ?? tpl?.frequency_months)}
+            </span>
+          ) : formattedDue ? (
+            <span className={`text-xs ${item.status === 'scaduta' ? 'text-semantic-red' : 'text-text-secondary'}`}>
+              {item.status === 'scaduta' ? 'Scaduta ' : 'Scade '}{formattedDue}
+            </span>
+          ) : null}
+          {item.suppliers && (
+            <span className="text-xs text-brand-medium">{item.suppliers.name}</span>
+          )}
+        </div>
+      </div>
+      <ItemConfigForm
+        itemId={item.id}
+        residenceId={residenceId}
+        currentMode={effMode}
+        currentObligation={effObl}
+        currentFrequency={item.frequency_months ?? tpl?.frequency_months ?? null}
+        currentWarranty={item.warranty_info}
+        currentSupplierId={item.supplier_id}
+        suppliers={suppliers}
+      />
     </div>
   )
 }
