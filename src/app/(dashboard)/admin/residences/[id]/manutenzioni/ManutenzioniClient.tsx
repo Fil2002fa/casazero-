@@ -58,6 +58,20 @@ function daysOverdue(dateStr: string | null, today: Date): number {
   return Math.floor((today.getTime() - new Date(dateStr).getTime()) / 86400000)
 }
 
+// Natural sort delle label unità: le label senza numero (nomi custom, es. "Appartamento
+// Rossi") vanno prima in ordine alfabetico; le "Unità N" numerate seguono in ordine crescente.
+function compareUnitLabels(a: string, b: string): number {
+  const na = a.match(/\d+/)
+  const nb = b.match(/\d+/)
+  if (na && nb) {
+    const diff = parseInt(na[0], 10) - parseInt(nb[0], 10)
+    return diff !== 0 ? diff : a.localeCompare(b, 'it')
+  }
+  if (na) return 1  // solo a numerata → dopo
+  if (nb) return -1 // solo b numerata → a (alfabetica) prima
+  return a.localeCompare(b, 'it')
+}
+
 interface Props {
   residenceId: string
   items: ItemRow[]
@@ -98,7 +112,7 @@ export function ManutenzioniClient({ residenceId, items, completions, suppliers,
     }
     return [...seen.entries()]
       .map(([id, label]) => ({ id, label }))
-      .sort((a, b) => a.label.localeCompare(b.label, 'it'))
+      .sort((a, b) => compareUnitLabels(a.label, b.label))
   })()
 
   // Filtro-unità come drill-down: gli item scope=condominio (unit_id null) restano sempre visibili.
