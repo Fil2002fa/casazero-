@@ -89,7 +89,7 @@ export default function SecurityTab() {
       <button
         type="submit"
         disabled={pending || !password || !confirm}
-        className="w-full py-3 bg-brand-dark text-white rounded-xl font-medium text-sm disabled:opacity-50"
+        className="w-full py-3 bg-brand-dark text-white rounded-xl font-medium text-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {pending ? 'Aggiornamento…' : 'Aggiorna password'}
       </button>

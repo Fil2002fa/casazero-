@@ -11,6 +11,7 @@ import type { AdminNotificationPrefs } from '@/types/database'
 
 interface Props {
   builderName: string
+  builderLogoUrl: string | null
   accountName: string
   accountEmail: string
   notifPrefs: AdminNotificationPrefs
@@ -44,7 +45,7 @@ export default function SettingsShell(props: Props) {
             <button
               key={tab.id}
               onClick={() => setActive(tab.id)}
-              className={`whitespace-nowrap px-3 py-3 text-sm font-medium border-b-2 transition-colors ${
+              className={`whitespace-nowrap px-3 py-3 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
                 active === tab.id
                   ? 'border-brand-dark text-brand-dark'
                   : 'border-transparent text-text-secondary'
@@ -58,7 +59,7 @@ export default function SettingsShell(props: Props) {
 
       <div className="p-4">
         {active === 'identity' && (
-          <IdentityTab initialName={props.builderName} />
+          <IdentityTab initialName={props.builderName} initialLogoUrl={props.builderLogoUrl} />
         )}
         {active === 'notifications' && <NotificationsTab initialPrefs={props.notifPrefs} />}
         {active === 'account' && <AccountTab initialName={props.accountName} email={props.accountEmail} />}

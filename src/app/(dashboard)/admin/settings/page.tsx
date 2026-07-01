@@ -12,7 +12,7 @@ export default async function SettingsPage() {
 
   const { data: builder } = await supabase
     .from('builders')
-    .select('name')
+    .select('name, logo_url')
     .eq('id', profile.builder_id!)
     .single()
 
@@ -30,6 +30,7 @@ export default async function SettingsPage() {
   return (
     <SettingsShell
       builderName={builder?.name ?? ''}
+      builderLogoUrl={builder?.logo_url ?? null}
       accountName={account?.full_name ?? ''}
       accountEmail={user?.email ?? ''}
       notifPrefs={notifPrefs}

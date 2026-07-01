@@ -59,6 +59,35 @@ export async function updateBuilderSettings(
   return { success: true }
 }
 
+// Tab 1 — Identità: rimuove il logo del builder (logo_url → null), tornando
+// al fallback foglia CasaZero. Il file su storage non viene cancellato: non serve
+// e resta innocuo (upsert lo sovrascrive al prossimo caricamento).
+export async function removeBuilderLogo(): Promise<{ error?: string; success?: boolean }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non autenticato' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role, builder_id')
+    .eq('id', user.id)
+    .single()
+
+  if (profile?.role !== 'super_admin') return { error: 'Permessi insufficienti' }
+  if (!profile.builder_id) return { error: 'Nessun builder associato' }
+
+  const { error } = await supabase
+    .from('builders')
+    .update({ logo_url: null })
+    .eq('id', profile.builder_id)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/admin/settings')
+  revalidatePath('/', 'layout')
+  return { success: true }
+}
+
 // Tab 3 — Profilo account: aggiorna il nome dell'utente super_admin loggato
 // (la persona, non il builder). Riadatta il pattern di updateProfile del residente.
 export async function updateAccountProfile(

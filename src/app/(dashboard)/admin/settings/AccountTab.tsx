@@ -32,7 +32,7 @@ export default function AccountTab({ initialName, email }: { initialName: string
         {!editing && (
           <button
             onClick={() => setEditing(true)}
-            className="flex items-center gap-1 text-xs text-brand-medium font-medium"
+            className="flex items-center gap-1 text-xs text-brand-medium font-medium cursor-pointer"
           >
             <Edit2 className="w-3.5 h-3.5" strokeWidth={1.8} />
             Modifica
@@ -69,14 +69,14 @@ export default function AccountTab({ initialName, email }: { initialName: string
           <button
             onClick={handleSave}
             disabled={pending}
-            className="flex items-center gap-1.5 px-4 py-2 bg-brand-dark text-white rounded-lg text-sm font-medium disabled:opacity-50"
+            className="flex items-center gap-1.5 px-4 py-2 bg-brand-dark text-white rounded-lg text-sm font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Check className="w-4 h-4" strokeWidth={2} />
             Salva
           </button>
           <button
             onClick={() => { setEditing(false); setName(savedName); setError(null) }}
-            className="flex items-center gap-1.5 px-4 py-2 border border-border rounded-lg text-sm text-text-secondary"
+            className="flex items-center gap-1.5 px-4 py-2 border border-border rounded-lg text-sm text-text-secondary cursor-pointer"
           >
             <X className="w-4 h-4" strokeWidth={1.8} />
             Annulla
