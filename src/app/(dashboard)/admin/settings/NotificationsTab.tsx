@@ -1,22 +1,22 @@
 'use client'
 
 import { useState } from 'react'
-import { Bell, Smartphone, Mail } from 'lucide-react'
+import { Bell, Mail } from 'lucide-react'
 import type { AdminNotificationPrefs } from '@/types/database'
 import { updateAdminNotificationPrefs } from './actions'
 
 // Eventi rilevanti per il super_admin (costruttore) — diversi da quelli del residente.
+// Solo canale email: la dashboard è desktop, senza PWA su cui recapitare le push.
 type PrefRow = {
   label: string
-  pushKey: keyof AdminNotificationPrefs | null
-  emailKey: keyof AdminNotificationPrefs | null
+  emailKey: keyof AdminNotificationPrefs
 }
 
 const PREF_ROWS: PrefRow[] = [
-  { label: 'Manutenzione a carico amministratore completata', pushKey: 'push_n3_completed',      emailKey: 'email_n3_completed'     },
-  { label: 'Nuovo residente registrato via QR',               pushKey: 'push_new_resident',       emailKey: 'email_new_resident'     },
-  { label: 'Manutenzione a carico residente scaduta da oltre 30 giorni', pushKey: null,           emailKey: 'email_n2_overdue_30'    },
-  { label: 'Report annuale generato',                         pushKey: 'push_report_generated',   emailKey: 'email_report_generated' },
+  { label: 'Manutenzione a carico amministratore completata',           emailKey: 'email_n3_completed'     },
+  { label: 'Nuovo residente registrato via QR',                         emailKey: 'email_new_resident'     },
+  { label: 'Manutenzione a carico residente scaduta da oltre 30 giorni', emailKey: 'email_n2_overdue_30'    },
+  { label: 'Report annuale generato',                                   emailKey: 'email_report_generated' },
 ]
 
 export default function NotificationsTab({ initialPrefs }: { initialPrefs: AdminNotificationPrefs }) {
@@ -46,13 +46,9 @@ export default function NotificationsTab({ initialPrefs }: { initialPrefs: Admin
         <h2 className="text-sm font-medium text-text-primary">Notifiche ricevute</h2>
       </div>
 
-      {/* Intestazioni colonne */}
+      {/* Intestazione colonna */}
       <div className="flex items-center gap-2 pb-1">
         <div className="flex-1" />
-        <div className="w-12 flex items-center justify-center gap-1">
-          <Smartphone className="w-3.5 h-3.5 text-text-secondary" strokeWidth={1.6} />
-          <span className="text-[10px] text-text-secondary">Push</span>
-        </div>
         <div className="w-16 flex items-center justify-center gap-1">
           <Mail className="w-3.5 h-3.5 text-text-secondary" strokeWidth={1.6} />
           <span className="text-[10px] text-text-secondary">Email</span>
@@ -65,40 +61,19 @@ export default function NotificationsTab({ initialPrefs }: { initialPrefs: Admin
           <div key={row.label} className="flex items-center gap-2 py-2.5 first:pt-0">
             <p className="flex-1 text-sm text-text-primary leading-tight">{row.label}</p>
 
-            {/* Push */}
-            <div className="w-12 flex justify-center">
-              {row.pushKey ? (
-                <Toggle
-                  on={prefs[row.pushKey]}
-                  disabled={savingKey === row.pushKey}
-                  onToggle={() => handleToggle(row.pushKey!)}
-                />
-              ) : (
-                <span className="text-xs text-border select-none">—</span>
-              )}
-            </div>
-
             {/* Email */}
             <div className="w-16 flex justify-center">
-              {row.emailKey ? (
-                <Toggle
-                  on={prefs[row.emailKey]}
-                  disabled={savingKey === row.emailKey}
-                  onToggle={() => handleToggle(row.emailKey!)}
-                />
-              ) : (
-                <span className="text-xs text-border select-none">—</span>
-              )}
+              <Toggle
+                on={prefs[row.emailKey]}
+                disabled={savingKey === row.emailKey}
+                onToggle={() => handleToggle(row.emailKey)}
+              />
             </div>
           </div>
         ))}
       </div>
 
       {error && <p className="text-xs text-semantic-red">{error}</p>}
-
-      <p className="text-xs text-text-secondary pt-1">
-        Le notifiche push richiedono l&apos;installazione dell&apos;app sul dispositivo.
-      </p>
     </section>
   )
 }

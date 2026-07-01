@@ -104,24 +104,20 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
 // Preferenze di notifica del super_admin (costruttore), memorizzate nella stessa
 // colonna profiles.notification_prefs (JSONB). Le chiavi sono distinte da quelle
 // del residente: il super_admin ha un profilo separato, quindi nessun conflitto.
+// Solo canale email: la dashboard super_admin è uno strumento desktop, senza PWA
+// né service worker, quindi le notifiche push non hanno un canale reale.
 export interface AdminNotificationPrefs {
-  push_n3_completed:      boolean
   email_n3_completed:     boolean
-  push_new_resident:      boolean
   email_new_resident:     boolean
-  email_n2_overdue_30:    boolean // solo email (nessun canale push)
-  push_report_generated:  boolean
+  email_n2_overdue_30:    boolean
   email_report_generated: boolean
 }
 
 export const DEFAULT_ADMIN_NOTIFICATION_PREFS: AdminNotificationPrefs = {
-  push_n3_completed:      true,
   email_n3_completed:     true,
-  push_new_resident:      true,
   email_new_resident:     true,
   email_n2_overdue_30:    true,
-  push_report_generated:  false, // report annuale generato: disattivo di default
-  email_report_generated: false,
+  email_report_generated: false, // report annuale generato: disattivo di default
 }
 
 export interface Completion {
