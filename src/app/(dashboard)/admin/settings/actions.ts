@@ -20,17 +20,14 @@ export async function updateBuilderSettings(
   if (profile?.role !== 'super_admin') return { error: 'Permessi insufficienti' }
   if (!profile.builder_id) return { error: 'Nessun builder associato' }
 
-  const name         = (formData.get('name') as string)?.trim()
-  const contactEmail = (formData.get('contact_email') as string)?.trim()
-  const contactPhone = (formData.get('contact_phone') as string)?.trim()
-  const logoFile     = formData.get('logo') as File | null
+  const name     = (formData.get('name') as string)?.trim()
+  const logoFile = formData.get('logo') as File | null
 
   // primary_color non più gestito: colore brand fisso CasaZero (#04342C), non dal form.
+  // Campi contatto (contact_email/contact_phone) rimossi dal form in attesa del flusso
+  // assistenza definitivo: le colonne restano nello schema ma non vengono più scritte.
   const updateData: Record<string, string | null> = {}
   if (name) updateData.name = name
-  // Campi contatto: opzionali e svuotabili (stringa vuota → null)
-  if (formData.has('contact_email')) updateData.contact_email = contactEmail || null
-  if (formData.has('contact_phone')) updateData.contact_phone = contactPhone || null
 
   // Upload logo se fornito
   if (logoFile && logoFile.size > 0) {

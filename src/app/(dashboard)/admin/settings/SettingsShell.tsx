@@ -11,8 +11,6 @@ import type { AdminNotificationPrefs } from '@/types/database'
 
 interface Props {
   builderName: string
-  builderEmail: string
-  builderPhone: string
   accountName: string
   accountEmail: string
   notifPrefs: AdminNotificationPrefs
@@ -60,11 +58,7 @@ export default function SettingsShell(props: Props) {
 
       <div className="p-4">
         {active === 'identity' && (
-          <IdentityTab
-            initialName={props.builderName}
-            initialEmail={props.builderEmail}
-            initialPhone={props.builderPhone}
-          />
+          <IdentityTab initialName={props.builderName} />
         )}
         {active === 'notifications' && <NotificationsTab initialPrefs={props.notifPrefs} />}
         {active === 'account' && <AccountTab initialName={props.accountName} email={props.accountEmail} />}

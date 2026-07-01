@@ -5,14 +5,12 @@ import { updateBuilderSettings } from './actions'
 
 interface Props {
   initialName: string
-  initialEmail: string
-  initialPhone: string
 }
 
 // Colore brand fisso CasaZero (design system §3 "Verde brand scuro").
 const BRAND_DARK = '#04342C'
 
-export default function IdentityTab({ initialName, initialEmail, initialPhone }: Props) {
+export default function IdentityTab({ initialName }: Props) {
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
@@ -41,28 +39,6 @@ export default function IdentityTab({ initialName, initialEmail, initialPhone }:
             name="name"
             defaultValue={initialName}
             placeholder="es. Furlan Costruzioni"
-            className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
-          />
-        </div>
-
-        <div>
-          <label className="text-xs text-text-secondary block mb-1">Email di contatto</label>
-          <input
-            type="email"
-            name="contact_email"
-            defaultValue={initialEmail}
-            placeholder="es. assistenza@furlan.it"
-            className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
-          />
-        </div>
-
-        <div>
-          <label className="text-xs text-text-secondary block mb-1">Telefono assistenza</label>
-          <input
-            type="tel"
-            name="contact_phone"
-            defaultValue={initialPhone}
-            placeholder="es. 0432 123456"
             className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
           />
         </div>
