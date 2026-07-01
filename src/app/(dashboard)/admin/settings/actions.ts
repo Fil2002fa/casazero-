@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import type { AdminNotificationPrefs } from '@/types/database'
 
 export async function updateBuilderSettings(
   formData: FormData
@@ -62,4 +63,60 @@ export async function updateBuilderSettings(
   revalidatePath('/admin/settings')
   revalidatePath('/', 'layout')
   return { success: true }
+}
+
+// Tab 3 — Profilo account: aggiorna il nome dell'utente super_admin loggato
+// (la persona, non il builder). Riadatta il pattern di updateProfile del residente.
+export async function updateAccountProfile(
+  formData: FormData
+): Promise<{ error?: string; success?: boolean }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non autenticato' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (profile?.role !== 'super_admin') return { error: 'Permessi insufficienti' }
+
+  const fullName = (formData.get('full_name') as string)?.trim() || null
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ full_name: fullName, updated_at: new Date().toISOString() })
+    .eq('id', user.id)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/admin/settings')
+  return { success: true }
+}
+
+// Tab 2 — Notifiche ricevute: preferenze notifiche del super_admin.
+// Stessa colonna profiles.notification_prefs, chiavi distinte (vedi AdminNotificationPrefs).
+export async function updateAdminNotificationPrefs(
+  prefs: AdminNotificationPrefs
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non autenticato' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (profile?.role !== 'super_admin') return { error: 'Permessi insufficienti' }
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ notification_prefs: prefs, updated_at: new Date().toISOString() })
+    .eq('id', user.id)
+
+  if (error) return { error: error.message }
+  return {}
 }
