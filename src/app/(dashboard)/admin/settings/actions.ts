@@ -21,13 +21,18 @@ export async function updateBuilderSettings(
 
   const name         = (formData.get('name') as string)?.trim()
   const primaryColor = (formData.get('primary_color') as string)?.trim()
+  const contactEmail = (formData.get('contact_email') as string)?.trim()
+  const contactPhone = (formData.get('contact_phone') as string)?.trim()
   const logoFile     = formData.get('logo') as File | null
 
-  const updateData: Record<string, string> = {}
+  const updateData: Record<string, string | null> = {}
   if (name) updateData.name = name
   if (primaryColor && /^#[0-9A-Fa-f]{6}$/.test(primaryColor)) {
     updateData.primary_color = primaryColor
   }
+  // Campi contatto: opzionali e svuotabili (stringa vuota → null)
+  if (formData.has('contact_email')) updateData.contact_email = contactEmail || null
+  if (formData.has('contact_phone')) updateData.contact_phone = contactPhone || null
 
   // Upload logo se fornito
   if (logoFile && logoFile.size > 0) {
