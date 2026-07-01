@@ -13,9 +13,9 @@ type PrefRow = {
 }
 
 const PREF_ROWS: PrefRow[] = [
-  { label: 'Manutenzione N3 completata da un amministratore', pushKey: 'push_n3_completed',      emailKey: 'email_n3_completed'     },
+  { label: 'Manutenzione a carico amministratore completata', pushKey: 'push_n3_completed',      emailKey: 'email_n3_completed'     },
   { label: 'Nuovo residente registrato via QR',               pushKey: 'push_new_resident',       emailKey: 'email_new_resident'     },
-  { label: 'Manutenzione N2 scaduta da oltre 30 giorni',      pushKey: null,                      emailKey: 'email_n2_overdue_30'    },
+  { label: 'Manutenzione a carico residente scaduta da oltre 30 giorni', pushKey: null,           emailKey: 'email_n2_overdue_30'    },
   { label: 'Report annuale generato',                         pushKey: 'push_report_generated',   emailKey: 'email_report_generated' },
 ]
 
