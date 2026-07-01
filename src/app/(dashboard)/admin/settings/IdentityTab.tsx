@@ -5,16 +5,17 @@ import { updateBuilderSettings } from './actions'
 
 interface Props {
   initialName: string
-  initialColor: string
   initialEmail: string
   initialPhone: string
 }
 
-export default function IdentityTab({ initialName, initialColor, initialEmail, initialPhone }: Props) {
+// Colore brand fisso CasaZero (design system §3 "Verde brand scuro").
+const BRAND_DARK = '#04342C'
+
+export default function IdentityTab({ initialName, initialEmail, initialPhone }: Props) {
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
-  const [previewColor, setPreviewColor] = useState(initialColor)
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -45,23 +46,6 @@ export default function IdentityTab({ initialName, initialColor, initialEmail, i
         </div>
 
         <div>
-          <label className="text-xs text-text-secondary block mb-1">Colore primario brand</label>
-          <div className="flex items-center gap-3">
-            <input
-              type="color"
-              name="primary_color"
-              value={previewColor}
-              onChange={e => setPreviewColor(e.target.value)}
-              className="w-12 h-10 border border-border rounded-lg cursor-pointer bg-transparent"
-            />
-            <div>
-              <p className="text-sm font-medium text-text-primary">{previewColor}</p>
-              <p className="text-xs text-text-secondary">Header, pulsanti e accenti dell&apos;app</p>
-            </div>
-          </div>
-        </div>
-
-        <div>
           <label className="text-xs text-text-secondary block mb-1">Email di contatto</label>
           <input
             type="email"
@@ -88,7 +72,7 @@ export default function IdentityTab({ initialName, initialColor, initialEmail, i
           <p className="text-xs text-text-secondary mb-2">Anteprima</p>
           <div
             className="rounded-xl px-4 py-3 flex items-center justify-between"
-            style={{ backgroundColor: previewColor }}
+            style={{ backgroundColor: BRAND_DARK }}
           >
             <span className="text-white text-sm font-medium">Header app</span>
             <div

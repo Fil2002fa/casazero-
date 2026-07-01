@@ -23,12 +23,13 @@ export async function getWhitelabelBrand(): Promise<WhitelabelBrand> {
 
   const { data: builder } = await supabase
     .from('builders')
-    .select('primary_color, logo_url, name')
+    .select('logo_url, name')
     .eq('id', profile.builder_id)
     .single()
 
   return {
-    brandDark: builder?.primary_color ?? DEFAULT.brandDark,
+    // Colore brand fisso deciso da CasaZero: non più personalizzabile dal costruttore.
+    brandDark: DEFAULT.brandDark,
     logoUrl: builder?.logo_url ?? null,
     builderName: builder?.name ?? DEFAULT.builderName,
   }

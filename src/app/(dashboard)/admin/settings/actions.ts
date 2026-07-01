@@ -21,16 +21,13 @@ export async function updateBuilderSettings(
   if (!profile.builder_id) return { error: 'Nessun builder associato' }
 
   const name         = (formData.get('name') as string)?.trim()
-  const primaryColor = (formData.get('primary_color') as string)?.trim()
   const contactEmail = (formData.get('contact_email') as string)?.trim()
   const contactPhone = (formData.get('contact_phone') as string)?.trim()
   const logoFile     = formData.get('logo') as File | null
 
+  // primary_color non più gestito: colore brand fisso CasaZero (#04342C), non dal form.
   const updateData: Record<string, string | null> = {}
   if (name) updateData.name = name
-  if (primaryColor && /^#[0-9A-Fa-f]{6}$/.test(primaryColor)) {
-    updateData.primary_color = primaryColor
-  }
   // Campi contatto: opzionali e svuotabili (stringa vuota → null)
   if (formData.has('contact_email')) updateData.contact_email = contactEmail || null
   if (formData.has('contact_phone')) updateData.contact_phone = contactPhone || null

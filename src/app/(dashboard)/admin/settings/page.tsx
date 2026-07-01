@@ -12,7 +12,7 @@ export default async function SettingsPage() {
 
   const { data: builder } = await supabase
     .from('builders')
-    .select('name, primary_color, contact_email, contact_phone')
+    .select('name, contact_email, contact_phone')
     .eq('id', profile.builder_id!)
     .single()
 
@@ -30,7 +30,6 @@ export default async function SettingsPage() {
   return (
     <SettingsShell
       builderName={builder?.name ?? ''}
-      builderColor={builder?.primary_color ?? '#04342C'}
       builderEmail={builder?.contact_email ?? ''}
       builderPhone={builder?.contact_phone ?? ''}
       accountName={account?.full_name ?? ''}
