@@ -83,7 +83,7 @@ export async function GET(req: NextRequest) {
     energyClass = r.energy_class
     deliveryDate = r.delivery_date
     builderName = r.builders?.name ?? 'CasaZero'
-    builderColor = r.builders?.primary_color ?? '#04342C'
+    builderColor = '#04342C' // Colore brand fisso CasaZero (coerente con whitelabel.ts)
 
     // Verifica accesso
     const isSuper   = profile.role === 'super_admin' && profile.builder_id === r.builder_id
@@ -127,7 +127,7 @@ export async function GET(req: NextRequest) {
     energyClass = r.energy_class
     deliveryDate = r.delivery_date
     builderName = r.builders?.name ?? 'CasaZero'
-    builderColor = r.builders?.primary_color ?? '#04342C'
+    builderColor = '#04342C' // Colore brand fisso CasaZero (coerente con whitelabel.ts)
 
     // Solo admin/super_admin per il report residenza
     if (profile.role === 'client') return NextResponse.json({ error: 'Accesso negato' }, { status: 403 })

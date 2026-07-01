@@ -42,7 +42,8 @@ export default async function WelcomePage({ params }: { params: Params }) {
     builder = residence?.builders ?? null
   }
 
-  const brandDark = builder?.primary_color?.trim() || '#04342C'
+  // Colore brand fisso CasaZero: coerente con whitelabel.ts, non più da builders.primary_color.
+  const brandDark = '#04342C'
 
   let unitCount: number | null = null
   if ((invite.role === 'admin' || invite.role === 'super_admin') && resolvedResidenceId) {
