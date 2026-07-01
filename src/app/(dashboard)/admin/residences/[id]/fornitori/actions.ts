@@ -151,3 +151,94 @@ export async function updateMaintenanceItemConfig(
   revalidatePath(`/admin/residences/${residenceId}/manutenzioni`)
   return { success: true }
 }
+
+// Fan-out a livello residenza: include o esclude dal piano attivo TUTTE le istanze di un
+// tipo (template) in un colpo. Tocca solo `activation_status` (per-istanza); MAI `is_active`
+// (template globale) e MAI `completions`. Solo super_admin. Usa il client RLS: la policy
+// "items: super_admin gestisce tutto" (FOR ALL) copre l'UPDATE multi-riga.
+export async function setTemplateActivationForResidence(
+  templateId: string,
+  residenceId: string,
+  targetStatus: 'inclusa' | 'archiviata'
+): Promise<{ error?: string; count?: number }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non autenticato' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  // Composizione del piano: azione riservata al costruttore, non all'amministratore.
+  if (profile?.role !== 'super_admin') {
+    return { error: 'Permessi insufficienti' }
+  }
+
+  // Esclusione: archivia le istanze attive. Nessun tocco a status/next_due_date.
+  if (targetStatus === 'archiviata') {
+    const { data, error } = await supabase
+      .from('maintenance_items')
+      .update({ activation_status: 'archiviata' })
+      .eq('template_id', templateId)
+      .eq('residence_id', residenceId)
+      .neq('activation_status', 'archiviata')
+      .select('id')
+
+    if (error) return { error: error.message }
+
+    revalidatePath(`/admin/residences/${residenceId}/manutenzioni`)
+    return { count: data?.length ?? 0 }
+  }
+
+  // Inclusione: riattiva le istanze archiviate e ricalcola le scadenze da oggi,
+  // per TUTTE le modalità (estensione del guard N1). Il ricalcolo per-riga con
+  // fallback freq (item ?? template) non è esprimibile in un singolo UPDATE literal:
+  // si raggruppa per frequenza effettiva (bucket) e si emette un UPDATE per bucket —
+  // un solo statement nel caso comune (nessun override per-item, es. FV).
+  const { data: affected, error: fetchError } = await supabase
+    .from('maintenance_items')
+    .select('id, frequency_months, maintenance_templates(frequency_months)')
+    .eq('template_id', templateId)
+    .eq('residence_id', residenceId)
+    .eq('activation_status', 'archiviata')
+
+  if (fetchError) return { error: fetchError.message }
+  if (!affected || affected.length === 0) {
+    revalidatePath(`/admin/residences/${residenceId}/manutenzioni`)
+    return { count: 0 }
+  }
+
+  const buckets = new Map<number | null, string[]>()
+  for (const row of affected) {
+    const tpl = row.maintenance_templates as unknown as { frequency_months: number } | null
+    const eff = row.frequency_months ?? tpl?.frequency_months ?? null
+    if (!buckets.has(eff)) buckets.set(eff, [])
+    buckets.get(eff)!.push(row.id)
+  }
+
+  let total = 0
+  for (const [freq, ids] of buckets) {
+    const payload: Record<string, unknown> = {
+      activation_status: 'inclusa',
+      status: 'in_attesa',
+    }
+    if (freq) {
+      const nextDue = new Date()
+      nextDue.setMonth(nextDue.getMonth() + freq)
+      payload.next_due_date = nextDue.toISOString().split('T')[0]
+    }
+    const { data, error } = await supabase
+      .from('maintenance_items')
+      .update(payload)
+      .in('id', ids)
+      .select('id')
+
+    if (error) return { error: error.message }
+    total += data?.length ?? 0
+  }
+
+  revalidatePath(`/admin/residences/${residenceId}/manutenzioni`)
+  return { count: total }
+}

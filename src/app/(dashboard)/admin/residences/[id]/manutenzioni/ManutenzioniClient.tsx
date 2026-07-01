@@ -1,15 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { MaintenanceBadge } from '@/components/MaintenanceBadge'
 import { ItemConfigForm } from './ItemConfigForm'
+import { setTemplateActivationForResidence } from '../fornitori/actions'
 import type { MaintenancePriority, MaintenanceStatus, CompletionMode, ObligationType, ItemActivation } from '@/types/database'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import { formatFrequency } from '@/lib/formatFrequency'
 
 export type ItemRow = {
   id: string
+  template_id: string
   status: MaintenanceStatus
   next_due_date: string | null
   unit_id: string | null
@@ -74,6 +76,7 @@ function compareUnitLabels(a: string, b: string): number {
 
 interface Props {
   residenceId: string
+  residenceName: string
   items: ItemRow[]
   completions: CompletionRow[]
   suppliers: { id: string; name: string }[]
@@ -81,13 +84,34 @@ interface Props {
   initialFilter?: FilterState
 }
 
-export function ManutenzioniClient({ residenceId, items, completions, suppliers, unitPrimaryNames, initialFilter = null }: Props) {
+// Azione di composizione piano in transito verso il modale di conferma (preview-before-apply).
+type PendingAction = {
+  templateId: string
+  title: string
+  targetStatus: 'inclusa' | 'archiviata'
+  count: number
+  freqMonths: number | null
+}
+
+export function ManutenzioniClient({ residenceId, residenceName, items, completions, suppliers, unitPrimaryNames, initialFilter = null }: Props) {
   const [activeFilter, setActiveFilter] = useState<FilterState>(initialFilter)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null)
   const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null)
+  const [showExcluded, setShowExcluded] = useState(false)
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
+  const [isPending, startTransition] = useTransition()
 
   const today = new Date()
+
+  function handleConfirm() {
+    if (!pendingAction) return
+    const { templateId, targetStatus } = pendingAction
+    startTransition(async () => {
+      const res = await setTemplateActivationForResidence(templateId, residenceId, targetStatus)
+      if (!res.error) setPendingAction(null)
+    })
+  }
 
   // Gli item archiviati spariscono dal piano attivo; le loro completion restano nel fascicolo
   const liveItems = items.filter(i => i.activation_status !== 'archiviata')
@@ -161,6 +185,31 @@ export function ManutenzioniClient({ residenceId, items, completions, suppliers,
       if (keptInner.size > 0) displayTemplate.set(cat, keptInner)
     }
   }
+
+  // Tipi interamente esclusi dal piano: costruiti da `items` RAW (liveItems li nasconde).
+  // Un tipo entra qui solo se OGNI sua istanza è archiviata; i tipi misti restano nel piano.
+  const excludedTemplates = (() => {
+    const groups = new Map<string, ItemRow[]>()
+    for (const i of items) {
+      if (!groups.has(i.template_id)) groups.set(i.template_id, [])
+      groups.get(i.template_id)!.push(i)
+    }
+    const result: { templateId: string; title: string; category: string; count: number; freq: number | null }[] = []
+    for (const [templateId, group] of groups) {
+      if (group.every(i => i.activation_status === 'archiviata')) {
+        const rep = group[0]
+        result.push({
+          templateId,
+          title: rep.maintenance_templates?.title ?? 'Senza titolo',
+          category: rep.maintenance_templates?.category ?? 'Altro',
+          count: group.length,
+          freq: rep.frequency_months ?? rep.maintenance_templates?.frequency_months ?? null,
+        })
+      }
+    }
+    return result.sort((a, b) =>
+      a.category.localeCompare(b.category, 'it') || a.title.localeCompare(b.title, 'it'))
+  })()
 
   // Mappa completamenti per categoria (fascicolo, invariata — lookup su items RAW)
   const completionsByCategory = new Map<string, { completion: CompletionRow; item: ItemRow }[]>()
@@ -402,6 +451,20 @@ export function ManutenzioniClient({ residenceId, items, completions, suppliers,
 
                       {isExpanded && (
                         <div className="border-t border-border">
+                          <div className="px-3 py-2 bg-background flex justify-end">
+                            <button
+                              onClick={() => setPendingAction({
+                                templateId: rep.template_id,
+                                title,
+                                targetStatus: 'archiviata',
+                                count: typeItems.length,
+                                freqMonths: freq ?? null,
+                              })}
+                              className="text-xs text-semantic-red font-medium px-2 py-1 rounded-md hover:bg-semantic-red-bg transition-colors"
+                            >
+                              Escludi dal piano
+                            </button>
+                          </div>
                           {isCondominio ? (
                             <UnitRow
                               item={rep}
@@ -431,6 +494,117 @@ export function ManutenzioniClient({ residenceId, items, completions, suppliers,
             </section>
           ))
         )
+      )}
+
+      {/* Tipi esclusi dal piano — sorgente per l'inclusione (fan-out) */}
+      {activeFilter !== 'completate' && excludedTemplates.length > 0 && (
+        <section className="space-y-2">
+          <button
+            onClick={() => setShowExcluded(v => !v)}
+            className="w-full flex items-center justify-between text-left"
+          >
+            <h2 className="text-sm font-medium text-text-secondary">
+              {excludedTemplates.length} {excludedTemplates.length === 1 ? 'tipo escluso' : 'tipi esclusi'} dal piano
+            </h2>
+            {showExcluded
+              ? <ChevronUp className="w-4 h-4 text-text-secondary flex-shrink-0" strokeWidth={1.6} />
+              : <ChevronDown className="w-4 h-4 text-text-secondary flex-shrink-0" strokeWidth={1.6} />}
+          </button>
+          {showExcluded && (
+            <div className="space-y-2">
+              {excludedTemplates.map(t => (
+                <div key={t.templateId} className="bg-surface rounded-xl border border-border p-3 flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-text-primary truncate">{t.title}</p>
+                    <div className="flex gap-3 mt-1 flex-wrap">
+                      <span className="text-xs text-text-secondary">{t.category}</span>
+                      <span className="text-xs text-text-secondary">
+                        {t.count} {t.count === 1 ? 'istanza' : 'istanze'}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setPendingAction({
+                      templateId: t.templateId,
+                      title: t.title,
+                      targetStatus: 'inclusa',
+                      count: t.count,
+                      freqMonths: t.freq,
+                    })}
+                    className="text-xs text-brand-dark font-medium px-3 py-1.5 rounded-md bg-brand-light hover:brightness-95 transition-all flex-shrink-0"
+                  >
+                    Includi nel piano
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Modale di conferma (preview-before-apply): dichiara righe toccate ed effetto */}
+      {pendingAction && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => { if (!isPending) setPendingAction(null) }}
+        >
+          <div
+            className="bg-surface rounded-xl border border-border max-w-sm w-full p-5 space-y-3"
+            onClick={e => e.stopPropagation()}
+          >
+            {pendingAction.targetStatus === 'inclusa' ? (
+              <>
+                <h3 className="text-base font-medium text-text-primary">Includi nel piano</h3>
+                <div className="space-y-2 text-sm text-text-primary">
+                  <p>
+                    Stai includendo <span className="font-medium">{pendingAction.title}</span> nel
+                    piano attivo di <span className="font-medium">{residenceName}</span>.
+                  </p>
+                  <p className="text-text-secondary">
+                    {pendingAction.count} {pendingAction.count === 1 ? 'istanza verrà riattivata' : 'istanze verranno riattivate'}.
+                  </p>
+                  <p className="text-text-secondary">
+                    Le scadenze verranno ricalcolate a partire da oggi
+                    {pendingAction.freqMonths ? ` (+ ${pendingAction.freqMonths} mesi)` : ''}.
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="text-base font-medium text-text-primary">Escludi dal piano</h3>
+                <div className="space-y-2 text-sm text-text-primary">
+                  <p>
+                    Stai escludendo <span className="font-medium">{pendingAction.title}</span> dal piano attivo.
+                  </p>
+                  <p className="text-text-secondary">
+                    {pendingAction.count} {pendingAction.count === 1 ? 'istanza verrà archiviata' : 'istanze verranno archiviate'}.
+                    Lo storico (fascicolo) resta intatto.
+                  </p>
+                </div>
+              </>
+            )}
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setPendingAction(null)}
+                disabled={isPending}
+                className="flex-1 py-2 rounded-md text-sm font-medium border border-border text-text-secondary disabled:opacity-50"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={handleConfirm}
+                disabled={isPending}
+                className={`flex-1 py-2 rounded-md text-sm font-medium text-white disabled:opacity-50 ${
+                  pendingAction.targetStatus === 'inclusa' ? 'bg-brand-dark' : 'bg-semantic-red'
+                }`}
+              >
+                {isPending
+                  ? '…'
+                  : `${pendingAction.targetStatus === 'inclusa' ? 'Includi' : 'Escludi'} ${pendingAction.count} ${pendingAction.count === 1 ? 'istanza' : 'istanze'}`}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

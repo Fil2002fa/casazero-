@@ -35,7 +35,7 @@ export default async function ResidenceManutenzioniPage({ params, searchParams }
     supabase
       .from('maintenance_items')
       .select(`
-        id, status, next_due_date, unit_id, priority, frequency_months, warranty_info, supplier_id,
+        id, template_id, status, next_due_date, unit_id, priority, frequency_months, warranty_info, supplier_id,
         completion_mode, obligation_type, activation_status,
         maintenance_templates(title, category, priority, frequency_months, scope, completion_mode, obligation_type),
         units(label),
@@ -89,6 +89,7 @@ export default async function ResidenceManutenzioniPage({ params, searchParams }
 
       <ManutenzioniClient
         residenceId={residenceId}
+        residenceName={residence.name}
         items={(rawItems ?? []) as unknown as ItemRow[]}
         completions={(rawCompletions ?? []) as unknown as CompletionRow[]}
         suppliers={(suppliers ?? []) as { id: string; name: string }[]}
