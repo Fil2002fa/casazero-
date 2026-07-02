@@ -52,7 +52,13 @@ export default function NewResidencePage() {
             <Field label="Classe energetica" name="energy_class" placeholder="es. A4" />
             <Field label="N. unità *" name="unit_count" type="number" placeholder="14" required min="1" max="200" />
           </div>
-          <Field label="Data consegna *" name="delivery_date" type="date" required />
+          <div>
+            <Field label="Data consegna *" name="delivery_date" type="date" required />
+            <p className="text-xs text-text-secondary mt-1">
+              Data di consegna chiavi al cliente. Da qui partono tutte le scadenze delle
+              manutenzioni (data consegna + frequenza).
+            </p>
+          </div>
         </section>
 
         {/* Edificio esistente */}
@@ -69,7 +75,10 @@ export default function NewResidencePage() {
             />
             <div>
               <p className="text-sm font-medium text-text-primary">Edificio esistente</p>
-              <p className="text-xs text-text-secondary">Imposta date diverse per categoria</p>
+              <p className="text-xs text-text-secondary">
+                Attiva per edifici già abitati: potrai inserire, per ogni categoria,
+                la data dell'ultimo intervento noto invece della data di consegna.
+              </p>
             </div>
           </label>
 
