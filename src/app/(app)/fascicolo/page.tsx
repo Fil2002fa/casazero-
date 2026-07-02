@@ -4,6 +4,11 @@ import { Download, Paperclip, FileDown } from 'lucide-react'
 import { createServiceClient } from '@/lib/supabase/admin'
 import { requireProfile } from '@/lib/auth'
 import type { MaintenancePriority } from '@/types/database'
+import {
+  isCountable, overdueLive, resolveCompletionMode, todayISO,
+  LIVE_STATUS_FIELDS, LIVE_STATUS_TEMPLATE_FIELDS,
+  type LiveStatusItem,
+} from '@/lib/maintenance-status'
 
 export const metadata: Metadata = { title: 'Fascicolo' }
 
@@ -30,7 +35,8 @@ export default async function FascicoloPage({ searchParams }: { searchParams: Se
 
   // ── Determina scope primario: usato sia per reportHref sia per conformità ──
   // Scopo: schermo e PDF mostrano ESATTAMENTE lo stesso perimetro e gli stessi numeri.
-  // Definizione uniforme: scadute = status 'scaduta' (= dopo trigger czero_recalc_due).
+  // Definizione uniforme: scaduta live da next_due_date via helper maintenance-status
+  // (la stessa di /api/report), mai dal campo status salvato.
   let reportHref: string | null = null
   let primaryResidenceId: string | null = null
   let primaryUnitId: string | null = null
@@ -73,12 +79,10 @@ export default async function FascicoloPage({ searchParams }: { searchParams: Se
     }
   }
 
-  // ── Conformità: stesso scope del PDF ─────────────────────────────────────
-  type ItemMin = { status: string; priority: string | null; maintenance_templates: { priority: string } | null }
-
+  // ── Conformità: stesso scope e stessa definizione live del PDF ───────────
   let itemsQuery = adminClient
     .from('maintenance_items')
-    .select('status, priority, maintenance_templates(priority)')
+    .select(`${LIVE_STATUS_FIELDS}, maintenance_templates!inner(${LIVE_STATUS_TEMPLATE_FIELDS})`)
     .neq('status', 'completata')
 
   if (primaryResidenceId) {
@@ -89,14 +93,11 @@ export default async function FascicoloPage({ searchParams }: { searchParams: Se
   }
 
   const { data: rawItems } = await itemsQuery
-  const allItems = (rawItems ?? []) as unknown as ItemMin[]
-  const n2n3 = allItems.filter(i => {
-    const p = i.priority ?? i.maintenance_templates?.priority
-    return p === 'N2' || p === 'N3'
-  })
-  const scaduteCount = n2n3.filter(i => i.status === 'scaduta').length
-  const conformita = n2n3.length > 0
-    ? Math.round(((n2n3.length - scaduteCount) / n2n3.length) * 100)
+  const allItems = (rawItems ?? []) as unknown as LiveStatusItem[]
+  const counted = allItems.filter(i => isCountable(i) && resolveCompletionMode(i) !== 'promemoria')
+  const scaduteCount = overdueLive(counted, todayISO()).length
+  const conformita = counted.length > 0
+    ? Math.round(((counted.length - scaduteCount) / counted.length) * 100)
     : 100
 
   // ── Completions ──────────────────────────────────────────────────────────
