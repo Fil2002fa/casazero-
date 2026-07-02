@@ -8,7 +8,11 @@ import {
 import { requireRole } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/admin'
 import { SollecitaButton } from '../SollecitaButton'
-import type { MaintenancePriority } from '@/types/database'
+import {
+  overdueLive, todayISO,
+  LIVE_STATUS_FIELDS, LIVE_STATUS_TEMPLATE_FIELDS,
+  type LiveStatusItem,
+} from '@/lib/maintenance-status'
 
 export const metadata: Metadata = { title: 'Scheda amministratore — CasaZero' }
 
@@ -36,7 +40,7 @@ export default async function AdminDetailPage({ params }: { params: Params }) {
   await requireRole(['super_admin'])
 
   const svc = createServiceClient()
-  const today = new Date().toISOString().split('T')[0]
+  const today = todayISO()
 
   // Profilo admin
   const { data: adminProfile } = await svc
@@ -77,23 +81,21 @@ export default async function AdminDetailPage({ params }: { params: Params }) {
     .select('id, name')
     .in('id', residenceIds)
 
-  // Item N2/N3 scaduti LIVE per queste residenze (scope esplicito = NON builder-wide)
-  type OverdueRaw = {
+  // Item scaduti LIVE per queste residenze (scope esplicito = NON builder-wide)
+  type OverdueRaw = LiveStatusItem & {
     id: string
     residence_id: string
-    priority: MaintenancePriority | null
-    next_due_date: string
-    maintenance_templates: { title: string; priority: MaintenancePriority } | null
+    maintenance_templates: LiveStatusItem['maintenance_templates'] & { title: string }
   }
+  // .lt è solo un pushdown del predicato dell'helper: la definizione resta in overdueLive
   const { data: overdueRaw } = await svc
     .from('maintenance_items')
-    .select('id, residence_id, priority, next_due_date, maintenance_templates(title, priority)')
+    .select(`id, residence_id, ${LIVE_STATUS_FIELDS}, maintenance_templates!inner(title, ${LIVE_STATUS_TEMPLATE_FIELDS})`)
     .in('residence_id', residenceIds)
     .neq('status', 'completata')
     .lt('next_due_date', today)
-    .not('next_due_date', 'is', null)
     .order('next_due_date', { ascending: true })
-  const allOverdue = (overdueRaw ?? []) as unknown as OverdueRaw[]
+  const allOverdue = overdueLive((overdueRaw ?? []) as unknown as OverdueRaw[], today)
 
   // Fornitori e unità per residenza
   const { data: suppliers } = await svc
@@ -117,11 +119,7 @@ export default async function AdminDetailPage({ params }: { params: Params }) {
   // Aggrega per residenza
   const residenceDetails: ResidenceDetail[] = residenceIds.map(rid => {
     const residence = (residences ?? []).find(r => r.id === rid)
-    const resOverdue = allOverdue.filter(item => {
-      if (item.residence_id !== rid) return false
-      const eff = item.priority ?? item.maintenance_templates?.priority
-      return eff === 'N2' || eff === 'N3'
-    })
+    const resOverdue = allOverdue.filter(item => item.residence_id === rid)
     const overdueCount = resOverdue.length
     const supplierCount = suppliersByRes[rid] ?? 0
     const unitCount = unitsByRes[rid] ?? 0
@@ -139,7 +137,8 @@ export default async function AdminDetailPage({ params }: { params: Params }) {
       overdueItems: resOverdue.map(item => ({
         id: item.id,
         title: item.maintenance_templates?.title ?? '—',
-        nextDueDate: item.next_due_date,
+        // dopo overdueLive next_due_date è garantito non-null
+        nextDueDate: item.next_due_date as string,
       })),
     }
   }).sort((a, b) => {

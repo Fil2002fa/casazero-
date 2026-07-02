@@ -7,7 +7,11 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
-import { effPriority, ScaduteRow } from '@/lib/residence-stats'
+import {
+  overdueLive, resolveCompletionMode, todayISO,
+  LIVE_STATUS_FIELDS, LIVE_STATUS_TEMPLATE_FIELDS,
+  type LiveStatusItem,
+} from '@/lib/maintenance-status'
 import { unitHasNoActiveAccount } from '@/lib/unit-utils'
 import { AdminBlock, type AdminProfile } from './AdminBlock'
 
@@ -35,7 +39,7 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
 
   const [
     { data: unitsRaw },
-    { data: scaduteData },
+    { data: itemsRaw },
     { count: docCount },
     { count: supplierCount },
     { data: adminRaw },
@@ -45,9 +49,9 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
       .select('id, unit_members!left(ended_at)')
       .eq('residence_id', id),
     supabase.from('maintenance_items')
-      .select('id, priority, unit_id, maintenance_templates!inner(priority)')
+      .select(`unit_id, ${LIVE_STATUS_FIELDS}, maintenance_templates!inner(${LIVE_STATUS_TEMPLATE_FIELDS})`)
       .eq('residence_id', id)
-      .eq('status', 'scaduta'),
+      .neq('status', 'completata'),
     supabase.from('documents')
       .select('id', { count: 'exact', head: true })
       .eq('residence_id', id),
@@ -69,11 +73,12 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
     unitHasNoActiveAccount((u.unit_members ?? []) as { ended_at: string | null }[])
   ).length
 
-  const scadute = (scaduteData ?? []) as unknown as ScaduteRow[]
-  const n3Scadute = scadute.filter(i => effPriority(i) === 'N3').length
+  type ItemRow = LiveStatusItem & { unit_id: string | null }
+  const overdue = overdueLive((itemsRaw ?? []) as unknown as ItemRow[], todayISO())
+  const n3Scadute = overdue.filter(i => resolveCompletionMode(i) === 'amministratore').length
   const n2ScaduteUnits = new Set(
-    scadute
-      .filter(i => effPriority(i) === 'N2' && i.unit_id != null)
+    overdue
+      .filter(i => resolveCompletionMode(i) === 'residente' && i.unit_id != null)
       .map(i => i.unit_id as string)
   ).size
 

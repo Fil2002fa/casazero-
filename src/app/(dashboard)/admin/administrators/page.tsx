@@ -3,7 +3,11 @@ import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
 import { requireRole } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/admin'
-import type { MaintenancePriority } from '@/types/database'
+import {
+  overdueLive, todayISO,
+  LIVE_STATUS_FIELDS, LIVE_STATUS_TEMPLATE_FIELDS,
+  type LiveStatusItem,
+} from '@/lib/maintenance-status'
 
 export const metadata: Metadata = { title: 'Amministratori — CasaZero' }
 
@@ -32,7 +36,7 @@ export type AdminSummary = {
 
 async function loadAdmins(builderId: string): Promise<AdminSummary[]> {
   const svc = createServiceClient()
-  const today = new Date().toISOString().split('T')[0]
+  const today = todayISO()
 
   const { data: residences } = await svc
     .from('residences')
@@ -54,26 +58,19 @@ async function loadAdmins(builderId: string): Promise<AdminSummary[]> {
     .select('id, full_name, phone')
     .in('id', adminIds)
 
-  type OverdueRaw = {
-    residence_id: string
-    priority: MaintenancePriority | null
-    maintenance_templates: { priority: MaintenancePriority } | null
-  }
+  type OverdueRaw = LiveStatusItem & { residence_id: string }
+  // .lt è solo un pushdown del predicato dell'helper: la definizione resta in overdueLive
   const { data: overdueRaw } = await svc
     .from('maintenance_items')
-    .select('residence_id, priority, maintenance_templates(priority)')
+    .select(`residence_id, ${LIVE_STATUS_FIELDS}, maintenance_templates!inner(${LIVE_STATUS_TEMPLATE_FIELDS})`)
     .in('residence_id', residenceIds)
     .neq('status', 'completata')
     .lt('next_due_date', today)
-    .not('next_due_date', 'is', null)
-  const overdueItems = (overdueRaw ?? []) as unknown as OverdueRaw[]
+  const overdueItems = overdueLive((overdueRaw ?? []) as unknown as OverdueRaw[], today)
 
   const overdueByResidence: Record<string, number> = {}
   for (const item of overdueItems) {
-    const eff = item.priority ?? item.maintenance_templates?.priority
-    if (eff === 'N2' || eff === 'N3') {
-      overdueByResidence[item.residence_id] = (overdueByResidence[item.residence_id] ?? 0) + 1
-    }
+    overdueByResidence[item.residence_id] = (overdueByResidence[item.residence_id] ?? 0) + 1
   }
 
   const { data: suppliers } = await svc

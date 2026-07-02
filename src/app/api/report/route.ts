@@ -7,6 +7,11 @@ import { createServiceClient } from '@/lib/supabase/admin'
 import { ReportDocument } from '@/lib/pdf/ReportDocument'
 import type { ReportData, CompletionEntry, OverdueEntry } from '@/lib/pdf/ReportDocument'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
+import {
+  isCountable, overdueLive, resolveCompletionMode, todayISO,
+  LIVE_STATUS_FIELDS, LIVE_STATUS_TEMPLATE_FIELDS,
+  type LiveStatusItem,
+} from '@/lib/maintenance-status'
 
 // Forza runtime Node.js — @react-pdf/renderer non è compatibile con Edge
 export const runtime = 'nodejs'
@@ -144,12 +149,18 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // ── Calcolo conformità (stesso algoritmo del Fascicolo) ───────────────────
-  type ItemMin = { status: string; priority: string | null; maintenance_templates: { priority: string } | null }
+  // ── Calcolo conformità (live, stesso helper dei contatori dashboard) ──────
+  // Denominatore: voci conteggiabili non-promemoria; scadute calcolate da
+  // next_due_date via overdueLive, mai dal campo status salvato.
+  type ItemRaw = LiveStatusItem & {
+    priority: string | null
+    maintenance_templates: LiveStatusItem['maintenance_templates'] & { title: string; priority: string }
+  }
 
+  const today = todayISO()
   const itemsQuery = admin
     .from('maintenance_items')
-    .select('status, priority, maintenance_templates(priority)')
+    .select(`priority, ${LIVE_STATUS_FIELDS}, maintenance_templates!inner(title, priority, ${LIVE_STATUS_TEMPLATE_FIELDS})`)
     .eq('residence_id', residenceId)
     .neq('status', 'completata')
 
@@ -157,14 +168,12 @@ export async function GET(req: NextRequest) {
     ? await itemsQuery.or(`unit_id.eq.${unitId},unit_id.is.null`)
     : await itemsQuery
 
-  const allItems = (rawItems ?? []) as unknown as ItemMin[]
-  const n2n3 = allItems.filter(i => {
-    const p = i.priority ?? i.maintenance_templates?.priority
-    return p === 'N2' || p === 'N3'
-  })
-  const scaduteCount = n2n3.filter(i => i.status === 'scaduta').length
-  const conformita = n2n3.length > 0
-    ? Math.round(((n2n3.length - scaduteCount) / n2n3.length) * 100)
+  const allItems = (rawItems ?? []) as unknown as ItemRaw[]
+  const counted = allItems.filter(i => isCountable(i) && resolveCompletionMode(i) !== 'promemoria')
+  const overdue = overdueLive(counted, today)
+  const scaduteCount = overdue.length
+  const conformita = counted.length > 0
+    ? Math.round(((counted.length - scaduteCount) / counted.length) * 100)
     : 100
 
   // ── Completions ───────────────────────────────────────────────────────────
@@ -210,29 +219,15 @@ export async function GET(req: NextRequest) {
     }
   })
 
-  // ── Voci scadute ─────────────────────────────────────────────────────────
-  type OverdueRaw = {
-    next_due_date: string
-    priority: string | null
-    maintenance_templates: { title: string; priority: string } | null
-  }
-
-  const overdueQuery = admin
-    .from('maintenance_items')
-    .select('next_due_date, priority, maintenance_templates(title, priority)')
-    .eq('residence_id', residenceId)
-    .eq('status', 'scaduta')
-    .order('next_due_date', { ascending: true })
-
-  const { data: rawOverdue } = unitId
-    ? await overdueQuery.or(`unit_id.eq.${unitId},unit_id.is.null`)
-    : await overdueQuery
-
-  const overdueItems: OverdueEntry[] = ((rawOverdue ?? []) as unknown as OverdueRaw[]).map(i => ({
-    title:         i.maintenance_templates?.title ?? 'Voce',
-    priority:      (i.priority ?? i.maintenance_templates?.priority ?? 'N2') as 'N1' | 'N2' | 'N3',
-    next_due_date: i.next_due_date,
-  }))
+  // ── Voci scadute (stesso set live del calcolo conformità) ────────────────
+  const overdueItems: OverdueEntry[] = [...overdue]
+    .sort((a, b) => ((a.next_due_date ?? '') < (b.next_due_date ?? '') ? -1 : 1))
+    .map(i => ({
+      title: i.maintenance_templates?.title ?? 'Voce',
+      // priorità legacy solo per il badge nel PDF, non per il conteggio
+      priority: (i.priority ?? i.maintenance_templates?.priority ?? 'N2') as 'N1' | 'N2' | 'N3',
+      next_due_date: i.next_due_date as string,
+    }))
 
   // ── Genera PDF ────────────────────────────────────────────────────────────
   const reportData: ReportData = {
@@ -248,8 +243,8 @@ export async function GET(req: NextRequest) {
       day: 'numeric', month: 'long', year: 'numeric',
     }),
     conformita,
-    n2n3Total: n2n3.length,
-    n2n3Ok:    n2n3.length - scaduteCount,
+    n2n3Total: counted.length,
+    n2n3Ok:    counted.length - scaduteCount,
     completions,
     overdueItems,
   }

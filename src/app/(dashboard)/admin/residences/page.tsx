@@ -3,7 +3,11 @@ import Link from 'next/link'
 import { Plus, Home, AlertTriangle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
-import { effPriority, ScaduteRow } from '@/lib/residence-stats'
+import {
+  countLive, todayISO,
+  LIVE_STATUS_FIELDS, LIVE_STATUS_TEMPLATE_FIELDS,
+  type LiveStatusItem,
+} from '@/lib/maintenance-status'
 
 export const metadata: Metadata = { title: 'Residenze' }
 
@@ -13,12 +17,13 @@ type ResidenceRow = {
   address: string | null
   energy_class: string | null
   delivery_date: string | null
-  _count: { units: number; n2_scadute: number; n3_scadute: number; in_corso: number }
+  _count: { units: number; scadute_residente: number; scadute_amministratore: number; in_corso: number }
 }
 
 export default async function ResidencesPage() {
   await requireRole(['super_admin'], '/admin/manutenzioni')
   const supabase = await createClient()
+  const today = todayISO()
 
   const { data: residences } = await supabase
     .from('residences')
@@ -27,29 +32,23 @@ export default async function ResidencesPage() {
 
   const rows: ResidenceRow[] = await Promise.all(
     (residences ?? []).map(async (r) => {
-      const [{ count: unitCount }, { data: scaduteData }, { count: inCorsoCount }] =
-        await Promise.all([
-          supabase.from('units').select('id', { count: 'exact', head: true }).eq('residence_id', r.id),
-          // Fetch scadute con join template per calcolare priorità effettiva (item.priority può essere null)
-          supabase.from('maintenance_items')
-            .select('id, priority, maintenance_templates!inner(priority)')
-            .eq('residence_id', r.id)
-            .eq('status', 'scaduta'),
-          supabase.from('maintenance_items').select('id', { count: 'exact', head: true })
-            .eq('residence_id', r.id).eq('status', 'in_corso'),
-        ])
+      const [{ count: unitCount }, { data: itemsData }] = await Promise.all([
+        supabase.from('units').select('id', { count: 'exact', head: true }).eq('residence_id', r.id),
+        supabase.from('maintenance_items')
+          .select(`${LIVE_STATUS_FIELDS}, maintenance_templates!inner(${LIVE_STATUS_TEMPLATE_FIELDS})`)
+          .eq('residence_id', r.id)
+          .neq('status', 'completata'),
+      ])
 
-      const scadute = (scaduteData ?? []) as unknown as ScaduteRow[]
-      const n2Scadute = scadute.filter(i => effPriority(i) === 'N2').length
-      const n3Scadute = scadute.filter(i => effPriority(i) === 'N3').length
+      const counts = countLive((itemsData ?? []) as unknown as LiveStatusItem[], today)
 
       return {
         ...r,
         _count: {
           units: unitCount ?? 0,
-          n2_scadute: n2Scadute,
-          n3_scadute: n3Scadute,
-          in_corso: inCorsoCount ?? 0,
+          scadute_residente: counts.scaduteResidente,
+          scadute_amministratore: counts.scaduteAmministratore,
+          in_corso: counts.inCorso,
         },
       }
     })
@@ -82,7 +81,7 @@ export default async function ResidencesPage() {
       ) : (
         <div className="space-y-3">
           {rows.map(r => {
-            const totalScadute = r._count.n2_scadute + r._count.n3_scadute
+            const totalScadute = r._count.scadute_residente + r._count.scadute_amministratore
             return (
               <Link
                 key={r.id}
@@ -103,8 +102,8 @@ export default async function ResidencesPage() {
                 </div>
                 <div className="flex gap-3 mt-3">
                   <Stat label="Unità" value={r._count.units} />
-                  <Stat label="A tuo carico" value={r._count.n2_scadute} alert={r._count.n2_scadute > 0} />
-                  <Stat label="Condominiali" value={r._count.n3_scadute} alert={r._count.n3_scadute > 0} />
+                  <Stat label="A tuo carico" value={r._count.scadute_residente} alert={r._count.scadute_residente > 0} />
+                  <Stat label="Condominiali" value={r._count.scadute_amministratore} alert={r._count.scadute_amministratore > 0} />
                   <Stat label="In corso" value={r._count.in_corso} />
                   {r.energy_class && <Stat label="Classe" value={r.energy_class} />}
                 </div>
