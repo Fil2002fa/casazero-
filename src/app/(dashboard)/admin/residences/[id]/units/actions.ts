@@ -23,47 +23,18 @@ export async function createUnit(
 
   const admin = createServiceClient()
 
-  // Crea l'unità
-  const { data: unit, error: unitErr } = await admin
-    .from('units')
-    .insert({ residence_id: residenceId, label: label.trim(), floor })
-    .select('id')
-    .single()
+  // Unità + maintenance_items scope='unit' in un'unica transazione:
+  // qualsiasi errore → ROLLBACK totale, nessuna unità senza piano.
+  const { data: unitId, error: rpcErr } = await admin.rpc('czero_add_unit_with_items', {
+    p_residence_id: residenceId,
+    p_label: label.trim(),
+    p_floor: floor,
+  })
 
-  if (unitErr || !unit) return { error: unitErr?.message ?? 'Errore creazione unità' }
-
-  // Crea gli item per i template scope=unit
-  const { data: templates } = await admin
-    .from('maintenance_templates')
-    .select('id, frequency_months')
-    .eq('scope', 'unit')
-
-  if (templates?.length) {
-    const { data: residence } = await admin
-      .from('residences')
-      .select('delivery_date')
-      .eq('id', residenceId)
-      .single()
-
-    const base = residence?.delivery_date ?? new Date().toISOString().split('T')[0]
-
-    const items = templates.map(t => {
-      const d = new Date(base)
-      d.setMonth(d.getMonth() + t.frequency_months)
-      return {
-        template_id: t.id,
-        residence_id: residenceId,
-        unit_id: unit.id,
-        next_due_date: d.toISOString().split('T')[0],
-        status: 'in_attesa',
-      }
-    })
-
-    await admin.from('maintenance_items').insert(items)
-  }
+  if (rpcErr || !unitId) return { error: rpcErr?.message ?? 'Errore creazione unità' }
 
   revalidatePath(`/admin/residences/${residenceId}/units`)
-  return { id: unit.id }
+  return { id: unitId as string }
 }
 
 export async function createInvite(
