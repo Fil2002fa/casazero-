@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { getProfile } from '@/lib/auth'
 
 export interface WhitelabelBrand {
   brandDark: string
@@ -9,17 +10,12 @@ export interface WhitelabelBrand {
 export async function getWhitelabelBrand(): Promise<WhitelabelBrand> {
   const DEFAULT: WhitelabelBrand = { brandDark: '#04342C', logoUrl: null, builderName: 'CasaZero' }
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return DEFAULT
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('builder_id')
-    .eq('id', user.id)
-    .single()
-
+  // Riusa il profilo cache-ato per request (src/lib/auth.ts): niente
+  // auth.getUser() né query profiles duplicate rispetto a layout/page.
+  const profile = await getProfile()
   if (!profile?.builder_id) return DEFAULT
+
+  const supabase = await createClient()
 
   const { data: builder } = await supabase
     .from('builders')
