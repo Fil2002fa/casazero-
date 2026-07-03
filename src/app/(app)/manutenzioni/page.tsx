@@ -32,13 +32,23 @@ export default async function ManutenzioniPage() {
 
   const supabase = await createClient()
 
-  // Cerca l'unità attiva del client
-  const { data: membership } = await supabase
-    .from('unit_members')
-    .select('unit_id, units(residence_id, label, residences(name))')
-    .eq('profile_id', profile.id)
-    .is('ended_at', null)
-    .maybeSingle()
+  // In parallelo: la query items è scopata da RLS, non dipende dalla membership
+  const [{ data: membership }, { data: rawItems }] = await Promise.all([
+    supabase
+      .from('unit_members')
+      .select('unit_id, units(residence_id, label, residences(name))')
+      .eq('profile_id', profile.id)
+      .is('ended_at', null)
+      .maybeSingle(),
+    supabase
+      .from('maintenance_items')
+      .select(`
+        id, status, next_due_date, unit_id, residence_id, priority, frequency_months,
+        maintenance_templates(title, category, priority, scope, frequency_months)
+      `)
+      .neq('status', 'completata')
+      .order('next_due_date', { ascending: true, nullsFirst: false }),
+  ])
 
   if (!membership) {
     return (
@@ -54,15 +64,6 @@ export default async function ManutenzioniPage() {
   }
 
   const unit = membership.units as unknown as { residence_id: string; label: string; residences: { name: string } | null } | null
-
-  const { data: rawItems } = await supabase
-    .from('maintenance_items')
-    .select(`
-      id, status, next_due_date, unit_id, residence_id, priority, frequency_months,
-      maintenance_templates(title, category, priority, scope, frequency_months)
-    `)
-    .neq('status', 'completata')
-    .order('next_due_date', { ascending: true, nullsFirst: false })
 
   const items = (rawItems ?? []) as unknown as ItemRow[]
 

@@ -25,34 +25,31 @@ export default async function HomePage() {
   const profile = await requireProfile()
   const supabase = await createClient()
 
-  const { data: membership } = await supabase
-    .from('unit_members')
-    .select('unit_id, units(id, label, residence_id, residences(name, photo_url))')
-    .eq('profile_id', profile.id)
-    .is('ended_at', null)
-    .maybeSingle()
+  // In parallelo: membership e urgenti sono indipendenti. Il banner usa il
+  // count 'exact' della STESSA query delle card (il limit non influenza il
+  // count): un'unica definizione di "urgente" per entrambe le superfici.
+  const [{ data: membership }, { data: rawUrgent, count: urgentCount }] = await Promise.all([
+    supabase
+      .from('unit_members')
+      .select('unit_id, units(id, label, residence_id, residences(name, photo_url))')
+      .eq('profile_id', profile.id)
+      .is('ended_at', null)
+      .maybeSingle(),
+    supabase
+      .from('maintenance_items')
+      .select(`
+        id, status, next_due_date, unit_id, residence_id, priority,
+        maintenance_templates(title, category, priority, scope)
+      `, { count: 'exact' })
+      .in('status', ['scaduta', 'in_corso'])
+      .order('next_due_date', { ascending: true, nullsFirst: false })
+      .limit(3),
+  ])
 
   const unit = membership?.units as unknown as {
     id: string; label: string; residence_id: string
     residences: { name: string; photo_url: string | null } | null
   } | null
-
-  // Conteggio scadenze urgenti (status scaduta o in_corso)
-  const { count: urgentCount } = await supabase
-    .from('maintenance_items')
-    .select('id', { count: 'exact', head: true })
-    .in('status', ['scaduta', 'in_corso'])
-
-  // Prime 3 card urgenti per la home
-  const { data: rawUrgent } = await supabase
-    .from('maintenance_items')
-    .select(`
-      id, status, next_due_date, unit_id, residence_id, priority,
-      maintenance_templates(title, category, priority, scope)
-    `)
-    .in('status', ['scaduta', 'in_corso'])
-    .order('next_due_date', { ascending: true, nullsFirst: false })
-    .limit(3)
 
   const urgentItems = (rawUrgent ?? []) as unknown as ItemRow[]
 

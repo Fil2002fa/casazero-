@@ -4,10 +4,12 @@ import { getWhitelabelBrand } from '@/lib/whitelabel'
 import { getProfile } from '@/lib/auth'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const profile = await getProfile()
+  // In parallelo: la parte auth è comunque condivisa dalla cache() di src/lib/auth.ts
+  const [profile, { brandDark, logoUrl }] = await Promise.all([
+    getProfile(),
+    getWhitelabelBrand(),
+  ])
   if (profile && profile.role !== 'client') redirect('/admin')
-
-  const { brandDark, logoUrl } = await getWhitelabelBrand()
 
   return (
     <div
