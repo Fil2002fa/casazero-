@@ -20,6 +20,12 @@ const MAX_UNITS = 200
 
 type UnitRow = { label: string; floor: string }
 
+// Fonte di verità unica per i nomi generati: usata sia dall'anteprima
+// sia dalla generazione vera, così non possono divergere.
+function generatedLabel(prefix: string, n: number): string {
+  return prefix ? `${prefix} ${n}` : String(n)
+}
+
 // Ritorna un messaggio d'errore per riga (indice → messaggio); vuoto = tutto valido.
 function validateUnitRows(rows: UnitRow[]): Record<number, string> {
   const errors: Record<number, string> = {}
@@ -54,11 +60,12 @@ export default function NewResidencePage() {
   const [rowErrors, setRowErrors] = useState<Record<number, string>>({})
   const [listError, setListError] = useState<string | null>(null)
 
-  // Generatore a pattern
+  // Generatore a pattern (parte sempre dal numero 1; numerazioni diverse
+  // si ottengono modificando le righe della lista, che è la fonte di verità)
   const [genPrefix, setGenPrefix] = useState('Unità')
-  const [genStart, setGenStart] = useState('1')
   const [genCount, setGenCount] = useState('')
   const [genPerFloor, setGenPerFloor] = useState('2')
+  const [showReplaceConfirm, setShowReplaceConfirm] = useState(false)
 
   const formRef = useRef<HTMLFormElement>(null)
 
@@ -74,26 +81,40 @@ export default function NewResidencePage() {
     setStep(2)
   }
 
-  function handleGenerate() {
-    const start = parseInt(genStart, 10)
+  // Campi del generatore validi? Unica definizione, condivisa da anteprima,
+  // "Genera" e generazione effettiva.
+  const gen = (() => {
     const count = parseInt(genCount, 10)
     const perFloor = parseInt(genPerFloor, 10)
-    if (!Number.isInteger(count) || count < 1 || count > MAX_UNITS) {
-      setListError(`Indica quante unità generare (da 1 a ${MAX_UNITS})`)
-      return
-    }
-    if (!Number.isInteger(start) || start < 0 || !Number.isInteger(perFloor) || perFloor < 1) {
-      setListError('Controlla i campi del generatore: numero iniziale e unità per piano')
-      return
-    }
-    if (units.length > 0 && !window.confirm(`Sostituire le ${units.length} unità già in lista?`)) return
+    if (!Number.isInteger(count) || count < 1 || count > MAX_UNITS) return null
+    if (!Number.isInteger(perFloor) || perFloor < 1) return null
+    return { count, perFloor }
+  })()
+
+  function doGenerate() {
+    if (!gen) return
     const prefix = genPrefix.trim()
-    setUnits(Array.from({ length: count }, (_, i) => ({
-      label: prefix ? `${prefix} ${start + i}` : `${start + i}`,
-      floor: String(Math.floor(i / perFloor) + 1),
+    setUnits(Array.from({ length: gen.count }, (_, i) => ({
+      label: generatedLabel(prefix, i + 1),
+      floor: String(Math.floor(i / gen.perFloor) + 1),
     })))
     setRowErrors({})
     setListError(null)
+  }
+
+  function handleGenerate() {
+    if (!gen) {
+      setListError(`Controlla i campi del generatore: numero di unità (da 1 a ${MAX_UNITS}) e unità per piano (almeno 1)`)
+      return
+    }
+    setListError(null)
+    // Conferma solo se in lista ci sono già unità con un nome: righe vuote
+    // appena aggiunte non sono lavoro da proteggere.
+    if (units.some(u => u.label.trim())) {
+      setShowReplaceConfirm(true)
+      return
+    }
+    doGenerate()
   }
 
   function updateUnit(index: number, patch: Partial<UnitRow>) {
@@ -156,7 +177,19 @@ export default function NewResidencePage() {
     })
   }
 
-  const floorCount = new Set(units.map(u => u.floor.trim())).size
+  // Il riepilogo conta solo le righe con un nome compilato: una riga appena
+  // aggiunta e ancora vuota non è un'unità.
+  const filledUnits = units.filter(u => u.label.trim())
+  const floorCount = new Set(filledUnits.map(u => u.floor.trim())).size
+
+  // Anteprima live del generatore: primi 3 nomi + "…" e intervallo piani.
+  const genPreview = gen ? (() => {
+    const prefix = genPrefix.trim()
+    const names = Array.from({ length: Math.min(gen.count, 3) }, (_, i) => generatedLabel(prefix, i + 1))
+    const maxFloor = Math.floor((gen.count - 1) / gen.perFloor) + 1
+    const floors = maxFloor === 1 ? 'piano 1' : `piani 1–${maxFloor}`
+    return `Verranno generate: ${names.join(', ')}${gen.count > 3 ? '…' : ''} · ${floors}`
+  })() : null
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -265,11 +298,20 @@ export default function NewResidencePage() {
               Scorciatoia per popolare la lista. Ogni riga resta poi modificabile singolarmente.
             </p>
             <div className="grid grid-cols-2 gap-3">
-              <GenField label="Prefisso" value={genPrefix} onChange={setGenPrefix} placeholder="Unità" />
-              <GenField label="Da n." value={genStart} onChange={setGenStart} type="number" min="0" />
-              <GenField label="Quante" value={genCount} onChange={setGenCount} type="number" min="1" max={String(MAX_UNITS)} placeholder="es. 14" />
-              <GenField label="Unità per piano" value={genPerFloor} onChange={setGenPerFloor} type="number" min="1" />
+              <GenField label="Nome unità" value={genPrefix} onChange={setGenPrefix} placeholder="es. Unità, Int., A" />
+              <GenField label="Numero di unità" value={genCount} onChange={setGenCount} type="number" min="1" max={String(MAX_UNITS)} placeholder="es. 14" />
             </div>
+            <GenField
+              label="Unità per piano"
+              value={genPerFloor}
+              onChange={setGenPerFloor}
+              type="number"
+              min="1"
+              hint="Per assegnare i piani in automatico: es. 2 = le prime due unità al piano 1, le successive al piano 2, e così via. Modificabile poi riga per riga."
+            />
+            {genPreview && (
+              <p className="text-xs text-text-secondary">{genPreview}</p>
+            )}
             <button
               type="button"
               onClick={handleGenerate}
@@ -283,9 +325,9 @@ export default function NewResidencePage() {
           <section className="bg-surface rounded-xl border border-border p-4 space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-medium text-text-primary">Unità</h2>
-              {units.length > 0 && (
+              {filledUnits.length > 0 && (
                 <p className="text-xs text-text-secondary">
-                  {units.length} unità su {floorCount} {floorCount === 1 ? 'piano' : 'piani'}
+                  {filledUnits.length} unità su {floorCount} {floorCount === 1 ? 'piano' : 'piani'}
                 </p>
               )}
             </div>
@@ -372,6 +414,34 @@ export default function NewResidencePage() {
           </div>
         </div>
       </form>
+
+      {/* Modale conferma sostituzione lista unità */}
+      {showReplaceConfirm && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-6">
+          <div className="bg-surface rounded-xl border border-border p-5 w-full max-w-sm space-y-3">
+            <p className="text-sm font-medium text-text-primary">Sostituire le unità?</p>
+            <p className="text-sm text-text-secondary">
+              Le {filledUnits.length} unità in lista verranno sostituite da quelle generate.
+            </p>
+            <div className="flex gap-2 justify-end pt-1">
+              <button
+                type="button"
+                onClick={() => setShowReplaceConfirm(false)}
+                className="px-4 py-2 border border-border rounded-lg text-sm text-text-secondary"
+              >
+                Annulla
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowReplaceConfirm(false); doGenerate() }}
+                className="px-4 py-2 bg-brand-dark text-white rounded-lg text-sm font-medium"
+              >
+                Sostituisci
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -396,10 +466,10 @@ function Field({
 }
 
 function GenField({
-  label, value, onChange, placeholder, type = 'text', min, max,
+  label, value, onChange, placeholder, type = 'text', min, max, hint,
 }: {
   label: string; value: string; onChange: (v: string) => void
-  placeholder?: string; type?: string; min?: string; max?: string
+  placeholder?: string; type?: string; min?: string; max?: string; hint?: string
 }) {
   return (
     <div>
@@ -413,6 +483,7 @@ function GenField({
         max={max}
         className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
       />
+      {hint && <p className="text-xs text-text-secondary mt-1">{hint}</p>}
     </div>
   )
 }
