@@ -77,7 +77,7 @@ export default function NewResidencePage() {
               <p className="text-sm font-medium text-text-primary">Edificio esistente</p>
               <p className="text-xs text-text-secondary">
                 Attiva per edifici già abitati: potrai inserire, per ogni categoria,
-                la data dell'ultimo intervento noto invece della data di consegna.
+                la data dell&apos;ultimo intervento noto invece della data di consegna.
               </p>
             </div>
           </label>
