@@ -23,16 +23,14 @@ export async function createResidence(formData: FormData) {
   const address      = (formData.get('address') as string)?.trim() || null
   const energyClass  = (formData.get('energy_class') as string)?.trim() || null
   const deliveryDate = formData.get('delivery_date') as string
-  const unitCount    = parseInt(formData.get('unit_count') as string, 10) || 1
 
   if (!name || !deliveryDate) return { error: 'Nome e data di consegna obbligatori' }
 
-  const admin = createServiceClient()
+  const unitsResult = parseUnits(formData.get('units'))
+  if ('error' in unitsResult) return { error: unitsResult.error }
+  const units = unitsResult.units
 
-  const units = Array.from({ length: unitCount }, (_, i) => ({
-    label: `Unità ${i + 1}`,
-    floor: Math.floor(i / 2) + 1,
-  }))
+  const admin = createServiceClient()
 
   // Il field name nel wizard è date_${category} con il valore esatto del template.
   const categoryDates: Record<string, string> = {}
@@ -58,4 +56,44 @@ export async function createResidence(formData: FormData) {
 
   revalidatePath('/admin/residences')
   redirect(`/admin/residences/${residenceId}`)
+}
+
+const MAX_UNITS = 200
+
+// Valida il JSON delle unità arrivato dal client. L'hidden field è manipolabile
+// dai DevTools: prima la shape (array di {label: string, floor: number}), poi le
+// stesse regole di merito del client (≥1 unità, label non vuote e uniche
+// case-insensitive, floor intero ≥ 0).
+function parseUnits(raw: FormDataEntryValue | null):
+  { units: { label: string; floor: number }[] } | { error: string } {
+  if (typeof raw !== 'string') return { error: 'Dati unità mancanti' }
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return { error: 'Dati unità non validi' }
+  }
+
+  if (!Array.isArray(parsed)) return { error: 'Dati unità non validi' }
+  if (parsed.length === 0) return { error: 'Serve almeno una unità' }
+  if (parsed.length > MAX_UNITS) return { error: `Massimo ${MAX_UNITS} unità per residenza` }
+
+  const units: { label: string; floor: number }[] = []
+  const seen = new Set<string>()
+  for (const entry of parsed) {
+    if (typeof entry !== 'object' || entry === null) return { error: 'Dati unità non validi' }
+    const { label, floor } = entry as Record<string, unknown>
+    if (typeof label !== 'string' || typeof floor !== 'number') return { error: 'Dati unità non validi' }
+    const trimmed = label.trim()
+    if (!trimmed) return { error: 'Ogni unità deve avere un nome' }
+    if (!Number.isInteger(floor) || floor < 0) {
+      return { error: `Piano non valido per "${trimmed}": serve un numero intero da 0 in su` }
+    }
+    const key = trimmed.toLowerCase()
+    if (seen.has(key)) return { error: `Nome unità duplicato: "${trimmed}"` }
+    seen.add(key)
+    units.push({ label: trimmed, floor })
+  }
+  return { units }
 }
