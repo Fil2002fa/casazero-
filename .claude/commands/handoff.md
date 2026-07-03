@@ -61,13 +61,27 @@ npm run build && npm start
 
 ## Domande aperte
 - [domanda tecnica o decisione ancora da prendere]
+
+## Leggi emerse (candidate per CLAUDE.md)
+[Rileggi le "Decisioni chiave" e la sessione intera e distingui STATO da LEGGI.
+Una LEGGE è una regola permanente valida oltre questa sessione: un invariante
+architetturale, una convenzione, una classe di bug con la sua prevenzione.
+Uno STATO è dove siamo arrivati — quello resta nelle sezioni sopra.
+
+Per ogni legge trovata, scrivi il testo ESATTO pronto da incollare in CLAUDE.md,
+indicando la sezione di destinazione (Invarianti / Metodo di lavoro / Regole di
+codice). Se nessuna legge è emersa, scrivi "Nessuna". NON modificare CLAUDE.md:
+la promozione la decide e la applica Filippo.]
+
+- **Sezione CLAUDE.md di destinazione**: [testo esatto della regola]
 ```
 
 4. **Vincoli**
-   - NON toccare mai `CLAUDE.md`
+   - NON toccare mai `CLAUDE.md` — le leggi emerse si PROPONGONO nella sezione dedicata, non si applicano
    - NON sovrascrivere handoff esistenti — crea sempre un nuovo file con timestamp fresco
    - Il documento deve essere leggibile da zero da un nuovo agente senza accesso alla conversazione
+   - Usa SOLO la nomenclatura ufficiale (Modalità: Residente/Amministratore/Promemoria · Tipo: Obbligo di legge/Raccomandata/Consiglio). Mai N1/N2/N3, salvo riferimenti espliciti alla colonna legacy `priority`
    - Includi ID e nomi reali (file path assoluti no, relativi dal root del progetto sì)
    - Riferimento progetto: CasaZero, Next.js 15 App Router + Supabase, milestone attiva M5
 
-5. **Al termine** conferma il path del file scritto e mostra le prime 10 righe come anteprima.
+5. **Al termine** conferma il path del file scritto, mostra le prime 10 righe come anteprima, e se la sezione "Leggi emerse" non è vuota, evidenziala a Filippo con un promemoria: "Ci sono N leggi candidate per CLAUDE.md — vuoi promuoverle?"
