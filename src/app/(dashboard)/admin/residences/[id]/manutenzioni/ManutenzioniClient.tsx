@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { ChevronDown, ChevronUp } from 'lucide-react'
+import { ChevronDown, ChevronUp, Bell, Clock } from 'lucide-react'
 import { MaintenanceBadge } from '@/components/MaintenanceBadge'
 import { ItemConfigForm } from './ItemConfigForm'
 import { setTemplateActivationForResidence } from '../fornitori/actions'
@@ -623,6 +623,14 @@ function UnitRow({ item, label, residenceId, suppliers, primaryName }: {
   const formattedDue = item.next_due_date
     ? new Date(item.next_due_date).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })
     : null
+  const [solicited, setSolicited] = useState(false)
+  const canSollecitare = effMode !== 'promemoria' && (item.status === 'scaduta' || item.status === 'in_corso')
+
+  function handleSollecita() {
+    if (solicited) return
+    setSolicited(true)
+    setTimeout(() => setSolicited(false), 2500)
+  }
 
   return (
     <div className="border-b border-border last:border-b-0">
@@ -645,6 +653,18 @@ function UnitRow({ item, label, residenceId, suppliers, primaryName }: {
           ) : null}
           {item.suppliers && (
             <span className="text-xs text-brand-medium">{item.suppliers.name}</span>
+          )}
+          {canSollecitare && (
+            <button
+              onClick={handleSollecita}
+              disabled={solicited}
+              className="flex items-center gap-1 text-xs text-brand-dark font-medium px-2 py-1 rounded-md hover:bg-brand-light transition-colors disabled:opacity-70"
+            >
+              {solicited
+                ? <Clock className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={1.6} />
+                : <Bell className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={1.6} />}
+              {solicited ? 'Sollecito inviato' : 'Sollecita'}
+            </button>
           )}
         </div>
       </div>
