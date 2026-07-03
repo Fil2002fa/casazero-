@@ -29,81 +29,33 @@ export async function createResidence(formData: FormData) {
 
   const admin = createServiceClient()
 
-  // 1. Crea residenza
-  const { data: residence, error: resErr } = await admin
-    .from('residences')
-    .insert({ builder_id: profile.builder_id, name, address, energy_class: energyClass, delivery_date: deliveryDate })
-    .select('id')
-    .single()
-
-  if (resErr || !residence) return { error: resErr?.message ?? 'Errore creazione residenza' }
-
-  // 2. Crea unità
-  const unitInserts = Array.from({ length: unitCount }, (_, i) => ({
-    residence_id: residence.id,
+  const units = Array.from({ length: unitCount }, (_, i) => ({
     label: `Unità ${i + 1}`,
     floor: Math.floor(i / 2) + 1,
   }))
-  const { data: units, error: unitsErr } = await admin.from('units').insert(unitInserts).select('id')
-  if (unitsErr) return { error: unitsErr.message }
 
-  // 3. Leggi template con categoria
-  const { data: templates } = await admin
-    .from('maintenance_templates')
-    .select('id, scope, frequency_months, category')
-    .order('sort_order')
-
-  if (!templates?.length) {
-    revalidatePath('/admin/residences')
-    redirect(`/admin/residences/${residence.id}`)
-  }
-
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-
-  // Calcola next_due_date e status iniziale.
-  // Se la data calcolata è già nel passato → 'scaduta', altrimenti 'in_attesa'.
   // Il field name nel wizard è date_${category} con il valore esatto del template.
-  function calcDue(category: string, freqMonths: number): { date: string; status: 'in_attesa' | 'scaduta' } {
-    const override = formData.get(`date_${category}`) as string | null
-    const base = override?.trim() ? override.trim() : deliveryDate
-    const d = new Date(base)
-    d.setMonth(d.getMonth() + freqMonths)
-    return {
-      date: d.toISOString().split('T')[0],
-      status: d < today ? 'scaduta' : 'in_attesa',
+  const categoryDates: Record<string, string> = {}
+  for (const [key, value] of formData.entries()) {
+    if (key.startsWith('date_') && typeof value === 'string' && value.trim()) {
+      categoryDates[key.slice('date_'.length)] = value.trim()
     }
   }
 
-  // 4. Crea maintenance_items
-  const itemInserts: object[] = []
-  for (const tpl of templates) {
-    const { date: nextDue, status } = calcDue(tpl.category, tpl.frequency_months)
-    if (tpl.scope === 'condominium') {
-      itemInserts.push({
-        template_id: tpl.id,
-        residence_id: residence.id,
-        unit_id: null,
-        next_due_date: nextDue,
-        status,
-      })
-    } else {
-      for (const unit of (units ?? [])) {
-        itemInserts.push({
-          template_id: tpl.id,
-          residence_id: residence.id,
-          unit_id: unit.id,
-          next_due_date: nextDue,
-          status,
-        })
-      }
-    }
-  }
+  // Residenza + unità + maintenance_items in un'unica transazione:
+  // qualsiasi errore → ROLLBACK totale, nessuna residenza parziale.
+  const { data: residenceId, error: rpcErr } = await admin.rpc('czero_create_residence_with_units', {
+    p_builder_id: profile.builder_id,
+    p_name: name,
+    p_address: address,
+    p_energy_class: energyClass,
+    p_delivery_date: deliveryDate,
+    p_units: units,
+    p_category_dates: categoryDates,
+  })
 
-  if (itemInserts.length > 0) {
-    await admin.from('maintenance_items').insert(itemInserts)
-  }
+  if (rpcErr || !residenceId) return { error: rpcErr?.message ?? 'Errore creazione residenza' }
 
   revalidatePath('/admin/residences')
-  redirect(`/admin/residences/${residence.id}`)
+  redirect(`/admin/residences/${residenceId}`)
 }
