@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { FolderOpen, BookOpen, CalendarClock, ChevronRight } from 'lucide-react'
+import { BookOpen, CalendarClock, ChevronRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireProfile } from '@/lib/auth'
 import { MaintenanceCard } from '@/components/MaintenanceCard'
@@ -240,22 +240,6 @@ export default async function HomePage() {
           <ChevronRight className="w-4 h-4 text-text-secondary flex-shrink-0" strokeWidth={1.6} />
         </div>
       </Link>
-
-      {/* Accessi rapidi */}
-      <section className="grid grid-cols-2 gap-3">
-        <Link href="/documenti">
-          <div className="bg-surface rounded-xl border border-border p-4 flex items-center gap-3 h-20 active:scale-[0.98] transition-transform">
-            <FolderOpen className="w-5 h-5 text-semantic-blue" strokeWidth={1.6} />
-            <span className="text-sm font-medium text-text-primary">Documenti</span>
-          </div>
-        </Link>
-        <Link href="/fascicolo">
-          <div className="bg-surface rounded-xl border border-border p-4 flex items-center gap-3 h-20 active:scale-[0.98] transition-transform">
-            <BookOpen className="w-5 h-5 text-brand-medium" strokeWidth={1.6} />
-            <span className="text-sm font-medium text-text-primary">Fascicolo</span>
-          </div>
-        </Link>
-      </section>
     </div>
   )
 }
