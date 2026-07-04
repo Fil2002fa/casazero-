@@ -45,7 +45,7 @@ export default async function ResidenceManutenzioniPage({ params, searchParams }
       .order('next_due_date', { ascending: true, nullsFirst: false }),
     supabase
       .from('completions')
-      .select('id, completed_at, item_id, performed_by_name')
+      .select('id, completed_at, item_id, performed_by_name, notes, attachments(id, file_name, storage_path)')
       .eq('residence_id', residenceId)
       .order('completed_at', { ascending: false }),
     supabase

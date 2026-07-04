@@ -40,6 +40,8 @@ export type CompletionRow = {
   completed_at: string
   item_id: string
   performed_by_name: string | null
+  notes: string | null
+  attachments: { id: string; file_name: string; storage_path: string }[]
 }
 
 export type FilterState = 'scaduta' | 'in_corso' | 'completate' | null
@@ -98,6 +100,7 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null)
   const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null)
+  const [expandedCompletion, setExpandedCompletion] = useState<string | null>(null)
   const [showExcluded, setShowExcluded] = useState(false)
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -312,8 +315,11 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
                   const dateStr = new Date(completion.completed_at).toLocaleDateString('it-IT', {
                     day: 'numeric', month: 'short', year: 'numeric',
                   })
-                  return (
-                    <div key={completion.id} className="bg-surface rounded-xl border border-border p-3">
+                  const hasDetail = !!completion.notes || completion.attachments?.length > 0
+                  const isExpanded = expandedCompletion === completion.id
+
+                  const header = (
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-medium text-text-primary truncate">{tpl?.title}</p>
                         <MaintenanceBadge mode={effMode} obligation={effObl} status="completata" />
@@ -329,6 +335,49 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
                           <span className="text-xs text-text-secondary">· {completion.performed_by_name}</span>
                         )}
                       </div>
+                    </div>
+                  )
+
+                  if (!hasDetail) {
+                    return (
+                      <div key={completion.id} className="bg-surface rounded-xl border border-border p-3">
+                        {header}
+                      </div>
+                    )
+                  }
+
+                  return (
+                    <div key={completion.id} className="bg-surface rounded-xl border border-border overflow-hidden">
+                      <button
+                        onClick={() => setExpandedCompletion(isExpanded ? null : completion.id)}
+                        className="w-full p-3 flex items-center gap-3 text-left"
+                      >
+                        {header}
+                        {isExpanded
+                          ? <ChevronUp className="w-4 h-4 text-text-secondary flex-shrink-0" strokeWidth={1.6} />
+                          : <ChevronDown className="w-4 h-4 text-text-secondary flex-shrink-0" strokeWidth={1.6} />}
+                      </button>
+
+                      {isExpanded && (
+                        <div className="border-t border-border p-3 space-y-2">
+                          {completion.notes && (
+                            <p className="text-sm text-text-secondary leading-relaxed">{completion.notes}</p>
+                          )}
+                          {completion.attachments?.length > 0 && (
+                            <div className="flex flex-col gap-1">
+                              {completion.attachments.map(att => (
+                                <a
+                                  key={att.id}
+                                  href={`/api/download?bucket=attachments&path=${encodeURIComponent(att.storage_path)}`}
+                                  className="text-xs text-brand-medium underline"
+                                >
+                                  {att.file_name}
+                                </a>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )
                 })}
