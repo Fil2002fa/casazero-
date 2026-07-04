@@ -1,10 +1,16 @@
 import Link from 'next/link'
-import { FolderOpen, BookOpen } from 'lucide-react'
+import { FolderOpen, BookOpen, CalendarClock, ChevronRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireProfile } from '@/lib/auth'
 import { MaintenanceCard } from '@/components/MaintenanceCard'
-import type { MaintenancePriority, MaintenanceStatus } from '@/types/database'
+import { OBLIGATION_LABELS } from '@/components/MaintenanceBadge'
+import type { MaintenancePriority, MaintenanceStatus, ObligationType } from '@/types/database'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
+import { pluralize } from '@/lib/pluralize'
+import {
+  isCountable, resolveCompletionMode, formatRelativeDue, todayISO,
+  LIVE_STATUS_FIELDS, LIVE_STATUS_TEMPLATE_FIELDS, type LiveStatusItem,
+} from '@/lib/maintenance-status'
 
 type ItemRow = {
   id: string
@@ -21,14 +27,35 @@ type ItemRow = {
   } | null
 }
 
+// Prossima manutenzione: campi live (helper) + display. Estende LiveStatusItem
+// così isCountable/resolveCompletionMode restano l'unica fonte di verità.
+type NextItemRow = LiveStatusItem & {
+  id: string
+  obligation_type: ObligationType | null
+  frequency_months: number | null
+  maintenance_templates:
+    | (NonNullable<LiveStatusItem['maintenance_templates']> & {
+        title: string
+        obligation_type: ObligationType | null
+        frequency_months: number | null
+      })
+    | null
+}
+
 export default async function HomePage() {
   const profile = await requireProfile()
   const supabase = await createClient()
 
-  // In parallelo: membership e urgenti sono indipendenti. Il banner usa il
-  // count 'exact' della STESSA query delle card (il limit non influenza il
-  // count): un'unica definizione di "urgente" per entrambe le superfici.
-  const [{ data: membership }, { data: rawUrgent, count: urgentCount }] = await Promise.all([
+  const today = todayISO()
+
+  // In parallelo (indipendenti tra loro, scopate da RLS): membership, urgenti e
+  // candidati "prossima manutenzione". Il banner urgenti usa il count 'exact'
+  // della STESSA query delle card (il limit non influenza il count).
+  const [
+    { data: membership },
+    { data: rawUrgent, count: urgentCount },
+    { data: rawNext },
+  ] = await Promise.all([
     supabase
       .from('unit_members')
       .select('unit_id, units(id, label, residence_id, residences(name, photo_url))')
@@ -44,6 +71,20 @@ export default async function HomePage() {
       .in('status', ['scaduta', 'in_corso'])
       .order('next_due_date', { ascending: true, nullsFirst: false })
       .limit(3),
+    // Candidati alla "Prossima manutenzione": item datati futuri, non completati,
+    // inclusi nel piano. Promemoria e template inattivi si scartano in JS via
+    // isCountable/resolveCompletionMode (asse canonico completion_mode).
+    supabase
+      .from('maintenance_items')
+      .select(`
+        id, ${LIVE_STATUS_FIELDS}, obligation_type, frequency_months,
+        maintenance_templates!inner(${LIVE_STATUS_TEMPLATE_FIELDS}, title, obligation_type, frequency_months)
+      `)
+      .neq('status', 'completata')
+      .eq('activation_status', 'inclusa')
+      .gte('next_due_date', today)
+      .order('next_due_date', { ascending: true })
+      .limit(20),
   ])
 
   const unit = membership?.units as unknown as {
@@ -52,6 +93,35 @@ export default async function HomePage() {
   } | null
 
   const urgentItems = (rawUrgent ?? []) as unknown as ItemRow[]
+
+  // Prossimo item DATATO futuro, escluse le promemoria: prima riga countable non-promemoria.
+  const nextItem =
+    ((rawNext ?? []) as unknown as NextItemRow[])
+      .find(i => isCountable(i) && resolveCompletionMode(i) !== 'promemoria') ?? null
+  const nextObligation =
+    (nextItem?.obligation_type ?? nextItem?.maintenance_templates?.obligation_type ?? null) as ObligationType | null
+
+  // Teaser fascicolo. Perimetro IDENTICO a /fascicolo tab "Tutti" per un client
+  // (unità + parti condominiali): residence_id = mia residenza AND (unit_id = mia
+  // unità OR unit_id IS NULL). Vincolo di allineamento: se cambia il filtro qui va
+  // cambiato anche in src/app/(app)/fascicolo/page.tsx (query completions). Solo
+  // lettura via createClient (RLS), mai service client.
+  let fascicoloCount = 0
+  let lastCompletedAt: string | null = null
+  if (unit) {
+    const { count, data: lastRows } = await supabase
+      .from('completions')
+      .select('completed_at', { count: 'exact' })
+      .eq('residence_id', unit.residence_id)
+      .or(`unit_id.eq.${unit.id},unit_id.is.null`)
+      .order('completed_at', { ascending: false })
+      .limit(1)
+    fascicoloCount = count ?? 0
+    lastCompletedAt = lastRows?.[0]?.completed_at ?? null
+  }
+  const lastCompletedLabel = lastCompletedAt
+    ? new Date(lastCompletedAt).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
+    : null
 
   const residenceName = unit?.residences?.name ?? 'La tua residenza'
   const photoUrl      = unit?.residences?.photo_url ?? null
@@ -127,6 +197,49 @@ export default async function HomePage() {
           </div>
         </section>
       )}
+
+      {/* Prossima manutenzione — informativa, non un'azione di completamento */}
+      {nextItem && (
+        <section className="space-y-2">
+          <h2 className="text-sm font-medium text-text-primary">Prossima manutenzione</h2>
+          <Link href={`/manutenzioni/${nextItem.id}`} className="block">
+            <div className="bg-surface rounded-xl border border-border p-4 flex items-center gap-3 active:scale-[0.98] transition-transform">
+              <div className="w-10 h-10 rounded-lg bg-background flex items-center justify-center flex-shrink-0">
+                <CalendarClock className="w-5 h-5 text-brand-medium" strokeWidth={1.6} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-text-primary truncate">
+                  {nextItem.maintenance_templates?.title ?? '—'}
+                </p>
+                <p className="text-xs text-text-secondary mt-0.5">
+                  {nextObligation ? OBLIGATION_LABELS[nextObligation] : 'Manutenzione'}
+                  {' · '}
+                  {formatRelativeDue(nextItem.next_due_date!, today)}
+                </p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-text-secondary flex-shrink-0" strokeWidth={1.6} />
+            </div>
+          </Link>
+        </section>
+      )}
+
+      {/* Teaser fascicolo — intero blocco cliccabile, nessun interattivo annidato */}
+      <Link href="/fascicolo" className="block">
+        <div className="bg-surface rounded-xl border border-border p-4 flex items-center gap-3 active:scale-[0.98] transition-transform">
+          <div className="w-10 h-10 rounded-lg bg-brand-light flex items-center justify-center flex-shrink-0">
+            <BookOpen className="w-5 h-5 text-brand-medium" strokeWidth={1.6} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-text-primary">Fascicolo</p>
+            <p className="text-xs text-text-secondary mt-0.5">
+              {fascicoloCount > 0
+                ? `${pluralize(fascicoloCount, 'intervento registrato', 'interventi registrati')} · ultimo ${lastCompletedLabel}`
+                : 'Ancora nessun intervento registrato'}
+            </p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-text-secondary flex-shrink-0" strokeWidth={1.6} />
+        </div>
+      </Link>
 
       {/* Accessi rapidi */}
       <section className="grid grid-cols-2 gap-3">

@@ -1,4 +1,5 @@
 import type { CompletionMode, ItemActivation } from '@/types/database'
+import { pluralize } from './pluralize'
 
 // Fonte di verità per lo stato live delle manutenzioni.
 //
@@ -85,4 +86,23 @@ export function countLive(items: LiveStatusItem[], today: string = todayISO()): 
     scaduteAmministratore: overdue.filter(i => resolveCompletionMode(i) === 'amministratore').length,
     inCorso: items.filter(i => isInCorso(i)).length,
   }
+}
+
+/**
+ * Data relativa per una scadenza FUTURA (informativa): "tra 6 giorni · 10 lug 2026",
+ * "tra 3 mesi · 10 ott 2026". Da usare solo su item non-promemoria e non scaduti
+ * (una promemoria non ha mai scadenza; uno scaduto usa il linguaggio "scaduta il").
+ * Pluralizzazione via helper condiviso, mai inline.
+ */
+export function formatRelativeDue(dueISO: string, today: string = todayISO()): string {
+  const due = new Date(`${dueISO}T00:00:00`)
+  const now = new Date(`${today}T00:00:00`)
+  const days = Math.round((due.getTime() - now.getTime()) / 86_400_000)
+  const abs = due.toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })
+  let rel: string
+  if (days <= 0) rel = 'oggi'
+  else if (days === 1) rel = 'domani'
+  else if (days < 30) rel = `tra ${pluralize(days, 'giorno', 'giorni')}`
+  else rel = `tra ${pluralize(Math.round(days / 30), 'mese', 'mesi')}`
+  return `${rel} · ${abs}`
 }

@@ -6,7 +6,7 @@ const MODE_LABELS: Record<CompletionMode, string> = {
   promemoria:     'Promemoria',
 }
 
-const OBLIGATION_LABELS: Record<ObligationType, string> = {
+export const OBLIGATION_LABELS: Record<ObligationType, string> = {
   A: 'Obbligo di legge',
   B: 'Raccomandata',
   C: 'Consiglio',
