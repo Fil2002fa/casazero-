@@ -5,6 +5,7 @@ import { ChevronDown, ChevronUp, Bell, Clock } from 'lucide-react'
 import { MaintenanceBadge } from '@/components/MaintenanceBadge'
 import { ItemConfigForm } from './ItemConfigForm'
 import { setTemplateActivationForResidence } from '../fornitori/actions'
+import { isOverdueLive, isInCorso } from '@/lib/maintenance-status'
 import type { MaintenancePriority, MaintenanceStatus, CompletionMode, ObligationType, ItemActivation } from '@/types/database'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import { formatFrequency } from '@/lib/formatFrequency'
@@ -30,6 +31,7 @@ export type ItemRow = {
     obligation_type: ObligationType
     frequency_months: number
     scope: string
+    is_active: boolean
   } | null
   units: { label: string } | null
   suppliers: { id: string; name: string } | null
@@ -120,8 +122,8 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
   const liveItems = items.filter(i => i.activation_status !== 'archiviata')
 
   // Contatori dalle sorgenti canoniche (invariati: liveItems e yearCompletions)
-  const scaduteCount = liveItems.filter(i => i.status === 'scaduta').length
-  const inCorsoCount = liveItems.filter(i => i.status === 'in_corso').length
+  const scaduteCount = liveItems.filter(i => isOverdueLive(i)).length
+  const inCorsoCount = liveItems.filter(i => isInCorso(i)).length
   const years = [...new Set(completions.map(c => Number(c.completed_at.slice(0, 4))))].sort((a, b) => b - a)
   const yearCompletions = completions.filter(c => Number(c.completed_at.slice(0, 4)) === selectedYear)
   const completedCount = yearCompletions.length
@@ -149,10 +151,12 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
 
   // TESTA — zona attenzione (per-istanza). Guardia promemoria strutturale: N1 non scade mai.
   const allAttentionItems = filteredItems
-    .filter(i => (i.status === 'scaduta' || i.status === 'in_corso') && resolveAxes(i).mode !== 'promemoria')
+    .filter(i => (isOverdueLive(i) || isInCorso(i)) && resolveAxes(i).mode !== 'promemoria')
     .sort((a, b) => {
-      if (a.status !== b.status) return a.status === 'scaduta' ? -1 : 1
-      if (a.status === 'scaduta') {
+      const aOverdue = isOverdueLive(a)
+      const bOverdue = isOverdueLive(b)
+      if (aOverdue !== bOverdue) return aOverdue ? -1 : 1
+      if (aOverdue) {
         const da = a.next_due_date ? new Date(a.next_due_date).getTime() : Infinity
         const db = b.next_due_date ? new Date(b.next_due_date).getTime() : Infinity
         return da - db // più in ritardo (data più vecchia) prima
@@ -422,17 +426,19 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
                 const unitLabel = item.unit_id === null
                   ? 'Condominio'
                   : (item.units ? formatUnitLabel(item.units.label) : '—')
-                const accent = item.status === 'scaduta' ? 'border-l-semantic-red' : 'border-l-semantic-amber'
+                const overdueNow = isOverdueLive(item)
+                const accent = overdueNow ? 'border-l-semantic-red' : 'border-l-semantic-amber'
+                const badgeStatus = overdueNow ? 'scaduta' : item.status
                 const n = daysOverdue(item.next_due_date, today)
                 return (
                   <div key={item.id} className={`bg-surface rounded-xl border border-border border-l-4 ${accent} p-3`}>
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-sm font-medium text-text-primary truncate">{tpl?.title}</p>
-                      <MaintenanceBadge mode={effMode} obligation={effObl} status={item.status} />
+                      <MaintenanceBadge mode={effMode} obligation={effObl} status={badgeStatus} />
                     </div>
                     <div className="flex gap-3 mt-1 flex-wrap">
                       <span className="text-xs text-text-secondary">{unitLabel}</span>
-                      {item.status === 'scaduta' ? (
+                      {overdueNow ? (
                         <span className="text-xs text-semantic-red">
                           in ritardo da {n} {n === 1 ? 'giorno' : 'giorni'}
                         </span>
@@ -466,7 +472,7 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
                   const { mode, obligation } = resolveAxes(rep)
                   const isCondominio = typeItems.every(i => i.unit_id === null)
                   const inRitardo = typeItems.filter(
-                    i => (i.status === 'scaduta' || i.status === 'in_corso') && resolveAxes(i).mode !== 'promemoria'
+                    i => (isOverdueLive(i) || isInCorso(i)) && resolveAxes(i).mode !== 'promemoria'
                   ).length
                   const freq = rep.frequency_months ?? rep.maintenance_templates?.frequency_months
                   const key = `${cat}__${title}`
