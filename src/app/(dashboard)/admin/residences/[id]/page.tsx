@@ -137,6 +137,7 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
               icon={<AlertCircle className="w-4 h-4 text-[#A32D2D]" strokeWidth={1.6} />}
               title={`N3 in ritardo · ${n3Scadute} ${n3Scadute === 1 ? 'voce' : 'voci'}`}
               sub="Sollecita l'amministratore"
+              href={`/admin/residences/${id}/manutenzioni?filtro=scaduta&modalita=amministratore`}
             />
           )}
           {n2ScaduteUnits > 0 && (
@@ -145,6 +146,7 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
               icon={<AlertCircle className="w-4 h-4 text-[#A32D2D]" strokeWidth={1.6} />}
               title={`N2 in ritardo · ${n2ScaduteUnits} unità`}
               sub="Clienti coinvolti"
+              href={`/admin/residences/${id}/manutenzioni?filtro=scaduta&modalita=residente`}
             />
           )}
           {n3Scadute === 0 && n2ScaduteUnits === 0 && (

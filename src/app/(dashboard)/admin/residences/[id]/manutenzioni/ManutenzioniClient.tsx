@@ -47,6 +47,7 @@ export type CompletionRow = {
 }
 
 export type FilterState = 'scaduta' | 'in_corso' | 'completate' | null
+export type AttentionModeFilter = 'amministratore' | 'residente' | null
 
 // Risoluzione assi: item override → template fallback. Unico call-site per testa e corpo,
 // così non nascono calcoli paralleli divergenti. Refactor puro dei calcoli inline preesistenti.
@@ -86,6 +87,7 @@ interface Props {
   suppliers: { id: string; name: string }[]
   unitPrimaryNames: Record<string, string>
   initialFilter?: FilterState
+  initialModeFilter?: AttentionModeFilter
 }
 
 // Azione di composizione piano in transito verso il modale di conferma (preview-before-apply).
@@ -97,8 +99,9 @@ type PendingAction = {
   freqMonths: number | null
 }
 
-export function ManutenzioniClient({ residenceId, residenceName, items, completions, suppliers, unitPrimaryNames, initialFilter = null }: Props) {
+export function ManutenzioniClient({ residenceId, residenceName, items, completions, suppliers, unitPrimaryNames, initialFilter = null, initialModeFilter = null }: Props) {
   const [activeFilter, setActiveFilter] = useState<FilterState>(initialFilter)
+  const modeFilter = initialModeFilter
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null)
   const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null)
@@ -151,7 +154,10 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
 
   // TESTA — zona attenzione (per-istanza). Guardia promemoria strutturale: N1 non scade mai.
   const allAttentionItems = filteredItems
-    .filter(i => (isOverdueLive(i) || isInCorso(i)) && resolveAxes(i).mode !== 'promemoria')
+    .filter(i => {
+      const mode = resolveAxes(i).mode
+      return (isOverdueLive(i) || isInCorso(i)) && mode !== 'promemoria' && (modeFilter === null || mode === modeFilter)
+    })
     .sort((a, b) => {
       const aOverdue = isOverdueLive(a)
       const bOverdue = isOverdueLive(b)
