@@ -72,39 +72,53 @@ export default function ResidencePhotoUpload({ residenceId, initialPhotoUrl }: P
         className="hidden"
       />
 
+      {/* Riga compatta: la foto è un attributo d'identità di gestione, non un hero.
+          Thumbnail a dimensione fissa (formato facciata) a sinistra, label + azione a destra.
+          L'hero full-width resta solo nella vista residente ((app)/page.tsx). */}
       {hasPhoto ? (
-        /* Foto presente — anteprima + sostituisci */
-        <div className="space-y-3">
+        /* Foto presente — thumbnail + sostituisci */
+        <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={openPicker}
-            className="block w-full aspect-video rounded-lg overflow-hidden bg-background cursor-pointer"
+            className="w-20 h-14 rounded-lg overflow-hidden bg-background flex-shrink-0 cursor-pointer"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={previewSrc!} alt="Foto residenza" className="w-full h-full object-cover" />
           </button>
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-text-primary">Foto residenza</p>
             <p className="text-xs text-text-secondary truncate">{pickedName ?? 'Foto attuale'}</p>
+          </div>
+          <button
+            type="button"
+            onClick={openPicker}
+            className="text-xs text-brand-medium font-medium cursor-pointer flex-shrink-0"
+          >
+            Sostituisci
+          </button>
+        </div>
+      ) : (
+        /* Nessuna foto — thumbnail-placeholder piccola + aggiungi */
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={openPicker}
+            className="w-20 h-14 rounded-lg border-2 border-dashed border-border flex items-center justify-center flex-shrink-0 text-text-secondary cursor-pointer"
+          >
+            <ImagePlus className="w-5 h-5" strokeWidth={1.6} />
+          </button>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-text-primary">Foto residenza</p>
             <button
               type="button"
               onClick={openPicker}
-              className="text-xs text-brand-medium font-medium cursor-pointer flex-shrink-0"
+              className="text-xs text-brand-medium font-medium cursor-pointer"
             >
-              Sostituisci
+              Aggiungi foto
             </button>
           </div>
         </div>
-      ) : (
-        /* Nessuna foto — placeholder cliccabile */
-        <button
-          type="button"
-          onClick={openPicker}
-          className="w-full aspect-video rounded-lg border-2 border-dashed border-border flex flex-col items-center justify-center gap-2 text-text-secondary cursor-pointer"
-        >
-          <ImagePlus className="w-6 h-6" strokeWidth={1.6} />
-          <span className="text-sm font-medium">Aggiungi foto</span>
-          <span className="text-xs">JPG, PNG o WEBP · max 5 MB</span>
-        </button>
       )}
 
       {error && (
@@ -119,12 +133,13 @@ export default function ResidencePhotoUpload({ residenceId, initialPhotoUrl }: P
         </div>
       )}
 
-      {/* Il bottone di salvataggio compare solo quando c'è un file nuovo da caricare */}
+      {/* Il bottone di salvataggio compare solo quando c'è un file nuovo da caricare;
+          dimensione contenuta, coerente con la riga compatta (non un CTA full-width). */}
       {pickedPreview && (
         <button
           type="submit"
           disabled={pending}
-          className="w-full py-3 bg-brand-dark text-white rounded-xl font-medium text-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed mt-3"
+          className="px-4 py-2 bg-brand-dark text-white rounded-lg font-medium text-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed mt-3"
         >
           {pending ? 'Caricamento…' : 'Salva foto'}
         </button>
