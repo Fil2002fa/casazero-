@@ -14,6 +14,7 @@ import {
 } from '@/lib/maintenance-status'
 import { unitHasNoActiveAccount } from '@/lib/unit-utils'
 import { AdminBlock, type AdminProfile } from './AdminBlock'
+import ResidencePhotoUpload from './ResidencePhotoUpload'
 
 export const metadata: Metadata = { title: 'Residenza' }
 
@@ -26,7 +27,7 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
 
   const { data: residence } = await supabase
     .from('residences')
-    .select('id, name, address, energy_class')
+    .select('id, name, address, energy_class, photo_url')
     .eq('id', id)
     .single()
 
@@ -120,6 +121,11 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
               </span>
             </div>
           </div>
+
+          <ResidencePhotoUpload
+            residenceId={id}
+            initialPhotoUrl={residence.photo_url}
+          />
 
           <AdminBlock
             residenceId={id}
