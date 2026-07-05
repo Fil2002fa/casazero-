@@ -22,6 +22,7 @@ export default function ResidencePhotoUpload({ residenceId, initialPhotoUrl }: P
   const [photoUrl] = useState<string | null>(initialPhotoUrl)
   const [pickedName, setPickedName] = useState<string | null>(null)
   const [pickedPreview, setPickedPreview] = useState<string | null>(null) // object URL locale
+  const [dirty, setDirty] = useState(false) // file scelto non ancora salvato → mostra "Salva foto"
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -36,8 +37,12 @@ export default function ResidencePhotoUpload({ residenceId, initialPhotoUrl }: P
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    // Igiene memoria: revoca l'object-URL precedente prima di crearne uno nuovo,
+    // così non accumuliamo blob a ogni sostituzione.
+    if (pickedPreview) URL.revokeObjectURL(pickedPreview)
     setPickedName(file.name)
     setPickedPreview(URL.createObjectURL(file))
+    setDirty(true)
     setError(null)
     setSuccess(false)
   }
@@ -52,10 +57,14 @@ export default function ResidencePhotoUpload({ residenceId, initialPhotoUrl }: P
       if (res.error) setError(res.error)
       else {
         setSuccess(true)
-        // File salvato: teniamo l'object URL come sorgente affidabile per l'anteprima
-        // finché la pagina non ricarica (il public URL ha path deterministico e può
-        // essere servito dalla cache del browser con l'immagine precedente).
+        // Torna a riposo: il flag "dirty" si azzera → il bottone "Salva foto" sparisce.
+        // NON azzeriamo pickedPreview: resta la sorgente visiva così la thumbnail mostra
+        // la foto appena scelta (niente flicker sulla foto vecchia); verrà sostituita dal
+        // nuovo initialPhotoUrl al prossimo render server (revalidatePath già chiamato).
+        setDirty(false)
         setPickedName(null)
+        // Ripulisci l'input così un re-select dello STESSO file rifà scattare onChange.
+        if (fileInputRef.current) fileInputRef.current.value = ''
       }
     })
   }
@@ -133,9 +142,9 @@ export default function ResidencePhotoUpload({ residenceId, initialPhotoUrl }: P
         </div>
       )}
 
-      {/* Il bottone di salvataggio compare solo quando c'è un file nuovo da caricare;
+      {/* Il bottone di salvataggio compare solo quando c'è un file nuovo non salvato;
           dimensione contenuta, coerente con la riga compatta (non un CTA full-width). */}
-      {pickedPreview && (
+      {dirty && (
         <button
           type="submit"
           disabled={pending}
