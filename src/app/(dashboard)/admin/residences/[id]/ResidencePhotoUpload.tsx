@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition } from 'react'
 import { ImagePlus } from 'lucide-react'
 import { updateResidencePhoto } from './actions'
+import { MAX_PHOTO_BYTES } from './constants'
 
 interface Props {
   residenceId: string
@@ -37,6 +38,15 @@ export default function ResidencePhotoUpload({ residenceId, initialPhotoUrl }: P
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    // Validazione dimensione lato client: blocca >5MB prima di chiamare la Server
+    // Action. Non imposta il file come selezionato (niente dirty/preview) e ripulisce
+    // l'input; la foto già presente resta invariata.
+    if (file.size > MAX_PHOTO_BYTES) {
+      setError('Immagine troppo grande, massimo 5 MB')
+      setSuccess(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
     // Igiene memoria: revoca l'object-URL precedente prima di crearne uno nuovo,
     // così non accumuliamo blob a ogni sostituzione.
     if (pickedPreview) URL.revokeObjectURL(pickedPreview)

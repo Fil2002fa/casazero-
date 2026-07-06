@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { MAX_PHOTO_BYTES } from './constants'
 
 // Carica/sostituisce la foto (facciata) di una residenza. Specchia la forma di
 // updateBuilderSettings (gate super_admin, upload, getPublicUrl, update, revalidate)
@@ -27,6 +28,9 @@ export async function updateResidencePhoto(
 
   const photoFile = formData.get('photo') as File | null
   if (!photoFile || photoFile.size === 0) return { error: 'Nessuna foto selezionata' }
+  // Rete di sicurezza server: il client si può aggirare, quindi ri-verifichiamo il
+  // limite dimensione prima dell'upload (stessa fonte di verità del client).
+  if (photoFile.size > MAX_PHOTO_BYTES) return { error: 'Immagine troppo grande, massimo 5 MB' }
 
   const ext = photoFile.name.split('.').pop()?.toLowerCase() ?? 'jpg'
   const storagePath = `${residenceId}/facade.${ext}`
