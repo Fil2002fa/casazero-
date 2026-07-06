@@ -47,9 +47,16 @@ export async function updateResidencePhoto(
     .from('residence-photos')
     .getPublicUrl(storagePath)
 
+  // Cache-buster: il path storage è deterministico (facade.<ext>), quindi il publicUrl
+  // è identico a ogni salvataggio e al reload il browser/CDN servirebbe la foto vecchia
+  // dalla cache. Il FILE resta a path fisso (niente orfani); cambia solo la stringa
+  // salvata nel DB, così ogni salvataggio produce un URL nuovo e il reload mostra
+  // l'immagine aggiornata. getPublicUrl standard non ha query param → append con '?'.
+  const cacheBustedUrl = `${publicUrl}${publicUrl.includes('?') ? '&' : '?'}v=${Date.now()}`
+
   const { error } = await supabase
     .from('residences')
-    .update({ photo_url: publicUrl })
+    .update({ photo_url: cacheBustedUrl })
     .eq('id', residenceId)
 
   if (error) return { error: error.message }
