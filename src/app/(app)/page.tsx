@@ -69,6 +69,7 @@ export default async function HomePage() {
         maintenance_templates(title, category, priority, scope)
       `, { count: 'exact' })
       .in('status', ['scaduta', 'in_corso'])
+      .eq('activation_status', 'inclusa')
       .order('next_due_date', { ascending: true, nullsFirst: false })
       .limit(3),
     // Candidati alla "Prossima manutenzione": item datati futuri, non completati,

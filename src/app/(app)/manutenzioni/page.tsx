@@ -47,6 +47,7 @@ export default async function ManutenzioniPage() {
         maintenance_templates(title, category, priority, scope, frequency_months)
       `)
       .neq('status', 'completata')
+      .eq('activation_status', 'inclusa')
       .order('next_due_date', { ascending: true, nullsFirst: false }),
   ])
 

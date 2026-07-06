@@ -39,6 +39,7 @@ export default async function AdminManutenzioniPage() {
     `)
     .is('unit_id', null)
     .in('status', ['scaduta', 'in_corso', 'in_attesa'])
+    .eq('activation_status', 'inclusa')
     .order('next_due_date', { ascending: true, nullsFirst: false })
 
   const items = (rawItems ?? []) as unknown as ItemRow[]
