@@ -49,6 +49,7 @@ export async function GET(req: NextRequest) {
     `)
     .or('status.eq.in_attesa,status.eq.scaduta,status.eq.in_corso')
     .lte('next_due_date', today)
+    .eq('activation_status', 'inclusa')
 
   if (error) {
     console.error('[CRON] fetch error:', error)
