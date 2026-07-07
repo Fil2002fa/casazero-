@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, Phone, Mail } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import { MaintenanceCard } from '@/components/MaintenanceCard'
@@ -22,6 +22,14 @@ type FollowedResidence = {
   energy_class: string | null
   builder_id: string
   unitCount: number
+}
+
+type BuilderContact = {
+  id: string
+  name: string
+  logo_url: string | null
+  contact_email: string | null
+  contact_phone: string | null
 }
 
 type ItemRow = {
@@ -75,6 +83,20 @@ export default async function AdminManutenzioniPage({ searchParams }: { searchPa
       return { ...r, unitCount: count ?? 0 }
     })
   )
+
+  // Costruttore della residenza primaria (prima per created_at, stesso criterio
+  // di "residenza principale" già usato in (app)/fascicolo/page.tsx). Richiede la
+  // policy SELECT admin su builders via admin_assignments (migrazione 016).
+  const primaryBuilderId = followedResidences[0]?.builder_id ?? null
+  let builder: BuilderContact | null = null
+  if (primaryBuilderId) {
+    const { data } = await supabase
+      .from('builders')
+      .select('id, name, logo_url, contact_email, contact_phone')
+      .eq('id', primaryBuilderId)
+      .maybeSingle()
+    builder = data
+  }
 
   // Tutti gli item di ambito condominio accessibili (RLS filtra per residenze assegnate)
   const { data: rawItems } = await supabase
@@ -130,6 +152,34 @@ export default async function AdminManutenzioniPage({ searchParams }: { searchPa
             ))}
           </div>
         </section>
+      )}
+
+      {builder && (
+        <div className="bg-surface rounded-xl border border-border p-4">
+          <div className="flex items-center gap-3">
+            {builder.logo_url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={builder.logo_url} alt={builder.name} className="w-10 h-10 rounded-lg object-contain flex-shrink-0" />
+            )}
+            <p className="text-sm font-medium text-text-primary">{builder.name}</p>
+          </div>
+          {(builder.contact_phone || builder.contact_email) && (
+            <div className="mt-2 space-y-1">
+              {builder.contact_phone && (
+                <a href={`tel:${builder.contact_phone}`} className="flex items-center gap-1.5 text-xs text-text-secondary">
+                  <Phone className="w-3 h-3" strokeWidth={1.6} />
+                  {builder.contact_phone}
+                </a>
+              )}
+              {builder.contact_email && (
+                <a href={`mailto:${builder.contact_email}`} className="flex items-center gap-1.5 text-xs text-text-secondary">
+                  <Mail className="w-3 h-3" strokeWidth={1.6} />
+                  {builder.contact_email}
+                </a>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Contatori — cliccabili per filtrare la lista sotto; toggle se già attivi */}
