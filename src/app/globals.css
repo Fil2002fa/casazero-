@@ -16,7 +16,7 @@
   --color-text-primary: #20302A;
   --color-text-secondary: #6B7A74;
 
-  /* Semantici */
+  /* Semantici (legacy — N1/N2/N3, non toccare: usati da PriorityBadge/MaintenanceBadge/MaintenanceCard) */
   --color-semantic-red: #A32D2D;
   --color-semantic-red-bg: #FCEBEB;
   --color-semantic-amber: #854F0B;
@@ -24,8 +24,25 @@
   --color-semantic-blue: #185FA5;
   --color-semantic-blue-bg: #E6F1FB;
 
+  /* Stato v2 (design system) — famiglia distinta dai semantic-* legacy, per i nuovi componenti condivisi */
+  --color-status-overdue: #B42318;
+  --color-status-inprogress: #B45309;
+  --color-status-reminder: #175CD3;
+
+  /* Ombra di sistema v2 — unica, riservata a elementi flottanti (modali, dropdown, toast) */
+  --shadow-elevated: 0 8px 24px rgb(4 52 44 / 0.08);
+
+  /* Scala z-index semantica — mai valori arbitrari (999, 9999) nei componenti */
+  --z-dropdown: 20;
+  --z-sticky: 30;
+  --z-modal-backdrop: 40;
+  --z-modal: 50;
+  --z-toast: 60;
+  --z-tooltip: 70;
+
   /* Tipografia */
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-source-serif), ui-serif, Georgia, serif;
 }
 
 /* White-label CSS custom properties — override per costruttore */

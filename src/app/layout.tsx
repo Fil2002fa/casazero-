@@ -1,12 +1,20 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter } from 'next/font/google'
+import { Inter, Source_Serif_4 } from 'next/font/google'
 import './globals.css'
 import PwaInit from '@/components/PwaInit'
+import { ToastProvider } from '@/components/ui/Toast'
 
 const inter = Inter({
   subsets: ['latin'],
   weight: ['400', '500'],
   variable: '--font-inter',
+  display: 'swap',
+})
+
+const sourceSerif = Source_Serif_4({
+  subsets: ['latin'],
+  weight: ['600'],
+  variable: '--font-source-serif',
   display: 'swap',
 })
 
@@ -34,10 +42,10 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="it" className={inter.variable}>
+    <html lang="it" className={`${inter.variable} ${sourceSerif.variable}`}>
       <body className="bg-background font-sans antialiased">
         <PwaInit />
-        {children}
+        <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
   )
