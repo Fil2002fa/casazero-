@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import {
-  ChevronLeft, Wrench, Users, Settings, FileText,
+  ChevronLeft, Wrench, Users, Settings, FileText, BookOpen,
   AlertCircle, AlertTriangle, CheckCircle,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
@@ -43,6 +43,7 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
     { data: itemsRaw },
     { count: docCount },
     { count: supplierCount },
+    { count: completionCount },
     { data: adminRaw },
     { data: adminListRaw },
   ] = await Promise.all([
@@ -57,6 +58,10 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
       .select('id', { count: 'exact', head: true })
       .eq('residence_id', id),
     supabase.from('suppliers')
+      .select('id', { count: 'exact', head: true })
+      .eq('residence_id', id),
+    // Fascicolo: conteggio senza filtro su activation_status (piano ≠ fascicolo).
+    supabase.from('completions')
       .select('id', { count: 'exact', head: true })
       .eq('residence_id', id),
     supabase.from('admin_assignments')
@@ -89,6 +94,7 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
   const porte = [
     { href: `/admin/residences/${id}/units`,        icon: Users,     label: 'Unità e inviti', sub: `${unitCount} unità` },
     { href: `/admin/residences/${id}/manutenzioni`, icon: Wrench,    label: 'Manutenzioni',   sub: null },
+    { href: `/admin/residences/${id}/fascicolo`,    icon: BookOpen,  label: 'Fascicolo',      sub: completionCount ? `${completionCount} completamenti` : null },
     { href: `/admin/residences/${id}/documenti`,    icon: FileText,  label: 'Documenti',      sub: docCount ? `${docCount} file` : null },
     { href: `/admin/residences/${id}/fornitori`,    icon: Settings,  label: 'Fornitori',      sub: supplierCount ? `${supplierCount} fornitori` : null },
   ]
