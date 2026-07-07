@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronLeft, Paperclip } from 'lucide-react'
+import { ChevronLeft, Paperclip, FileDown } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
@@ -61,6 +61,14 @@ export default async function ResidenceFascicoloPage({ params }: { params: Param
           <h1 className="text-base font-medium text-text-primary">Fascicolo</h1>
           <p className="text-xs text-text-secondary">{residence.name}</p>
         </div>
+        <a
+          href={`/api/fascicolo-pdf?residenceId=${residenceId}`}
+          download
+          className="flex items-center gap-1.5 px-3 py-2 border border-brand-medium rounded-lg text-xs font-medium text-brand-dark flex-shrink-0"
+        >
+          <FileDown className="w-3.5 h-3.5" strokeWidth={1.8} />
+          Scarica fascicolo (PDF)
+        </a>
       </div>
 
       <div className="p-4">
