@@ -56,10 +56,13 @@ export default async function FascicoloPage({ searchParams }: { searchParams: Se
       reportHref = `/api/report?scope=unit&id=${primaryUnitId}`
     }
   } else if (profile.role === 'admin') {
+    // Un admin può avere più residenze assegnate: ordine esplicito, altrimenti
+    // Postgres non garantisce quale riga torna .limit(1) senza ORDER BY.
     const { data: assignment } = await adminClient
       .from('admin_assignments')
       .select('residence_id')
       .eq('profile_id', profile.id)
+      .order('created_at', { ascending: true })
       .limit(1)
       .single()
     if (assignment) {
@@ -67,10 +70,13 @@ export default async function FascicoloPage({ searchParams }: { searchParams: Se
       reportHref = `/api/report?scope=residence&id=${primaryResidenceId}`
     }
   } else if (profile.role === 'super_admin' && profile.builder_id) {
+    // Un builder può avere più residenze: ordine esplicito, altrimenti Postgres
+    // non garantisce quale riga torna .limit(1) senza ORDER BY.
     const { data: residence } = await adminClient
       .from('residences')
       .select('id')
       .eq('builder_id', profile.builder_id)
+      .order('created_at', { ascending: true })
       .limit(1)
       .single()
     if (residence) {
