@@ -10,6 +10,10 @@ import { isOverdueLive, isInCorso, resolveCompletionMode } from '@/lib/maintenan
 
 export const metadata: Metadata = { title: 'Manutenzioni — Amministratore' }
 
+type SearchParams = Promise<{ filter?: string }>
+
+type StatFilter = 'scadute' | 'in_corso' | 'pianificate'
+
 type ItemRow = {
   id: string
   status: MaintenanceStatus
@@ -30,7 +34,11 @@ type ItemRow = {
   residences: { name: string } | null
 }
 
-export default async function AdminManutenzioniPage() {
+export default async function AdminManutenzioniPage({ searchParams }: { searchParams: SearchParams }) {
+  const { filter } = await searchParams
+  const activeFilter: StatFilter | null =
+    filter === 'scadute' || filter === 'in_corso' || filter === 'pianificate' ? filter : null
+
   await requireRole(['admin'])
   const supabase = await createClient()
 
@@ -67,15 +75,21 @@ export default async function AdminManutenzioniPage() {
         <h1 className="text-xl font-medium text-text-primary mt-1">Manutenzioni condominiali</h1>
       </header>
 
-      {/* Contatori */}
+      {/* Contatori — cliccabili per filtrare la lista sotto; toggle se già attivi */}
       <div className="grid grid-cols-3 gap-3">
-        <Stat label="Scadute" value={scadute.length} color="text-semantic-red" bg="bg-semantic-red-bg" />
-        <Stat label="In corso" value={inCorso.length} color="text-semantic-amber" bg="bg-semantic-amber-bg" />
-        <Stat label="Pianificate" value={upcoming.length} color="text-text-secondary" bg="bg-background" />
+        <Link href={statHref('scadute', activeFilter)} className="block">
+          <Stat label="Scadute" value={scadute.length} color="text-semantic-red" bg="bg-semantic-red-bg" active={activeFilter === 'scadute'} />
+        </Link>
+        <Link href={statHref('in_corso', activeFilter)} className="block">
+          <Stat label="In corso" value={inCorso.length} color="text-semantic-amber" bg="bg-semantic-amber-bg" active={activeFilter === 'in_corso'} />
+        </Link>
+        <Link href={statHref('pianificate', activeFilter)} className="block">
+          <Stat label="Pianificate" value={upcoming.length} color="text-text-secondary" bg="bg-background" active={activeFilter === 'pianificate'} />
+        </Link>
       </div>
 
       {/* Scadute */}
-      {scadute.length > 0 && (
+      {(!activeFilter || activeFilter === 'scadute') && scadute.length > 0 && (
         <Section title="Da prendere in carico" accent="red">
           {scadute.map(item => (
             <ItemCard key={item.id} item={item} />
@@ -84,7 +98,7 @@ export default async function AdminManutenzioniPage() {
       )}
 
       {/* In corso */}
-      {inCorso.length > 0 && (
+      {(!activeFilter || activeFilter === 'in_corso') && inCorso.length > 0 && (
         <Section title="In corso" accent="amber">
           {inCorso.map(item => (
             <ItemCard key={item.id} item={item} />
@@ -93,7 +107,7 @@ export default async function AdminManutenzioniPage() {
       )}
 
       {/* Prossime */}
-      {upcoming.length > 0 && (
+      {(!activeFilter || activeFilter === 'pianificate') && upcoming.length > 0 && (
         <Section title="Pianificate">
           {upcoming.map(item => (
             <MaintenanceCard
@@ -170,9 +184,17 @@ function ItemCard({ item }: { item: ItemRow }) {
   )
 }
 
-function Stat({ label, value, color, bg }: { label: string; value: number; color: string; bg: string }) {
+function statHref(filterValue: StatFilter, activeFilter: StatFilter | null): string {
+  return activeFilter === filterValue ? '/admin/manutenzioni' : `/admin/manutenzioni?filter=${filterValue}`
+}
+
+function Stat({
+  label, value, color, bg, active,
+}: {
+  label: string; value: number; color: string; bg: string; active: boolean
+}) {
   return (
-    <div className={`${bg} rounded-xl p-3 text-center`}>
+    <div className={`${bg} rounded-xl p-3 text-center ${active ? 'ring-2 ring-brand-dark' : ''}`}>
       <p className={`text-2xl font-medium ${color}`}>{value}</p>
       <p className="text-xs text-text-secondary mt-0.5">{label}</p>
     </div>
