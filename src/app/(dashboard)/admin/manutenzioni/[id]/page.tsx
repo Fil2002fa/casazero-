@@ -6,8 +6,9 @@ import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import { PriorityBadge } from '@/components/PriorityBadge'
 import { N3AdminActions } from '@/components/N3AdminActions'
-import type { MaintenancePriority, MaintenanceStatus } from '@/types/database'
+import type { MaintenancePriority, MaintenanceStatus, CompletionMode, ItemActivation } from '@/types/database'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
+import { isOverdueLive, isInCorso, resolveCompletionMode, type LiveStatusItem } from '@/lib/maintenance-status'
 
 export const metadata: Metadata = { title: 'Dettaglio manutenzione' }
 
@@ -16,6 +17,7 @@ type Params = Promise<{ id: string }>
 type TplRow = {
   title: string; category: string; description: string | null
   priority: MaintenancePriority; frequency_months: number; scope: string
+  completion_mode: CompletionMode | null; is_active: boolean
 }
 type SupplierRow = { name: string; phone: string | null; email: string | null }
 type CompletionRow = {
@@ -33,7 +35,8 @@ export default async function AdminItemDetailPage({ params }: { params: Params }
     .from('maintenance_items')
     .select(`
       id, status, next_due_date, unit_id, residence_id, priority, warranty_info,
-      maintenance_templates(title, category, description, priority, frequency_months, scope),
+      completion_mode, activation_status,
+      maintenance_templates(title, category, description, priority, frequency_months, scope, completion_mode, is_active),
       suppliers(name, phone, email),
       residences(name),
       units(label)
@@ -47,6 +50,8 @@ export default async function AdminItemDetailPage({ params }: { params: Params }
     id: string; status: string; next_due_date: string | null
     unit_id: string | null; residence_id: string; priority: string | null
     warranty_info: string | null
+    completion_mode: CompletionMode | null
+    activation_status: ItemActivation
     maintenance_templates: TplRow | null
     suppliers: SupplierRow | null
     residences: { name: string } | null
@@ -58,6 +63,21 @@ export default async function AdminItemDetailPage({ params }: { params: Params }
   const effectivePriority = (item.priority ?? tpl?.priority ?? 'N2') as MaintenancePriority
   const status = item.status as MaintenanceStatus
 
+  // Stato live: il cron non gira in locale, quindi 'scaduta' va calcolato da
+  // next_due_date (helper condiviso), non letto dal campo status salvato —
+  // altrimenti gli item scaduti da tempo restano "invisibili" all'azione admin.
+  const liveItem: LiveStatusItem = {
+    status: item.status,
+    next_due_date: item.next_due_date,
+    completion_mode: item.completion_mode,
+    activation_status: item.activation_status,
+    maintenance_templates: tpl
+      ? { completion_mode: tpl.completion_mode, is_active: tpl.is_active }
+      : null,
+  }
+  const overdueNow = isOverdueLive(liveItem)
+  const effectiveStatus: MaintenanceStatus = overdueNow ? 'scaduta' : status
+
   const { data: rawCompletions } = await supabase
     .from('completions')
     .select('id, completed_at, performed_by_name, notes, attachments(id, file_name)')
@@ -67,8 +87,10 @@ export default async function AdminItemDetailPage({ params }: { params: Params }
 
   const completions = (rawCompletions ?? []) as unknown as CompletionRow[]
 
-  const isN3 = effectivePriority === 'N3'
-  const canAct = profile.role === 'admin' && isN3 && (status === 'scaduta' || status === 'in_corso')
+  const canAct =
+    profile.role === 'admin' &&
+    resolveCompletionMode(liveItem) === 'amministratore' &&
+    (overdueNow || isInCorso(liveItem))
 
   const formattedDue = item.next_due_date
     ? new Date(item.next_due_date).toLocaleDateString('it-IT', {
@@ -159,7 +181,7 @@ export default async function AdminItemDetailPage({ params }: { params: Params }
         {canAct && (
           <div className="bg-surface rounded-xl border border-border p-4 space-y-3">
             <p className="text-sm font-medium text-text-primary">Gestione amministratore</p>
-            <N3AdminActions itemId={item.id} residenceId={item.residence_id} status={status} />
+            <N3AdminActions itemId={item.id} residenceId={item.residence_id} status={effectiveStatus} />
           </div>
         )}
 

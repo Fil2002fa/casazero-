@@ -5,7 +5,8 @@ import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import { MaintenanceCard } from '@/components/MaintenanceCard'
 import { N3AdminActions } from '@/components/N3AdminActions'
-import type { MaintenancePriority, MaintenanceStatus } from '@/types/database'
+import type { MaintenancePriority, MaintenanceStatus, CompletionMode, ItemActivation } from '@/types/database'
+import { isOverdueLive, isInCorso, resolveCompletionMode } from '@/lib/maintenance-status'
 
 export const metadata: Metadata = { title: 'Manutenzioni — Amministratore' }
 
@@ -16,11 +17,15 @@ type ItemRow = {
   unit_id: string | null
   residence_id: string
   priority: MaintenancePriority | null
+  completion_mode: CompletionMode | null
+  activation_status: ItemActivation
   maintenance_templates: {
     title: string
     category: string
     priority: MaintenancePriority
     scope: string
+    completion_mode: CompletionMode | null
+    is_active: boolean
   } | null
   residences: { name: string } | null
 }
@@ -34,7 +39,8 @@ export default async function AdminManutenzioniPage() {
     .from('maintenance_items')
     .select(`
       id, status, next_due_date, unit_id, residence_id, priority,
-      maintenance_templates(title, category, priority, scope),
+      completion_mode, activation_status,
+      maintenance_templates(title, category, priority, scope, completion_mode, is_active),
       residences(name)
     `)
     .is('unit_id', null)
@@ -44,14 +50,15 @@ export default async function AdminManutenzioniPage() {
 
   const items = (rawItems ?? []) as unknown as ItemRow[]
 
-  // Filtra per priorità effettiva N3
-  const n3Items = items.filter(
-    i => (i.priority ?? i.maintenance_templates?.priority) === 'N3'
-  )
+  // Filtra per modalità amministratore (asse canonico, non più priorità legacy)
+  const adminItems = items.filter(i => resolveCompletionMode(i) === 'amministratore')
 
-  const scadute  = n3Items.filter(i => i.status === 'scaduta')
-  const inCorso  = n3Items.filter(i => i.status === 'in_corso')
-  const upcoming = n3Items.filter(i => i.status === 'in_attesa')
+  // Stato live: il cron non gira in locale, quindi 'scaduta' va calcolato da
+  // next_due_date (helper condiviso), non letto dal campo status salvato —
+  // altrimenti gli item scaduti da tempo restano bloccati in "Pianificate".
+  const scadute  = adminItems.filter(i => isOverdueLive(i))
+  const inCorso  = adminItems.filter(i => isInCorso(i))
+  const upcoming = adminItems.filter(i => !isOverdueLive(i) && !isInCorso(i))
 
   return (
     <div className="p-6 space-y-6 pb-safe">
@@ -104,7 +111,7 @@ export default async function AdminManutenzioniPage() {
         </Section>
       )}
 
-      {n3Items.length === 0 && (
+      {adminItems.length === 0 && (
         <div className="bg-brand-light rounded-xl p-6 text-center">
           <p className="text-sm text-brand-dark font-medium">Nessuna manutenzione attiva</p>
           <p className="text-xs text-brand-medium mt-1">Tutte le residenze sono in regola.</p>
@@ -121,9 +128,13 @@ function ItemCard({ item }: { item: ItemRow }) {
       })
     : null
 
-  const borderColor = item.status === 'scaduta'
+  // Stato live, non quello salvato: vedi nota cron in AdminManutenzioniPage.
+  const overdueNow: boolean = isOverdueLive(item)
+  const effectiveStatus: MaintenanceStatus = overdueNow ? 'scaduta' : item.status
+
+  const borderColor = effectiveStatus === 'scaduta'
     ? 'border-l-semantic-red'
-    : item.status === 'in_corso'
+    : effectiveStatus === 'in_corso'
     ? 'border-l-semantic-amber'
     : 'border-l-transparent'
 
@@ -139,9 +150,9 @@ function ItemCard({ item }: { item: ItemRow }) {
             )}
             {formattedDue && (
               <p className={`text-xs mt-1 font-medium ${
-                item.status === 'scaduta' ? 'text-semantic-red' : 'text-text-secondary'
+                effectiveStatus === 'scaduta' ? 'text-semantic-red' : 'text-text-secondary'
               }`}>
-                {item.status === 'scaduta' ? 'Scaduta il ' : 'Scadenza: '}{formattedDue}
+                {effectiveStatus === 'scaduta' ? 'Scaduta il ' : 'Scadenza: '}{formattedDue}
               </p>
             )}
           </div>
@@ -152,7 +163,7 @@ function ItemCard({ item }: { item: ItemRow }) {
         <N3AdminActions
           itemId={item.id}
           residenceId={item.residence_id}
-          status={item.status}
+          status={effectiveStatus}
         />
       </div>
     </div>
