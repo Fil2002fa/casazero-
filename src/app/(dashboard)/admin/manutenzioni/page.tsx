@@ -14,6 +14,16 @@ type SearchParams = Promise<{ filter?: string }>
 
 type StatFilter = 'scadute' | 'in_corso' | 'pianificate'
 
+type FollowedResidence = {
+  id: string
+  name: string
+  address: string | null
+  photo_url: string | null
+  energy_class: string | null
+  builder_id: string
+  unitCount: number
+}
+
 type ItemRow = {
   id: string
   status: MaintenanceStatus
@@ -39,8 +49,32 @@ export default async function AdminManutenzioniPage({ searchParams }: { searchPa
   const activeFilter: StatFilter | null =
     filter === 'scadute' || filter === 'in_corso' || filter === 'pianificate' ? filter : null
 
-  await requireRole(['admin'])
+  const profile = await requireRole(['admin'])
   const supabase = await createClient()
+
+  // Residenze assegnate all'admin (un admin può averne più di una: niente .single()).
+  // Ordine esplicito per determinismo, stesso pattern del fix su (app)/fascicolo/page.tsx.
+  const { data: assignmentRows } = await supabase
+    .from('admin_assignments')
+    .select('residences(id, name, address, photo_url, energy_class, builder_id)')
+    .eq('profile_id', profile.id)
+    .order('created_at', { ascending: true })
+
+  type AssignmentResidence = Omit<FollowedResidence, 'unitCount'>
+  const assignedResidences = (assignmentRows ?? [])
+    .map(a => a.residences as unknown as AssignmentResidence | null)
+    .filter((r): r is AssignmentResidence => r !== null)
+
+  // Numero unità: stessa query/join usata in admin/residences/page.tsx per lo stesso conteggio.
+  const followedResidences: FollowedResidence[] = await Promise.all(
+    assignedResidences.map(async (r) => {
+      const { count } = await supabase
+        .from('units')
+        .select('id', { count: 'exact', head: true })
+        .eq('residence_id', r.id)
+      return { ...r, unitCount: count ?? 0 }
+    })
+  )
 
   // Tutti gli item di ambito condominio accessibili (RLS filtra per residenze assegnate)
   const { data: rawItems } = await supabase
@@ -74,6 +108,29 @@ export default async function AdminManutenzioniPage({ searchParams }: { searchPa
         <p className="text-xs text-text-secondary uppercase tracking-wide">Amministratore</p>
         <h1 className="text-xl font-medium text-text-primary mt-1">Manutenzioni condominiali</h1>
       </header>
+
+      {followedResidences.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="text-sm font-medium text-text-primary">
+            {followedResidences.length === 1 ? 'Residenza che segui' : 'Residenze che segui'}
+          </h2>
+          <div className="space-y-3">
+            {followedResidences.map(r => (
+              <div key={r.id} className="bg-surface rounded-xl border border-border overflow-hidden">
+                {r.photo_url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={r.photo_url} alt={r.name} className="w-full h-32 object-cover" />
+                )}
+                <div className="p-4">
+                  <p className="text-sm font-medium text-text-primary">{r.name}</p>
+                  {r.address && <p className="text-xs text-text-secondary mt-0.5">{r.address}</p>}
+                  <p className="text-xs text-text-secondary mt-2">{r.unitCount} unità</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Contatori — cliccabili per filtrare la lista sotto; toggle se già attivi */}
       <div className="grid grid-cols-3 gap-3">
