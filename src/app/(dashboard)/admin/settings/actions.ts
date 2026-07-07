@@ -29,20 +29,25 @@ export async function updateBuilderSettings(
   const updateData: Record<string, string | null> = {}
   if (name) updateData.name = name
 
-  // Upload logo se fornito
+  // Upload logo se fornito. Bucket 'builder-logos' (pubblico, dedicato al branding),
+  // mai 'documents' (privato, contiene i documenti dei condomini).
   if (logoFile && logoFile.size > 0) {
     const ext = logoFile.name.split('.').pop() ?? 'png'
     const storagePath = `${profile.builder_id}/logo.${ext}`
     const arrayBuffer = await logoFile.arrayBuffer()
 
     const { error: uploadError } = await supabase.storage
-      .from('documents')
+      .from('builder-logos')
       .upload(storagePath, arrayBuffer, { contentType: logoFile.type, upsert: true })
 
     if (uploadError) return { error: `Errore upload logo: ${uploadError.message}` }
 
-    const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(storagePath)
-    updateData.logo_url = publicUrl
+    const { data: { publicUrl } } = supabase.storage.from('builder-logos').getPublicUrl(storagePath)
+
+    // Cache-buster: path storage deterministico (logo.<ext>) → publicUrl identico a
+    // ogni salvataggio, altrimenti browser/CDN servirebbe il logo vecchio dalla cache.
+    // Stesso pattern di updateResidencePhoto (residences/[id]/actions.ts).
+    updateData.logo_url = `${publicUrl}${publicUrl.includes('?') ? '&' : '?'}v=${Date.now()}`
   }
 
   if (Object.keys(updateData).length === 0) return { error: 'Nessuna modifica da salvare' }
