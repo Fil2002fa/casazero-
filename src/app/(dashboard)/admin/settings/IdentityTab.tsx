@@ -3,6 +3,9 @@
 import { useRef, useState, useTransition } from 'react'
 import { Image as ImageIcon, ImagePlus } from 'lucide-react'
 import { updateBuilderSettings, removeBuilderLogo } from './actions'
+import { Input, Label, FieldHelp } from '@/components/ui/Input'
+import { Button } from '@/components/ui/Button'
+import { useToast } from '@/components/ui/Toast'
 
 interface Props {
   initialName: string
@@ -26,10 +29,9 @@ function LeafMark({ className }: { className?: string }) {
 }
 
 export default function IdentityTab({ initialName, initialLogoUrl }: Props) {
+  const { showToast } = useToast()
   const [pending, startTransition] = useTransition()
   const [removing, startRemoving] = useTransition()
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
 
   const [name, setName] = useState(initialName)
   const [logoUrl, setLogoUrl] = useState<string | null>(initialLogoUrl)
@@ -56,33 +58,29 @@ export default function IdentityTab({ initialName, initialLogoUrl }: Props) {
     setPickedName(file.name)
     setPickedPreview(URL.createObjectURL(file))
     setThumbError(false)
-    setSuccess(false)
   }
 
   function handleRemove() {
-    setError(null)
-    setSuccess(false)
     startRemoving(async () => {
       const res = await removeBuilderLogo()
-      if (res.error) { setError(res.error); return }
+      if (res.error) { showToast('error', res.error); return }
       setLogoUrl(null)
       setPickedName(null)
       setPickedPreview(null)
       setThumbError(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
+      showToast('success', 'Logo rimosso.')
     })
   }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    setError(null)
-    setSuccess(false)
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
       const res = await updateBuilderSettings(formData)
-      if (res.error) setError(res.error)
+      if (res.error) showToast('error', res.error)
       else {
-        setSuccess(true)
+        showToast('success', 'Identità salvata. Ricarica l’app per vedere le modifiche.')
         // File salvato: non è più "in attesa", ma teniamo l'object URL come sorgente
         // affidabile per la thumbnail finché la pagina non ricarica.
         setPickedName(null)
@@ -93,23 +91,23 @@ export default function IdentityTab({ initialName, initialLogoUrl }: Props) {
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {/* Card 1 — Nome costruttore */}
-      <div className="bg-surface rounded-xl border border-border p-4">
-        <label htmlFor="builder-name" className="text-xs text-text-secondary block mb-1">Nome costruttore</label>
-        <input
+      <div className="bg-surface rounded-xl border border-border p-6">
+        <h2 className="text-lg font-semibold text-neutral-900 mb-4">Nome costruttore</h2>
+        <Label htmlFor="builder-name">Nome costruttore</Label>
+        <Input
           id="builder-name"
           type="text"
           name="name"
           value={name}
           onChange={e => setName(e.target.value)}
           placeholder="es. Furlan Costruzioni"
-          className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
         />
-        <p className="text-xs text-text-secondary mt-1.5">Appare nell&apos;app dei residenti e nei report PDF</p>
+        <FieldHelp>Appare nell&apos;app dei residenti e nei report PDF</FieldHelp>
       </div>
 
       {/* Card 2 — Logo */}
-      <div className="bg-surface rounded-xl border border-border p-4 space-y-4">
-        <h2 className="text-sm font-medium text-text-primary">Logo</h2>
+      <div className="bg-surface rounded-xl border border-border p-6 space-y-4">
+        <h2 className="text-lg font-semibold text-neutral-900">Logo</h2>
 
         {/* Input file nascosto, inviato con il form al salvataggio */}
         <input
@@ -206,25 +204,9 @@ export default function IdentityTab({ initialName, initialLogoUrl }: Props) {
         </div>
       </div>
 
-      {error && (
-        <div className="bg-semantic-red-bg border border-semantic-red/20 rounded-xl p-3">
-          <p className="text-sm text-semantic-red">{error}</p>
-        </div>
-      )}
-
-      {success && (
-        <div className="bg-brand-light border border-brand-medium/20 rounded-xl p-3">
-          <p className="text-sm text-brand-dark">Impostazioni salvate. Ricarica l&apos;app per vedere le modifiche.</p>
-        </div>
-      )}
-
-      <button
-        type="submit"
-        disabled={pending}
-        className="w-full py-3 bg-brand-dark text-white rounded-xl font-medium text-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {pending ? 'Salvataggio…' : 'Salva impostazioni'}
-      </button>
+      <Button type="submit" disabled={pending} className="w-full">
+        {pending ? 'Salvataggio…' : 'Salva identità'}
+      </Button>
     </form>
   )
 }

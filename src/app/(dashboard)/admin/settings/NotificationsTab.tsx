@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Bell, Mail } from 'lucide-react'
 import type { AdminNotificationPrefs } from '@/types/database'
 import { updateAdminNotificationPrefs } from './actions'
+import { useToast } from '@/components/ui/Toast'
 
 // Eventi rilevanti per il super_admin (costruttore) — diversi da quelli del residente.
 // Solo canale email: la dashboard è desktop, senza PWA su cui recapitare le push.
@@ -20,30 +21,29 @@ const PREF_ROWS: PrefRow[] = [
 ]
 
 export default function NotificationsTab({ initialPrefs }: { initialPrefs: AdminNotificationPrefs }) {
+  const { showToast } = useToast()
   const [prefs, setPrefs] = useState<AdminNotificationPrefs>(initialPrefs)
   const [savingKey, setSavingKey] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
 
   async function handleToggle(key: keyof AdminNotificationPrefs) {
     if (savingKey !== null) return // evita salvataggi concorrenti
     const prev = prefs
     const next = { ...prev, [key]: !prev[key] }
     setPrefs(next)
-    setError(null)
     setSavingKey(key)
     const res = await updateAdminNotificationPrefs(next)
     setSavingKey(null)
     if (res.error) {
       setPrefs(prev)
-      setError(res.error)
+      showToast('error', res.error)
     }
   }
 
   return (
-    <section className="bg-surface rounded-xl border border-border p-4 space-y-3">
+    <section className="bg-surface rounded-xl border border-border p-6 space-y-3">
       <div className="flex items-center gap-2">
         <Bell className="w-4 h-4 text-brand-medium" strokeWidth={1.8} />
-        <h2 className="text-sm font-medium text-text-primary">Notifiche ricevute</h2>
+        <h2 className="text-lg font-semibold text-neutral-900">Notifiche ricevute</h2>
       </div>
 
       {/* Intestazione colonna */}
@@ -72,8 +72,6 @@ export default function NotificationsTab({ initialPrefs }: { initialPrefs: Admin
           </div>
         ))}
       </div>
-
-      {error && <p className="text-xs text-semantic-red">{error}</p>}
     </section>
   )
 }

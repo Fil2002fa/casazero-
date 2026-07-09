@@ -3,84 +3,85 @@
 import { useState, useTransition } from 'react'
 import { Check, X, Edit2 } from 'lucide-react'
 import { updateAccountProfile } from './actions'
+import { Input, Label } from '@/components/ui/Input'
+import { Button } from '@/components/ui/Button'
+import { useToast } from '@/components/ui/Toast'
 
 export default function AccountTab({ initialName, email }: { initialName: string; email: string }) {
+  const { showToast } = useToast()
   const [pending, startTransition] = useTransition()
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(initialName)
   const [savedName, setSavedName] = useState(initialName)
-  const [error, setError] = useState<string | null>(null)
 
   function handleSave() {
-    setError(null)
     const fd = new FormData()
     fd.set('full_name', name)
     startTransition(async () => {
       const res = await updateAccountProfile(fd)
-      if (res.error) setError(res.error)
+      if (res.error) showToast('error', res.error)
       else {
         setSavedName(name)
         setEditing(false)
+        showToast('success', 'Profilo salvato.')
       }
     })
   }
 
   return (
-    <section className="bg-surface rounded-xl border border-border p-4 space-y-4">
+    <section className="bg-surface rounded-xl border border-border p-6 space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium text-text-primary">Profilo account</h2>
+        <h2 className="text-lg font-semibold text-neutral-900">Profilo account</h2>
         {!editing && (
-          <button
-            onClick={() => setEditing(true)}
-            className="flex items-center gap-1 text-xs text-brand-medium font-medium cursor-pointer"
-          >
+          <Button type="button" variant="ghost" size="default" onClick={() => setEditing(true)} className="gap-1.5">
             <Edit2 className="w-3.5 h-3.5" strokeWidth={1.8} />
             Modifica
-          </button>
+          </Button>
         )}
       </div>
 
       <div className="space-y-3">
         <div>
-          <p className="text-xs text-text-secondary mb-1">Nome</p>
           {editing ? (
-            <input
-              type="text"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
-              placeholder="Il tuo nome"
-            />
+            <>
+              <Label htmlFor="account-name">Nome</Label>
+              <Input
+                id="account-name"
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="Il tuo nome"
+              />
+            </>
           ) : (
-            <p className="text-sm font-medium text-text-primary">{savedName || '—'}</p>
+            <>
+              <p className="text-[13px] font-medium text-neutral-700 mb-2">Nome</p>
+              <p className="text-sm font-medium text-neutral-900">{savedName || '—'}</p>
+            </>
           )}
         </div>
 
         <div>
-          <p className="text-xs text-text-secondary mb-1">Email</p>
-          <p className="text-sm text-text-primary">{email}</p>
+          <p className="text-[13px] font-medium text-neutral-700 mb-2">Email</p>
+          <p className="text-sm text-neutral-900">{email}</p>
         </div>
       </div>
 
-      {error && <p className="text-xs text-semantic-red">{error}</p>}
-
       {editing && (
         <div className="flex gap-2 pt-1">
-          <button
-            onClick={handleSave}
-            disabled={pending}
-            className="flex items-center gap-1.5 px-4 py-2 bg-brand-dark text-white rounded-lg text-sm font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          >
+          <Button type="button" onClick={handleSave} disabled={pending} className="gap-1.5">
             <Check className="w-4 h-4" strokeWidth={2} />
-            Salva
-          </button>
-          <button
-            onClick={() => { setEditing(false); setName(savedName); setError(null) }}
-            className="flex items-center gap-1.5 px-4 py-2 border border-border rounded-lg text-sm text-text-secondary cursor-pointer"
+            Salva profilo
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            className="gap-1.5"
+            onClick={() => { setEditing(false); setName(savedName) }}
           >
             <X className="w-4 h-4" strokeWidth={1.8} />
             Annulla
-          </button>
+          </Button>
         </div>
       )}
     </section>

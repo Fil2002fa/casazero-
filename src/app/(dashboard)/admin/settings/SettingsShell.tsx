@@ -48,7 +48,7 @@ export default function SettingsShell(props: Props) {
               className={`whitespace-nowrap px-3 py-3 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
                 active === tab.id
                   ? 'border-brand-dark text-brand-dark'
-                  : 'border-transparent text-text-secondary'
+                  : 'border-transparent text-neutral-500'
               }`}
             >
               {tab.label}
