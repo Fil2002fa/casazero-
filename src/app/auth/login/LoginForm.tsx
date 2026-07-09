@@ -2,6 +2,9 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { BrandMark } from '@/components/BrandMark'
+import { Button } from '@/components/ui/Button'
+import { Input, Label } from '@/components/ui/Input'
 
 export function LoginForm({ invite, error }: { invite: string | null; error: string | null }) {
   const [email, setEmail] = useState('')
@@ -42,27 +45,24 @@ export function LoginForm({ invite, error }: { invite: string | null; error: str
   return (
     <div className="min-h-svh flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm">
-        {/* Logo */}
-        <div className="mb-8 text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-brand-dark mb-4">
-            <span className="text-brand-light text-2xl font-medium select-none">C</span>
-          </div>
-          <h1 className="text-2xl font-medium text-text-primary">CasaZero</h1>
-          <p className="text-sm text-text-secondary mt-1">
-            {invite ? 'Accedi per accettare il tuo invito' : 'Il libretto digitale della tua casa'}
-          </p>
+        <div className="mb-8 flex flex-col items-center">
+          <h1 className="sr-only">CasaZero — accesso</h1>
+          <BrandMark iconSize={28} textClassName="text-xl font-semibold" />
+          {invite && (
+            <p className="text-sm text-text-primary mt-2">Accedi per accettare il tuo invito</p>
+          )}
         </div>
 
-        <div className="bg-surface rounded-xl border border-border p-6 space-y-4">
-          {/* Google */}
-          <button
+        <div className="bg-surface rounded-xl border border-border p-8 space-y-4">
+          <Button
             onClick={handleGoogle}
             type="button"
-            className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-border rounded-lg text-sm font-medium text-text-primary hover:bg-background transition-colors"
+            variant="secondary"
+            className="w-full gap-3"
           >
             <GoogleIcon />
             Continua con Google
-          </button>
+          </Button>
 
           <div className="relative flex items-center gap-3">
             <div className="flex-1 border-t border-border" />
@@ -70,33 +70,31 @@ export function LoginForm({ invite, error }: { invite: string | null; error: str
             <div className="flex-1 border-t border-border" />
           </div>
 
-          {/* Magic link */}
           <form onSubmit={handleMagicLink} className="space-y-3">
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="La tua email"
-              required
-              className="w-full px-4 py-3 border border-border rounded-lg text-sm text-text-primary bg-background placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-brand-medium focus:border-transparent"
-            />
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full px-4 py-3 bg-brand-dark text-brand-light rounded-lg text-sm font-medium hover:bg-brand-medium transition-colors disabled:opacity-50"
-            >
-              {loading ? 'Invio in corso…' : 'Invia link di accesso'}
-            </button>
+            <div>
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="nome@esempio.com"
+                required
+              />
+            </div>
+            <Button type="submit" variant="primary" className="w-full" disabled={loading}>
+              {loading ? 'Invio in corso…' : 'Accedi con email'}
+            </Button>
           </form>
 
           {message && (
-            <p className={`text-xs text-center ${message.ok ? 'text-brand-medium' : 'text-semantic-red'}`}>
+            <p className={`text-xs text-center ${message.ok ? 'text-brand-medium' : 'text-status-overdue'}`}>
               {message.text}
             </p>
           )}
         </div>
 
-        <p className="text-xs text-center text-text-secondary mt-6">
+        <p className="text-xs text-center text-text-primary mt-6">
           Accesso solo su invito. Contatta il tuo costruttore.
         </p>
       </div>
