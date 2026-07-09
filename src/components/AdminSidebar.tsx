@@ -33,37 +33,65 @@ export default function AdminSidebar({ role }: Props) {
   const items = role === 'super_admin' ? SUPER_ADMIN_ITEMS : ADMIN_ITEMS
 
   return (
-    <aside
-      className="w-56 flex-shrink-0 flex flex-col"
-      style={{ backgroundColor: 'var(--wl-brand-dark, #04342C)' }}
-    >
-      <nav className="flex-1 p-3 pt-4 space-y-0.5" aria-label="Navigazione admin">
-        {items.map(({ href, icon: Icon, label, badge, dividerBefore }) => {
-          const isActive = pathname === href || pathname.startsWith(href + '/')
-          return (
-            <div key={href}>
-              {dividerBefore && (
-                <hr className="my-2 border-0 border-t border-white/10" />
-              )}
-              <Link
-                href={href}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
-                  isActive
-                    ? 'bg-white/15 text-white font-medium'
-                    : 'text-white/65 hover:bg-white/10 hover:text-white'
-                }`}
-              >
-                <Icon size={18} strokeWidth={isActive ? 2.2 : 1.6} />
-                <span className="flex-1">{label}</span>
-                {badge && (
-                  <span className="text-[10px] font-medium leading-none px-1.5 py-0.5 rounded-full bg-white/15 text-white/70 uppercase tracking-wide">
-                    {badge}
-                  </span>
+    <aside className="w-60 flex-shrink-0 flex flex-col bg-background">
+      <div className="h-14 flex-shrink-0 flex items-center gap-2 px-3">
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          aria-hidden="true"
+          style={{ color: 'var(--wl-brand-dark, #04342C)' }}
+        >
+          <path
+            d="M20 4C10.5 4 4 9.5 4 18.5c0 .55.4 1 .95 1C13.5 19.5 20 13.5 20 4z"
+            fill="currentColor"
+          />
+          <path
+            d="M7 17C10.5 11.5 13.5 9 17.5 7.5"
+            stroke="#FFFFFF"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+          />
+        </svg>
+        <span
+          className="text-[15px] font-semibold"
+          style={{ color: 'var(--wl-brand-dark, #04342C)' }}
+        >
+          CasaZero
+        </span>
+      </div>
+
+      <nav aria-label="Navigazione admin" className="flex-1 px-3 pb-3">
+        <ul className="space-y-0.5">
+          {items.map(({ href, icon: Icon, label, badge, dividerBefore }) => {
+            const isActive = pathname === href || pathname.startsWith(href + '/')
+            return (
+              <li key={href}>
+                {dividerBefore && (
+                  <hr className="my-2 border-0 border-t border-border" />
                 )}
-              </Link>
-            </div>
-          )
-        })}
+                <Link
+                  href={href}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`flex items-center gap-3 px-3 h-9 rounded-lg text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2 ${
+                    isActive
+                      ? 'bg-brand-dark text-white'
+                      : 'text-text-primary hover:bg-[rgb(4_52_44/0.06)]'
+                  }`}
+                >
+                  <Icon size={18} strokeWidth={isActive ? 2.2 : 1.6} />
+                  <span className="flex-1">{label}</span>
+                  {badge && (
+                    <span className="text-[10px] font-medium leading-none px-1.5 py-0.5 rounded-full bg-[rgb(4_52_44/0.08)] text-text-secondary uppercase tracking-wide">
+                      {badge}
+                    </span>
+                  )}
+                </Link>
+              </li>
+            )
+          })}
+        </ul>
       </nav>
     </aside>
   )
