@@ -18,7 +18,9 @@ const VARIANT_STYLES: Record<ButtonVariant, string> = {
 }
 
 const SIZE_STYLES: Record<ButtonSize, string> = {
-  default: 'h-9',
+  /** h-11 (44px) su touch, h-9 (36px) da md in su: stesso pattern di Input per le superfici (app) mobile. */
+  default: 'h-11 md:h-9',
+  /** Solo dentro righe tabella — contesto desktop (dashboard), non serve variante touch. */
   table:   'h-8',
 }
 

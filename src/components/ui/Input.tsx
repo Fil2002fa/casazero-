@@ -15,7 +15,12 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ error, className, ...props }, ref) => (
-    <input ref={ref} className={cn(FIELD_BASE, error && FIELD_ERROR, className)} {...props} />
+    <input
+      ref={ref}
+      aria-invalid={error || undefined}
+      className={cn(FIELD_BASE, error && FIELD_ERROR, className)}
+      {...props}
+    />
   )
 )
 Input.displayName = 'Input'
@@ -28,6 +33,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
   ({ error, className, ...props }, ref) => (
     <textarea
       ref={ref}
+      aria-invalid={error || undefined}
       className={cn(FIELD_BASE, 'h-auto min-h-[5.5rem] py-2 resize-none', error && FIELD_ERROR, className)}
       {...props}
     />
@@ -41,7 +47,12 @@ interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(
   ({ error, className, ...props }, ref) => (
-    <select ref={ref} className={cn(FIELD_BASE, error && FIELD_ERROR, className)} {...props} />
+    <select
+      ref={ref}
+      aria-invalid={error || undefined}
+      className={cn(FIELD_BASE, error && FIELD_ERROR, className)}
+      {...props}
+    />
   )
 )
 Select.displayName = 'Select'
@@ -54,7 +65,14 @@ export function FieldHelp({ children }: { children: React.ReactNode }) {
   return <p className="mt-1 text-xs text-neutral-500">{children}</p>
 }
 
-/** Il messaggio deve sempre dire come riparare, non solo cosa è andato storto. */
-export function FieldError({ children }: { children: React.ReactNode }) {
-  return <p className="mt-1 text-xs text-status-overdue">{children}</p>
+/**
+ * Il messaggio deve sempre dire come riparare, non solo cosa è andato storto.
+ * Passa `id` e collegalo con `aria-describedby={id}` sul campo per l'associazione screen reader.
+ */
+export function FieldError({ id, children }: { id?: string; children: React.ReactNode }) {
+  return (
+    <p id={id} className="mt-1 text-xs text-status-overdue">
+      {children}
+    </p>
+  )
 }

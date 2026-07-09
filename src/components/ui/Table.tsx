@@ -1,4 +1,4 @@
-import type { TdHTMLAttributes, ThHTMLAttributes } from 'react'
+import type { KeyboardEvent, TdHTMLAttributes, ThHTMLAttributes } from 'react'
 import { cn } from '@/lib/cn'
 
 export function Table({ children }: { children: React.ReactNode }) {
@@ -41,12 +41,23 @@ interface TableRowProps {
 
 /** Ultima riga senza bordo: gestito da :last-child, non serve una prop dedicata. */
 export function TableRow({ children, clickable, onClick, className }: TableRowProps) {
+  function handleKeyDown(e: KeyboardEvent<HTMLTableRowElement>) {
+    if (!onClick) return
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      onClick()
+    }
+  }
+
   return (
     <tr
       onClick={onClick}
+      onKeyDown={clickable ? handleKeyDown : undefined}
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
       className={cn(
         'h-12 border-b border-border last:border-b-0 hover:bg-background',
-        clickable && 'cursor-pointer',
+        clickable && 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-dark/30',
         className
       )}
     >

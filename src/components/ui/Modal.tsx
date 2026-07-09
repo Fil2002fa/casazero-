@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/cn'
@@ -11,6 +11,9 @@ const SIZE_STYLES: Record<ModalSize, string> = {
   confirm: 'max-w-md',
   form:    'max-w-lg',
 }
+
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 interface ModalProps {
   open: boolean
@@ -23,17 +26,46 @@ interface ModalProps {
 
 /** Una modale non apre mai un'altra modale. */
 export function Modal({ open, onClose, title, size = 'confirm', footer, children }: ModalProps) {
+  const panelRef = useRef<HTMLDivElement>(null)
+  const previouslyFocused = useRef<HTMLElement | null>(null)
+
   useEffect(() => {
     if (!open) return
 
+    previouslyFocused.current = document.activeElement as HTMLElement | null
     document.body.style.overflow = 'hidden'
+
+    const panel = panelRef.current
+    const firstFocusable = panel?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
+    ;(firstFocusable ?? panel)?.focus()
+
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        onClose()
+        return
+      }
+      if (e.key !== 'Tab' || !panel) return
+
+      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+      if (focusable.length === 0) return
+
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
     }
+
     window.addEventListener('keydown', handleKeyDown)
     return () => {
       document.body.style.overflow = ''
       window.removeEventListener('keydown', handleKeyDown)
+      previouslyFocused.current?.focus()
     }
   }, [open, onClose])
 
@@ -45,10 +77,12 @@ export function Modal({ open, onClose, title, size = 'confirm', footer, children
       onClick={onClose}
     >
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
-        className={cn('z-modal w-full rounded-xl bg-surface p-6 shadow-elevated', SIZE_STYLES[size])}
+        tabIndex={-1}
+        className={cn('z-modal w-full rounded-xl bg-surface p-6 shadow-elevated outline-none', SIZE_STYLES[size])}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
