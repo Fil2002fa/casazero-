@@ -16,6 +16,13 @@
   --color-text-primary: #20302A;
   --color-text-secondary: #6B7A74;
 
+  /* Override scala neutra v2 — neutral-500 stock Tailwind (#737373) dava ~4.27:1 su
+     bg-background, sotto la soglia AA 4.5:1 quando il testo poggia sulla pagina invece
+     che su una card bg-surface (feed attività, testata residenza). #5E5E5E dà ~5.84:1
+     su bg-background e ~6.49:1 su bg-surface, restando percettibilmente più chiaro di
+     neutral-600 (#525252, ~7:1) per non appiattire i due livelli di grigio del sistema. */
+  --color-neutral-500: #5E5E5E;
+
   /* Semantici (legacy — N1/N2/N3, non toccare: usati da PriorityBadge/MaintenanceBadge/MaintenanceCard) */
   --color-semantic-red: #A32D2D;
   --color-semantic-red-bg: #FCEBEB;
