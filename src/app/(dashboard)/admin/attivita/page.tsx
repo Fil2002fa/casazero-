@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import { CheckCircle2, UserPlus, AlertTriangle, FileText, MessageSquare, Wrench } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { requireRole } from '@/lib/auth'
+import { PILL_BASE } from '@/components/ui/Badge'
+import { cn } from '@/lib/cn'
 
 export const metadata: Metadata = { title: 'Attività' }
 
@@ -9,109 +11,134 @@ type EventType = 'completion' | 'new_resident' | 'attention' | 'document' | 'com
 
 type ActivityEvent = {
   type: EventType
-  text: string
-  detail?: string
-  when: string
+  subject: string
+  action: string
+  overdue?: boolean
+  at: Date
 }
 
-const EVENT_STYLE: Record<EventType, { icon: LucideIcon; color: string; bg: string }> = {
-  completion:   { icon: CheckCircle2,  color: 'text-brand-medium',    bg: 'bg-brand-light' },
-  new_resident: { icon: UserPlus,      color: 'text-semantic-blue',   bg: 'bg-semantic-blue-bg' },
-  attention:    { icon: AlertTriangle, color: 'text-semantic-amber',  bg: 'bg-semantic-amber-bg' },
-  document:     { icon: FileText,      color: 'text-semantic-blue',   bg: 'bg-semantic-blue-bg' },
-  comment:      { icon: MessageSquare, color: 'text-text-secondary',  bg: 'bg-background' },
-  maintenance:  { icon: Wrench,        color: 'text-brand-medium',    bg: 'bg-brand-light' },
+const EVENT_ICON: Record<EventType, LucideIcon> = {
+  completion: CheckCircle2,
+  new_resident: UserPlus,
+  attention: AlertTriangle,
+  document: FileText,
+  comment: MessageSquare,
+  maintenance: Wrench,
+}
+
+function hoursAgo(now: Date, hours: number): Date {
+  return new Date(now.getTime() - hours * 60 * 60 * 1000)
 }
 
 // Dati demo: feed cronologico di esempio per la presentazione.
-// Non collegato a eventi reali (trigger DB / cron / webhook) — vedi badge in header.
-const DEMO_EVENTS: ActivityEvent[] = [
-  {
-    type: 'completion',
-    text: 'Test differenziale impianto elettrico completato',
-    detail: 'Unità 7 — Residenza Cavaccio',
-    when: '2 ore fa',
-  },
-  {
-    type: 'new_resident',
-    text: 'Nuovo residente registrato',
-    detail: 'Unità 3 — Residenza Cavaccio',
-    when: '5 ore fa',
-  },
-  {
-    type: 'attention',
-    text: 'Verifica linee vita scaduta',
-    detail: 'Residenza Cavaccio — a carico dell’amministratore',
-    when: 'ieri',
-  },
-  {
-    type: 'document',
-    text: 'Caricato certificato di conformità impianto termico',
-    detail: 'Unità 11 — Residenza Cavaccio',
-    when: 'ieri',
-  },
-  {
-    type: 'maintenance',
-    text: 'Pulizia grondaie presa in carico',
-    detail: 'Residenza Cavaccio — Amministratore di condominio',
-    when: '2 giorni fa',
-  },
-  {
-    type: 'comment',
-    text: 'Nuovo commento su “Sostituzione filtri VMC”',
-    detail: 'Unità 2 — Residenza Cavaccio',
-    when: '3 giorni fa',
-  },
-  {
-    type: 'completion',
-    text: 'Controllo serramenti completato',
-    detail: 'Unità 9 — Residenza Cavaccio',
-    when: '4 giorni fa',
-  },
-]
+// Non collegato a eventi reali (trigger DB / cron / webhook) — vedi badge "Test" su ogni riga.
+function buildDemoEvents(now: Date): ActivityEvent[] {
+  return [
+    { type: 'completion', subject: 'Unità 7', action: 'test differenziale impianto elettrico completato', at: hoursAgo(now, 2) },
+    { type: 'new_resident', subject: 'Unità 3', action: 'invito accettato', at: hoursAgo(now, 5) },
+    { type: 'attention', subject: 'Residenza Cavaccio', action: 'verifica linee vita scaduta — a carico dell’amministratore', overdue: true, at: hoursAgo(now, 27) },
+    { type: 'document', subject: 'Unità 11', action: 'certificato di conformità impianto termico caricato', at: hoursAgo(now, 30) },
+    { type: 'maintenance', subject: 'Residenza Cavaccio', action: 'pulizia grondaie presa in carico dall’amministratore', at: hoursAgo(now, 48) },
+    { type: 'comment', subject: 'Unità 2', action: 'nuovo commento su “Sostituzione filtri VMC”', at: hoursAgo(now, 74) },
+    { type: 'completion', subject: 'Unità 9', action: 'controllo serramenti completato', at: hoursAgo(now, 98) },
+  ]
+}
+
+function startOfDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
+}
+
+function dayLabel(date: Date, now: Date): string {
+  const diffDays = Math.round((startOfDay(now).getTime() - startOfDay(date).getTime()) / 86_400_000)
+  if (diffDays === 0) return 'Oggi'
+  if (diffDays === 1) return 'Ieri'
+  return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+}
+
+type DayGroup = { label: string; events: ActivityEvent[] }
+
+function groupByDay(events: ActivityEvent[], now: Date): DayGroup[] {
+  const groups: DayGroup[] = []
+  for (const event of events) {
+    const label = dayLabel(event.at, now)
+    const current = groups[groups.length - 1]
+    if (current && current.label === label) {
+      current.events.push(event)
+    } else {
+      groups.push({ label, events: [event] })
+    }
+  }
+  return groups
+}
+
+function TestBadge() {
+  return (
+    <span className={cn(PILL_BASE, 'border border-border bg-transparent text-neutral-600 flex-shrink-0')}>
+      Test
+    </span>
+  )
+}
 
 export default async function AttivitaPage() {
   await requireRole(['super_admin'], '/admin/manutenzioni')
 
+  const now = new Date()
+  const groups = groupByDay(buildDemoEvents(now), now)
+
   return (
-    <div className="p-6 space-y-6 pb-safe">
+    <div className="max-w-6xl mx-auto px-8 py-8 pb-safe">
       <header>
-        <div className="flex items-center gap-2">
-          <h1 className="text-xl font-medium text-text-primary">Attività</h1>
-          <span className="px-2 py-0.5 rounded-full bg-semantic-amber-bg text-semantic-amber text-[10px] font-medium uppercase tracking-wide">
-            Dati demo
-          </span>
-        </div>
-        <p className="text-xs text-text-secondary mt-1">
-          Feed cronologico degli eventi recenti nel sistema. In questa fase mostra dati di
-          esempio, non ancora collegati agli eventi reali.
+        <h1 className="font-serif text-3xl font-semibold text-neutral-900">Attività</h1>
+        <p className="text-sm text-neutral-500 mt-2">
+          Registro cronologico degli eventi recenti nel sistema.
         </p>
       </header>
 
-      <div className="bg-surface rounded-xl border border-border overflow-hidden">
-        {DEMO_EVENTS.map((event, i) => {
-          const style = EVENT_STYLE[event.type]
-          const Icon = style.icon
-          return (
-            <div
-              key={i}
-              className={`flex items-start gap-3 p-4 ${i > 0 ? 'border-t border-border' : ''}`}
-            >
-              <div className={`w-8 h-8 rounded-full ${style.bg} flex items-center justify-center flex-shrink-0`}>
-                <Icon className={`w-4 h-4 ${style.color}`} strokeWidth={1.8} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-text-primary">{event.text}</p>
-                {event.detail && (
-                  <p className="text-xs text-text-secondary mt-0.5">{event.detail}</p>
-                )}
-              </div>
-              <span className="text-xs text-text-secondary flex-shrink-0 whitespace-nowrap">
-                {event.when}
-              </span>
-            </div>
-          )
-        })}
+      <div className="mt-12">
+        {groups.length === 0 ? (
+          <div className="bg-surface rounded-xl border border-border p-8 text-center space-y-3">
+            <Wrench className="w-10 h-10 text-neutral-400 mx-auto" strokeWidth={1.2} aria-hidden="true" />
+            <p className="text-sm text-neutral-500">Nessun evento registrato.</p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {groups.map((group) => (
+              <section key={group.label}>
+                <h2 className="text-[13px] font-medium text-neutral-500">{group.label}</h2>
+                <ul role="list" aria-label={`${group.events.length} eventi — ${group.label}`} className="mt-2">
+                  {group.events.map((event, i) => {
+                    const Icon = EVENT_ICON[event.type]
+                    return (
+                      <li
+                        key={i}
+                        className={cn('flex items-center gap-3 py-3', i > 0 && 'border-t border-border')}
+                      >
+                        <Icon
+                          className={cn('w-4 h-4 flex-shrink-0', event.overdue ? 'text-status-overdue' : 'text-neutral-400')}
+                          strokeWidth={1.8}
+                          aria-hidden="true"
+                        />
+                        <div className="flex-1 min-w-0 flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <p className="text-sm font-medium text-neutral-900">
+                            {event.subject} — {event.action}
+                          </p>
+                          <TestBadge />
+                        </div>
+                        <span className="text-xs text-neutral-500 tabular-nums flex-shrink-0 whitespace-nowrap">
+                          {formatTime(event.at)}
+                        </span>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </section>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
