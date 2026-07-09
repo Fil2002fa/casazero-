@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, QrCode, Trash2, UserPlus, Copy, Check, MessageCircle, Mail, Pencil, X, Loader2 } from 'lucide-react'
+import { Plus, Trash2, UserPlus, Copy, Check, MessageCircle, Mail, Pencil, X, Loader2 } from 'lucide-react'
 import { createUnit, createInvite, revokeInvite, updateUnitLabel, createBulkInvites } from './actions'
 import { unitHasNoActiveAccount } from '@/lib/unit-utils'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
@@ -393,11 +393,11 @@ export function UnitsManager({
                     disabled={pending}
                     className="flex items-center gap-1.5 px-3 py-2 border border-border rounded-lg text-xs text-text-primary bg-surface"
                   >
-                    {pending ? '…' : <><UserPlus className="w-3.5 h-3.5" /> Genera invito QR</>}
+                    {pending ? '…' : <><UserPlus className="w-3.5 h-3.5" /> Genera invito</>}
                   </button>
                   {activeInvites.length === 0 && usedInvites.length === 0 && unit.members.length === 0 && (
                     <div className="flex items-center gap-1.5 px-3 py-2 bg-background rounded-lg text-xs text-text-secondary">
-                      <QrCode className="w-3.5 h-3.5" />
+                      <UserPlus className="w-3.5 h-3.5" />
                       Nessun invito — generane uno
                     </div>
                   )}
