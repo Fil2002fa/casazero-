@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/admin'
+import { unitHasNoActiveAccount } from '@/lib/unit-utils'
 
 export async function createUnit(
   residenceId: string,
@@ -109,9 +110,26 @@ export async function createBulkInvites(
     .gt('expires_at', now)
 
   const alreadyInvited = new Set((existing ?? []).map(i => i.unit_id as string))
-  const toInvite = unitIds.filter(id => !alreadyInvited.has(id))
 
-  if (toInvite.length === 0) return { count: 0, skipped: alreadyInvited.size }
+  // Safety net: solo unità senza account cliente attivo, indipendentemente da cosa
+  // ha già filtrato il chiamante (stesso helper condiviso usato lato client).
+  const { data: memberRows } = await admin
+    .from('unit_members')
+    .select('unit_id, ended_at')
+    .in('unit_id', unitIds)
+
+  const membersByUnit = new Map<string, { ended_at: string | null }[]>()
+  for (const row of memberRows ?? []) {
+    const list = membersByUnit.get(row.unit_id as string) ?? []
+    list.push({ ended_at: row.ended_at as string | null })
+    membersByUnit.set(row.unit_id as string, list)
+  }
+
+  const toInvite = unitIds.filter(id =>
+    !alreadyInvited.has(id) && unitHasNoActiveAccount(membersByUnit.get(id) ?? [])
+  )
+
+  if (toInvite.length === 0) return { count: 0, skipped: unitIds.length }
 
   const expiresAt = new Date()
   expiresAt.setDate(expiresAt.getDate() + 30)
@@ -124,10 +142,10 @@ export async function createBulkInvites(
   }))
 
   const { error } = await admin.from('invites').insert(rows)
-  if (error) return { count: 0, skipped: alreadyInvited.size, error: error.message }
+  if (error) return { count: 0, skipped: unitIds.length - toInvite.length, error: error.message }
 
   revalidatePath(`/admin/residences/${residenceId}/units`)
-  return { count: toInvite.length, skipped: alreadyInvited.size }
+  return { count: toInvite.length, skipped: unitIds.length - toInvite.length }
 }
 
 export async function updateUnitLabel(
