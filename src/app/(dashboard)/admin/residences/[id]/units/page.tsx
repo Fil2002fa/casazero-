@@ -5,7 +5,6 @@ import { ChevronLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import { UnitsManager } from './UnitsManager'
-import QRCode from 'qrcode'
 
 export const metadata: Metadata = { title: 'Unità e inviti' }
 
@@ -48,38 +47,22 @@ export default async function UnitsPage({ params, searchParams }: { params: Para
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
 
-  const units: (UnitRow & { qrCodes: Record<string, string> })[] = await Promise.all(
-    (rawUnitsAll ?? []).map(async (u) => {
-      const rawMembersAll = (u.unit_members as unknown as { profile_id: string; is_primary: boolean; ended_at: string | null; profiles: { full_name: string | null } | null }[]) ?? []
-      const members = rawMembersAll
-        .filter(m => !m.ended_at)
-        .sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0))
-      const invites = (u.invites as unknown as { id: string; token: string; expires_at: string; used_at: string | null }[]) ?? []
+  const units: UnitRow[] = (rawUnitsAll ?? []).map((u) => {
+    const rawMembersAll = (u.unit_members as unknown as { profile_id: string; is_primary: boolean; ended_at: string | null; profiles: { full_name: string | null } | null }[]) ?? []
+    const members = rawMembersAll
+      .filter(m => !m.ended_at)
+      .sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0))
+    const invites = (u.invites as unknown as { id: string; token: string; expires_at: string; used_at: string | null }[]) ?? []
 
-      // Genera QR per inviti attivi
-      const qrCodes: Record<string, string> = {}
-      for (const inv of invites) {
-        if (!inv.used_at && new Date(inv.expires_at) > new Date()) {
-          const url = `${appUrl}/welcome/${inv.token}`
-          try {
-            qrCodes[inv.id] = await QRCode.toDataURL(url, { width: 180, margin: 1 })
-          } catch {
-            // QR generation failed, skip
-          }
-        }
-      }
-
-      return {
-        id: u.id,
-        label: u.label,
-        floor: u.floor,
-        members: members as UnitRow['members'],
-        rawMembers: rawMembersAll,
-        invites,
-        qrCodes,
-      }
-    })
-  )
+    return {
+      id: u.id,
+      label: u.label,
+      floor: u.floor,
+      members: members as UnitRow['members'],
+      rawMembers: rawMembersAll,
+      invites,
+    }
+  })
 
   return (
     <div className="min-h-screen bg-background pb-24">

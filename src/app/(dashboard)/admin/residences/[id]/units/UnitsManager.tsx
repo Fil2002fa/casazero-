@@ -5,12 +5,12 @@ import { useRouter } from 'next/navigation'
 import { Plus, QrCode, Trash2, UserPlus, Copy, Check, MessageCircle, Mail, Pencil, X, Loader2 } from 'lucide-react'
 import { createUnit, createInvite, revokeInvite, updateUnitLabel, createBulkInvites } from './actions'
 import { unitHasNoActiveAccount } from '@/lib/unit-utils'
-import Image from 'next/image'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
+import { useToast } from '@/components/ui/Toast'
 
 type MemberRow = { profile_id: string; is_primary: boolean; profiles: { full_name: string | null } | null }
 type InviteRow = { id: string; token: string; expires_at: string; used_at: string | null }
-type UnitRow = { id: string; label: string; floor: number | null; members: MemberRow[]; rawMembers: { ended_at: string | null }[]; invites: InviteRow[]; qrCodes: Record<string, string> }
+type UnitRow = { id: string; label: string; floor: number | null; members: MemberRow[]; rawMembers: { ended_at: string | null }[]; invites: InviteRow[] }
 
 export function UnitsManager({
   residenceId, units, appUrl, initialFilter,
@@ -21,12 +21,12 @@ export function UnitsManager({
   initialFilter?: string
 }) {
   const router = useRouter()
+  const { showToast } = useToast()
   const [pending, startTransition] = useTransition()
   const [newUnitLabel, setNewUnitLabel] = useState('')
   const [newUnitFloor, setNewUnitFloor] = useState('')
   const [showNewUnitForm, setShowNewUnitForm] = useState(false)
   const [localError, setLocalError] = useState<string | null>(null)
-  const [copiedId, setCopiedId] = useState<string | null>(null)
   const [expandedUnit, setExpandedUnit] = useState<string | null>(null)
   const [editingUnitId, setEditingUnitId] = useState<string | null>(null)
   const [editLabel, setEditLabel] = useState('')
@@ -110,11 +110,10 @@ export function UnitsManager({
     })
   }
 
-  function copyInviteUrl(token: string, inviteId: string) {
+  function copyInviteUrl(token: string) {
     const url = `${appUrl}/welcome/${token}`
     navigator.clipboard.writeText(url)
-    setCopiedId(inviteId)
-    setTimeout(() => setCopiedId(null), 2000)
+    showToast('success', 'Link copiato.')
   }
 
   return (
@@ -339,24 +338,19 @@ export function UnitsManager({
                     <div className="space-y-3">
                       {activeInvites.map(inv => {
                         const url = `${appUrl}/welcome/${inv.token}`
-                        const qrSrc = unit.qrCodes[inv.id]
                         return (
                           <div key={inv.id} className="bg-background rounded-lg p-3 space-y-2">
-                            {qrSrc && (
-                              <div className="flex justify-center">
-                                <Image src={qrSrc} alt="QR invito" width={120} height={120} className="rounded" />
-                              </div>
-                            )}
+                            <p className="text-xs text-text-primary break-all">{url}</p>
                             <p className="text-[10px] text-text-secondary">
                               Scade il {new Date(inv.expires_at).toLocaleDateString('it-IT')}
                             </p>
                             <div className="flex flex-wrap gap-2">
                               <button
-                                onClick={() => copyInviteUrl(inv.token, inv.id)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-dark text-white rounded-lg text-xs"
+                                onClick={() => copyInviteUrl(inv.token)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 border border-border text-text-primary bg-surface rounded-lg text-xs"
                               >
-                                {copiedId === inv.id ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                                {copiedId === inv.id ? 'Copiato' : 'Copia URL'}
+                                <Copy className="w-3 h-3" />
+                                Copia link
                               </button>
                               <a
                                 href={`https://wa.me/?text=${encodeURIComponent(`Benvenuto in CasaZero! Attiva il tuo accesso da qui: ${url}`)}`}
