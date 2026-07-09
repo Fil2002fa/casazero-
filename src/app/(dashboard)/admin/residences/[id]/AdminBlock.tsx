@@ -3,10 +3,11 @@
 import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  AlertTriangle, ChevronLeft, Copy, Check, Loader2,
+  ChevronLeft, Copy, Check, Loader2,
   Mail, Phone, UserCheck, UserPlus, X,
 } from 'lucide-react'
 import { assignAdmin, removeAdminAssignment, createAdminInvite, getAdminEmail } from './admin-actions'
+import { Button } from '@/components/ui/Button'
 
 export type AdminProfile = {
   id: string
@@ -399,10 +400,10 @@ export function AdminBlock({
           tabIndex={0}
           onClick={openDettaglio}
           onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') openDettaglio() }}
-          className="px-4 py-3 flex items-center gap-3 border-t border-border cursor-pointer hover:bg-background transition-colors"
+          className="px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-background transition-colors"
         >
-          <div className="w-8 h-8 rounded-full bg-[#E1F5EE] flex items-center justify-center flex-shrink-0">
-            <UserCheck className="w-4 h-4 text-[#0F6E56]" strokeWidth={1.6} />
+          <div className="w-8 h-8 rounded-full bg-brand-light flex items-center justify-center flex-shrink-0">
+            <UserCheck className="w-4 h-4 text-brand-medium" strokeWidth={1.6} />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-text-primary truncate">
@@ -413,21 +414,19 @@ export function AdminBlock({
           <ChevronLeft className="w-4 h-4 text-text-secondary rotate-180 flex-shrink-0" strokeWidth={1.6} />
         </div>
       ) : !transitioning ? (
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={openAssegnazione}
-          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') openAssegnazione() }}
-          className="px-4 py-3 flex items-center gap-3 border-t border-[#854F0B]/20 bg-[#FAEEDA] cursor-pointer hover:brightness-[0.97] transition-colors"
-        >
-          <div className="w-8 h-8 rounded-full bg-[#854F0B]/10 flex items-center justify-center flex-shrink-0">
-            <AlertTriangle className="w-4 h-4 text-[#854F0B]" strokeWidth={1.6} />
+        <div className="px-4 py-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-8 h-8 rounded-full bg-background flex items-center justify-center flex-shrink-0">
+              <UserPlus className="w-4 h-4 text-neutral-500" strokeWidth={1.6} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-text-primary">Nessun amministratore assegnato</p>
+              <p className="text-xs text-text-secondary">Assegna o invita un amministratore per questa residenza</p>
+            </div>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-[#854F0B]">Amministratore non assegnato</p>
-            <p className="text-xs text-[#854F0B]/70">Assegna amministratore</p>
-          </div>
-          <ChevronLeft className="w-4 h-4 text-[#854F0B]/50 rotate-180 flex-shrink-0" strokeWidth={1.6} />
+          <Button variant="secondary" onClick={openAssegnazione} className="flex-shrink-0">
+            Invita amministratore
+          </Button>
         </div>
       ) : null}
       {open && (

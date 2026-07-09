@@ -1,4 +1,4 @@
-import type { CompletionMode, ItemActivation } from '@/types/database'
+import type { CompletionMode, ItemActivation, MaintenanceStatus, ObligationType } from '@/types/database'
 import { pluralize } from './pluralize'
 
 // Fonte di verità per lo stato live delle manutenzioni.
@@ -40,6 +40,22 @@ export function resolveCompletionMode(i: LiveStatusItem): CompletionMode | null 
   return i.completion_mode ?? i.maintenance_templates?.completion_mode ?? null
 }
 
+/** Stesso pattern item→template di resolveCompletionMode, per obligation_type. */
+export function resolveObligationType(i: {
+  obligation_type: ObligationType | null
+  maintenance_templates: { obligation_type: ObligationType | null } | null
+}): ObligationType | null {
+  return i.obligation_type ?? i.maintenance_templates?.obligation_type ?? null
+}
+
+/** Stesso pattern item→template di resolveCompletionMode, per frequency_months. */
+export function resolveFrequencyMonths(i: {
+  frequency_months: number | null
+  maintenance_templates: { frequency_months: number | null } | null
+}): number | null {
+  return i.frequency_months ?? i.maintenance_templates?.frequency_months ?? null
+}
+
 /** Voce conteggiabile: template attivo a catalogo e item incluso nella residenza. */
 export function isCountable(i: LiveStatusItem): boolean {
   return i.activation_status === 'inclusa' && i.maintenance_templates?.is_active === true
@@ -62,6 +78,17 @@ export function isOverdueLive(i: LiveStatusItem, today: string = todayISO()): bo
 
 export function isInCorso(i: LiveStatusItem): boolean {
   return isCountable(i) && i.status === 'in_corso'
+}
+
+/**
+ * Stato temporale live per un item non-promemoria (scaduta calcolata da data,
+ * mai dal campo status salvato). Non usare su voci a modalità promemoria: quelle
+ * non hanno mai uno StatusBadge, vedi PromemoriaBadge.
+ */
+export function resolveLiveStatus(i: LiveStatusItem, today: string = todayISO()): MaintenanceStatus {
+  if (isOverdueLive(i, today)) return 'scaduta'
+  if (isInCorso(i)) return 'in_corso'
+  return 'in_attesa'
 }
 
 export function overdueLive<T extends LiveStatusItem>(

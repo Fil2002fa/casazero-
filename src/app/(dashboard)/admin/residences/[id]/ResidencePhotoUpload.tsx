@@ -8,6 +8,8 @@ import { MAX_PHOTO_BYTES } from './constants'
 interface Props {
   residenceId: string
   initialPhotoUrl: string | null
+  title: string
+  subtitle?: string | null
 }
 
 // Upload della foto (facciata) della residenza — visibile solo al super_admin.
@@ -15,13 +17,15 @@ interface Props {
 // handleFileChange con object URL per l'anteprima + handleSubmit con FormData).
 // A differenza di IdentityTab NON c'è hack onError/thumbError: il bucket è pubblico,
 // un'immagine rotta è un bug vero e va mostrato, non mascherato.
-export default function ResidencePhotoUpload({ residenceId, initialPhotoUrl }: Props) {
+// Il componente possiede lo stato di upload MA renderizza anche nome/indirizzo
+// della residenza: sono la stessa riga di testata (thumbnail + identità), non ha
+// senso spezzarli in due componenti che devono restare visivamente allineati.
+export default function ResidencePhotoUpload({ residenceId, initialPhotoUrl, title, subtitle }: Props) {
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
 
   const [photoUrl] = useState<string | null>(initialPhotoUrl)
-  const [pickedName, setPickedName] = useState<string | null>(null)
   const [pickedPreview, setPickedPreview] = useState<string | null>(null) // object URL locale
   const [dirty, setDirty] = useState(false) // file scelto non ancora salvato → mostra "Salva foto"
 
@@ -50,7 +54,6 @@ export default function ResidencePhotoUpload({ residenceId, initialPhotoUrl }: P
     // Igiene memoria: revoca l'object-URL precedente prima di crearne uno nuovo,
     // così non accumuliamo blob a ogni sostituzione.
     if (pickedPreview) URL.revokeObjectURL(pickedPreview)
-    setPickedName(file.name)
     setPickedPreview(URL.createObjectURL(file))
     setDirty(true)
     setError(null)
@@ -72,7 +75,6 @@ export default function ResidencePhotoUpload({ residenceId, initialPhotoUrl }: P
         // la foto appena scelta (niente flicker sulla foto vecchia); verrà sostituita dal
         // nuovo initialPhotoUrl al prossimo render server (revalidatePath già chiamato).
         setDirty(false)
-        setPickedName(null)
         // Ripulisci l'input così un re-select dello STESSO file rifà scattare onChange.
         if (fileInputRef.current) fileInputRef.current.value = ''
       }
@@ -80,7 +82,7 @@ export default function ResidencePhotoUpload({ residenceId, initialPhotoUrl }: P
   }
 
   return (
-    <form onSubmit={handleSubmit} className="px-4 py-4 border-b border-border">
+    <form onSubmit={handleSubmit}>
       <input type="hidden" name="residence_id" value={residenceId} />
       <input
         ref={fileInputRef}
@@ -91,54 +93,35 @@ export default function ResidencePhotoUpload({ residenceId, initialPhotoUrl }: P
         className="hidden"
       />
 
-      {/* Riga compatta: la foto è un attributo d'identità di gestione, non un hero.
-          Thumbnail a dimensione fissa (formato facciata) a sinistra, label + azione a destra.
+      {/* Testata: thumbnail 96×72 a sinistra, identità residenza accanto.
           L'hero full-width resta solo nella vista residente ((app)/page.tsx). */}
-      {hasPhoto ? (
-        /* Foto presente — thumbnail + sostituisci */
-        <div className="flex items-center gap-3">
+      <div className="flex items-start gap-4">
+        {hasPhoto ? (
           <button
             type="button"
             onClick={openPicker}
-            className="w-20 h-14 rounded-lg overflow-hidden bg-background flex-shrink-0 cursor-pointer"
+            aria-label="Sostituisci foto residenza"
+            className="w-24 h-[72px] rounded-xl overflow-hidden bg-background flex-shrink-0 cursor-pointer"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={previewSrc!} alt="Foto residenza" className="w-full h-full object-cover" />
+            <img src={previewSrc!} alt="" className="w-full h-full object-cover" />
           </button>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-text-primary">Foto residenza</p>
-            <p className="text-xs text-text-secondary truncate">{pickedName ?? 'Foto attuale'}</p>
-          </div>
+        ) : (
           <button
             type="button"
             onClick={openPicker}
-            className="text-xs text-brand-medium font-medium cursor-pointer flex-shrink-0"
-          >
-            Sostituisci
-          </button>
-        </div>
-      ) : (
-        /* Nessuna foto — thumbnail-placeholder piccola + aggiungi */
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={openPicker}
-            className="w-20 h-14 rounded-lg border-2 border-dashed border-border flex items-center justify-center flex-shrink-0 text-text-secondary cursor-pointer"
+            aria-label="Aggiungi foto residenza"
+            className="w-24 h-[72px] rounded-xl border-2 border-dashed border-border flex items-center justify-center flex-shrink-0 text-text-secondary cursor-pointer"
           >
             <ImagePlus className="w-5 h-5" strokeWidth={1.6} />
           </button>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-text-primary">Foto residenza</p>
-            <button
-              type="button"
-              onClick={openPicker}
-              className="text-xs text-brand-medium font-medium cursor-pointer"
-            >
-              Aggiungi foto
-            </button>
-          </div>
+        )}
+
+        <div className="flex-1 min-w-0 pt-1">
+          <h1 className="font-serif text-3xl font-semibold text-text-primary text-balance">{title}</h1>
+          {subtitle && <p className="text-sm text-neutral-500 mt-1">{subtitle}</p>}
         </div>
-      )}
+      </div>
 
       {error && (
         <div className="bg-semantic-red-bg border border-semantic-red/20 rounded-lg p-3 mt-3">
@@ -152,8 +135,7 @@ export default function ResidencePhotoUpload({ residenceId, initialPhotoUrl }: P
         </div>
       )}
 
-      {/* Il bottone di salvataggio compare solo quando c'è un file nuovo non salvato;
-          dimensione contenuta, coerente con la riga compatta (non un CTA full-width). */}
+      {/* Il bottone di salvataggio compare solo quando c'è un file nuovo non salvato. */}
       {dirty && (
         <button
           type="submit"

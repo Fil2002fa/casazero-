@@ -20,6 +20,7 @@ export function TableHeader({ children }: { children: React.ReactNode }) {
 export function TableHead({ className, children, ...props }: ThHTMLAttributes<HTMLTableCellElement>) {
   return (
     <th
+      scope="col"
       className={cn('h-12 px-4 text-left text-[13px] font-medium text-neutral-500', className)}
       {...props}
     >

@@ -2,7 +2,7 @@ import type { MaintenanceStatus, ObligationType } from '@/types/database'
 import { formatFrequency } from '@/lib/formatFrequency'
 import { cn } from '@/lib/cn'
 
-const PILL_BASE = 'inline-flex items-center rounded-full h-[22px] px-2.5 text-xs font-medium'
+export const PILL_BASE = 'inline-flex items-center rounded-full h-[22px] px-2.5 text-xs font-medium'
 
 const STATUS_STYLES: Record<MaintenanceStatus, string> = {
   scaduta:    'bg-status-overdue/8 text-status-overdue',

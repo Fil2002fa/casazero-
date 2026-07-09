@@ -2,23 +2,52 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import {
-  ChevronLeft, Wrench, Users, Settings, FileText, BookOpen,
-  AlertCircle, AlertTriangle, CheckCircle,
+  ChevronLeft, Wrench, Users, Settings, FileText, BookOpen, AlertTriangle,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import {
-  overdueLive, resolveCompletionMode, todayISO,
+  overdueLive, isCountable, resolveCompletionMode, resolveObligationType,
+  resolveFrequencyMonths, resolveLiveStatus, todayISO,
   LIVE_STATUS_FIELDS, LIVE_STATUS_TEMPLATE_FIELDS,
-  type LiveStatusItem,
 } from '@/lib/maintenance-status'
 import { unitHasNoActiveAccount } from '@/lib/unit-utils'
+import type { CompletionMode, ItemActivation, ObligationType } from '@/types/database'
 import { AdminBlock, type AdminProfile } from './AdminBlock'
 import ResidencePhotoUpload from './ResidencePhotoUpload'
+import { UnitsSummaryTable, type UnitSummaryRow } from './UnitsSummaryTable'
+import { MaintenancePlanTable, type PlanRow } from './MaintenancePlanTable'
 
 export const metadata: Metadata = { title: 'Residenza' }
 
 type Params = Promise<{ id: string }>
+
+type UnitRow = {
+  id: string
+  label: string
+  floor: number | null
+  unit_members: { ended_at: string | null; is_primary: boolean; profiles: { full_name: string | null } | null }[] | null
+}
+
+type PlanItemRow = {
+  id: string
+  unit_id: string | null
+  status: string
+  next_due_date: string | null
+  completion_mode: CompletionMode | null
+  obligation_type: ObligationType | null
+  frequency_months: number | null
+  activation_status: ItemActivation
+  maintenance_templates: {
+    title: string
+    completion_mode: CompletionMode | null
+    obligation_type: ObligationType | null
+    frequency_months: number | null
+    is_active: boolean
+  } | null
+}
+
+type AdminRow = { profiles: AdminProfile | null } | null
 
 export default async function ResidenceDetailPage({ params }: { params: Params }) {
   const { id } = await params
@@ -33,9 +62,6 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
 
   if (!residence) notFound()
 
-  type UnitRow = { id: string; unit_members: { ended_at: string | null }[] | null }
-  type AdminRow = { profiles: AdminProfile | null } | null
-
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
 
   const [
@@ -48,12 +74,18 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
     { data: adminListRaw },
   ] = await Promise.all([
     supabase.from('units')
-      .select('id, unit_members!left(ended_at)')
-      .eq('residence_id', id),
-    supabase.from('maintenance_items')
-      .select(`unit_id, ${LIVE_STATUS_FIELDS}, maintenance_templates!inner(${LIVE_STATUS_TEMPLATE_FIELDS})`)
+      .select('id, label, floor, unit_members!left(ended_at, is_primary, profiles(full_name))')
       .eq('residence_id', id)
-      .neq('status', 'completata'),
+      .order('floor', { ascending: true, nullsFirst: false })
+      .order('label', { ascending: true }),
+    supabase.from('maintenance_items')
+      .select(`
+        id, unit_id, obligation_type, frequency_months, ${LIVE_STATUS_FIELDS},
+        maintenance_templates!inner(title, obligation_type, frequency_months, ${LIVE_STATUS_TEMPLATE_FIELDS})
+      `)
+      .eq('residence_id', id)
+      .neq('status', 'completata')
+      .order('next_due_date', { ascending: true, nullsFirst: false }),
     supabase.from('documents')
       .select('id', { count: 'exact', head: true })
       .eq('residence_id', id),
@@ -79,14 +111,33 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
     unitHasNoActiveAccount((u.unit_members ?? []) as { ended_at: string | null }[])
   ).length
 
-  type ItemRow = LiveStatusItem & { unit_id: string | null }
-  const overdue = overdueLive((itemsRaw ?? []) as unknown as ItemRow[], todayISO())
-  const n3Scadute = overdue.filter(i => resolveCompletionMode(i) === 'amministratore').length
-  const n2ScaduteUnits = new Set(
-    overdue
-      .filter(i => resolveCompletionMode(i) === 'residente' && i.unit_id != null)
-      .map(i => i.unit_id as string)
-  ).size
+  const unitRows: UnitSummaryRow[] = units.map(u => {
+    const activeMembers = (u.unit_members ?? []).filter(m => m.ended_at === null)
+    const primary = [...activeMembers].sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0))[0] ?? null
+    return {
+      id: u.id,
+      label: u.label,
+      floor: u.floor,
+      residentName: primary?.profiles?.full_name ?? null,
+      active: activeMembers.length > 0,
+    }
+  })
+
+  // Piano attivo: solo item a catalogo attivo e inclusi nella residenza (helper
+  // condiviso, stesso filtro auditato usato per i conteggi scadute/in corso).
+  const planItems = ((itemsRaw ?? []) as unknown as PlanItemRow[]).filter(isCountable)
+  const today = todayISO()
+  const overdueCount = overdueLive(planItems, today).length
+
+  const planRows: PlanRow[] = planItems.map(item => ({
+    id: item.id,
+    title: item.maintenance_templates?.title ?? '—',
+    mode: resolveCompletionMode(item),
+    obligationType: resolveObligationType(item),
+    status: resolveLiveStatus(item, today),
+    frequencyMonths: resolveFrequencyMonths(item),
+    nextDueDate: item.next_due_date,
+  }))
 
   const adminProfile = (adminRaw as unknown as AdminRow)?.profiles ?? null
   const adminList = (adminListRaw ?? []) as AdminProfile[]
@@ -100,145 +151,114 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
   ]
 
   return (
-    <div className="min-h-screen bg-background pb-24">
-      {/* header */}
-      <div className="bg-surface border-b border-border px-4 py-4 sticky top-0 z-10">
-        <Link href="/admin/residences" className="text-text-secondary p-1 -ml-1 rounded-lg inline-block">
-          <ChevronLeft className="w-5 h-5" strokeWidth={1.6} />
-        </Link>
+    <div className="max-w-6xl mx-auto px-8 py-8 pb-safe">
+      <Link href="/admin/residences" className="inline-flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary mb-6">
+        <ChevronLeft className="w-4 h-4" strokeWidth={1.6} />
+        Residenze
+      </Link>
+
+      {/* Testata */}
+      <div className="bg-surface rounded-xl border border-border p-6">
+        <ResidencePhotoUpload
+          residenceId={id}
+          initialPhotoUrl={residence.photo_url}
+          title={residence.name}
+          subtitle={residence.address}
+        />
       </div>
 
-      <div className="p-4 space-y-4">
-        {/* Zona 1 — Identità + Amministratore */}
-        <div className="bg-surface rounded-xl border border-border overflow-hidden">
-          <div className="bg-[#04342C] px-4 py-5">
-            <h2 className="text-base font-medium text-white">{residence.name}</h2>
-            {residence.address && (
-              <p className="text-xs text-[#9FE1CB] mt-0.5">{residence.address}</p>
-            )}
-            <div className="flex flex-wrap gap-2 mt-3">
-              {residence.energy_class && (
-                <span className="text-[11px] font-medium bg-white/10 text-[#E1F5EE] px-2.5 py-1 rounded-full">
-                  Classe {residence.energy_class}
-                </span>
-              )}
-              <span className="text-[11px] font-medium bg-white/10 text-[#E1F5EE] px-2.5 py-1 rounded-full">
-                {unitCount} unità
-              </span>
-            </div>
+      {/* Numeri chiave */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
+        <StatCard label="Unità" value={unitCount} />
+        <StatCard label="Voci attive" value={planItems.length} />
+        <StatCard label="Scadute" value={overdueCount} danger={overdueCount > 0} />
+        <StatCard label="Completamenti" value={completionCount ?? 0} />
+      </div>
+
+      {/* Amministratore */}
+      <div className="bg-surface rounded-xl border border-border overflow-hidden mt-8">
+        <AdminBlock
+          residenceId={id}
+          adminProfile={adminProfile}
+          availableAdmins={adminList}
+          appUrl={appUrl}
+        />
+      </div>
+
+      {/* Zona attenzione — solo gap di configurazione senza elemento dedicato */}
+      {unitsSenzaAccount > 0 && (
+        <Link
+          href={`/admin/residences/${id}/units?filter=senza_account`}
+          className="flex items-center gap-3 bg-semantic-amber-bg border border-semantic-amber/20 rounded-xl p-4 hover:brightness-[0.98] transition-all mt-8"
+        >
+          <div className="w-8 h-8 rounded-full bg-semantic-amber/10 flex items-center justify-center flex-shrink-0">
+            <AlertTriangle className="w-4 h-4 text-semantic-amber" strokeWidth={1.6} />
           </div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-semantic-amber">
+              Unità senza account cliente · {unitsSenzaAccount}
+            </p>
+            <p className="text-xs text-semantic-amber/70">Inviti non ancora inviati</p>
+          </div>
+        </Link>
+      )}
 
-          <ResidencePhotoUpload
-            residenceId={id}
-            initialPhotoUrl={residence.photo_url}
-          />
+      {/* Tabella unità */}
+      <section className="mt-8">
+        <h2 className="text-lg font-semibold text-text-primary mb-3">Unità</h2>
+        {unitRows.length > 0 ? (
+          <UnitsSummaryTable residenceId={id} rows={unitRows} />
+        ) : (
+          <p className="text-sm text-neutral-500 py-6 text-center bg-surface rounded-xl border border-border">
+            Nessuna unità configurata.
+          </p>
+        )}
+      </section>
 
-          <AdminBlock
-            residenceId={id}
-            adminProfile={adminProfile}
-            availableAdmins={adminList}
-            appUrl={appUrl}
-          />
-        </div>
+      {/* Piano manutenzioni */}
+      <section className="mt-8">
+        <h2 className="text-lg font-semibold text-text-primary mb-3">Piano manutenzioni</h2>
+        {planRows.length > 0 ? (
+          <MaintenancePlanTable residenceId={id} rows={planRows} />
+        ) : (
+          <p className="text-sm text-neutral-500 py-6 text-center bg-surface rounded-xl border border-border">
+            Nessuna voce nel piano.
+          </p>
+        )}
+      </section>
 
-        {/* Zona 2 — Richiede attenzione */}
-        <div className="space-y-2">
-          {n3Scadute > 0 && (
-            <AttenzioneCard
-              color="red"
-              icon={<AlertCircle className="w-4 h-4 text-[#A32D2D]" strokeWidth={1.6} />}
-              title={`Amministratore in ritardo · ${n3Scadute} ${n3Scadute === 1 ? 'voce' : 'voci'}`}
-              sub="Sollecita l'amministratore"
-              href={`/admin/residences/${id}/manutenzioni?filtro=scaduta&modalita=amministratore`}
-            />
-          )}
-          {n2ScaduteUnits > 0 && (
-            <AttenzioneCard
-              color="red"
-              icon={<AlertCircle className="w-4 h-4 text-[#A32D2D]" strokeWidth={1.6} />}
-              title={`Residente in ritardo · ${n2ScaduteUnits} unità`}
-              sub="Clienti coinvolti"
-              href={`/admin/residences/${id}/manutenzioni?filtro=scaduta&modalita=residente`}
-            />
-          )}
-          {n3Scadute === 0 && n2ScaduteUnits === 0 && (
-            <div className="bg-surface rounded-xl border border-border px-4 py-3 flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-[#E1F5EE] flex items-center justify-center flex-shrink-0">
-                <CheckCircle className="w-4 h-4 text-[#0F6E56]" strokeWidth={1.6} />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-[#0F6E56]">In regola</p>
-                <p className="text-xs text-text-secondary">Nessun ritardo in corso</p>
-              </div>
+      {/* Gestione */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mt-8">
+        {porte.map(porta => (
+          <Link
+            key={porta.href}
+            href={porta.href}
+            className="flex items-center gap-3 bg-surface rounded-xl border border-border p-4 hover:bg-background transition-colors"
+          >
+            <div className="w-9 h-9 bg-background rounded-lg flex items-center justify-center text-text-secondary flex-shrink-0">
+              <porta.icon className="w-4 h-4" strokeWidth={1.6} />
             </div>
-          )}
-          {unitsSenzaAccount > 0 && (
-            <AttenzioneCard
-              color="amber"
-              icon={<AlertTriangle className="w-4 h-4 text-[#854F0B]" strokeWidth={1.6} />}
-              title={`Unità senza account cliente · ${unitsSenzaAccount}`}
-              sub="Inviti non ancora inviati"
-              href={`/admin/residences/${id}/units?filter=senza_account`}
-            />
-          )}
-        </div>
-
-        {/* Zona 3 — Gestione */}
-        <div className="space-y-2">
-          {porte.map(porta => (
-            <Link
-              key={porta.href}
-              href={porta.href}
-              className="flex items-center gap-3 bg-surface rounded-xl border border-border p-4 active:scale-[0.99] transition-transform"
-            >
-              <div className="w-9 h-9 bg-background rounded-lg flex items-center justify-center text-text-secondary flex-shrink-0">
-                <porta.icon className="w-4 h-4" strokeWidth={1.6} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-text-primary">{porta.label}</p>
-                {porta.sub && (
-                  <p className="text-xs text-text-secondary mt-0.5">{porta.sub}</p>
-                )}
-              </div>
-              <ChevronLeft className="w-4 h-4 text-text-secondary flex-shrink-0 rotate-180" strokeWidth={1.6} />
-            </Link>
-          ))}
-        </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-text-primary">{porta.label}</p>
+              {porta.sub && (
+                <p className="text-xs text-text-secondary mt-0.5">{porta.sub}</p>
+              )}
+            </div>
+          </Link>
+        ))}
       </div>
     </div>
   )
 }
 
-function AttenzioneCard({
-  color,
-  icon,
-  title,
-  sub,
-  href,
-}: {
-  color: 'red' | 'amber'
-  icon: React.ReactNode
-  title: string
-  sub: string
-  href?: string
-}) {
-  const s = color === 'red'
-    ? { wrap: 'bg-[#FCEBEB] border-[#A32D2D]/20', iconBg: 'bg-[#A32D2D]/10', title: 'text-[#A32D2D]', sub: 'text-[#A32D2D]/70' }
-    : { wrap: 'bg-[#FAEEDA] border-[#854F0B]/20', iconBg: 'bg-[#854F0B]/10', title: 'text-[#854F0B]', sub: 'text-[#854F0B]/70' }
-
-  const className = `rounded-xl border px-4 py-3 flex items-center gap-3 ${s.wrap}`
-  const inner = (
-    <>
-      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${s.iconBg}`}>
-        {icon}
+function StatCard({ label, value, danger }: { label: string; value: number; danger?: boolean }) {
+  return (
+    <div className="bg-surface rounded-xl border border-border p-4">
+      <p className="text-[13px] font-medium text-neutral-500">{label}</p>
+      <div className="flex items-center gap-2 mt-1">
+        <p className="font-serif text-3xl font-semibold text-brand-dark">{value}</p>
+        {danger && <span className="w-2 h-2 rounded-full bg-status-overdue" />}
       </div>
-      <div>
-        <p className={`text-sm font-medium ${s.title}`}>{title}</p>
-        <p className={`text-xs ${s.sub}`}>{sub}</p>
-      </div>
-    </>
+    </div>
   )
-
-  if (href) return <Link href={href} className={className}>{inner}</Link>
-  return <div className={className}>{inner}</div>
 }
