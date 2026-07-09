@@ -31,20 +31,21 @@ export function UnitsManager({
   const [editingUnitId, setEditingUnitId] = useState<string | null>(null)
   const [editLabel, setEditLabel] = useState('')
   const [filterSenzaAccount, setFilterSenzaAccount] = useState(initialFilter === 'senza_account')
-  const [showBulkConfirm, setShowBulkConfirm] = useState(false)
 
   const displayUnits = filterSenzaAccount
     ? units.filter(u => unitHasNoActiveAccount(u.rawMembers))
     : units
 
-  const targetsForBulk = useMemo(
-    () => filterSenzaAccount
-      ? displayUnits.filter(u =>
-          unitHasNoActiveAccount(u.rawMembers) &&
-          u.invites.filter(i => !i.used_at && new Date(i.expires_at) > new Date()).length === 0
-        )
-      : [],
-    [displayUnits, filterSenzaAccount]
+  const unitsSenzaAccount = useMemo(
+    () => units.filter(u => unitHasNoActiveAccount(u.rawMembers)),
+    [units]
+  )
+
+  const bulkTargets = useMemo(
+    () => unitsSenzaAccount.filter(u =>
+      u.invites.filter(i => !i.used_at && new Date(i.expires_at) > new Date()).length === 0
+    ),
+    [unitsSenzaAccount]
   )
 
   function handleAddUnit() {
@@ -100,11 +101,14 @@ export function UnitsManager({
   function handleBulkInvite() {
     setLocalError(null)
     startTransition(async () => {
-      const res = await createBulkInvites(targetsForBulk.map(u => u.id), residenceId)
+      const res = await createBulkInvites(bulkTargets.map(u => u.id), residenceId)
       if (res.error) {
         setLocalError(res.error)
+      } else if (res.count === 0) {
+        showToast('success', 'Nessuna nuova unità da invitare: tutte hanno già un account o un invito attivo.')
+        router.refresh()
       } else {
-        setShowBulkConfirm(false)
+        showToast('success', `Inviti generati per ${res.count} unità.`)
         router.refresh()
       }
     })
@@ -118,16 +122,26 @@ export function UnitsManager({
 
   return (
     <div className="space-y-4">
-      {/* Aggiungi unità */}
-      <div className="flex items-center justify-between">
+      {/* Testata: conteggio + azioni */}
+      <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-medium text-text-primary">{units.length} unità</p>
-        <button
-          onClick={() => setShowNewUnitForm(!showNewUnitForm)}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-dark text-white rounded-lg text-xs font-medium"
-        >
-          <Plus className="w-3.5 h-3.5" strokeWidth={2} />
-          Aggiungi
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleBulkInvite}
+            disabled={pending || bulkTargets.length === 0}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-semantic-amber text-white rounded-lg text-xs font-medium disabled:opacity-40"
+          >
+            {pending && <Loader2 className="w-3 h-3 animate-spin" />}
+            Genera inviti per tutte le unità{bulkTargets.length > 0 ? ` (${bulkTargets.length})` : ''}
+          </button>
+          <button
+            onClick={() => setShowNewUnitForm(!showNewUnitForm)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-dark text-white rounded-lg text-xs font-medium"
+          >
+            <Plus className="w-3.5 h-3.5" strokeWidth={2} />
+            Aggiungi
+          </button>
+        </div>
       </div>
 
       {showNewUnitForm && (
@@ -171,64 +185,18 @@ export function UnitsManager({
         </div>
       )}
 
-      {/* Banner filtro attivo + azione bulk */}
+      {/* Banner filtro attivo — solo indicatore, l'azione vive nel bottone di testata */}
       {filterSenzaAccount && (
-        <div className="bg-[#FAEEDA] rounded-lg border border-[#854F0B]/20 overflow-hidden">
-          {!showBulkConfirm ? (
-            <div className="flex items-center justify-between px-3 py-2 gap-3">
-              <p className="text-xs text-[#854F0B] shrink-0">
-                {displayUnits.length} unità senza account cliente
-              </p>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {targetsForBulk.length > 0 ? (
-                  <button
-                    onClick={() => setShowBulkConfirm(true)}
-                    className="text-[11px] font-medium bg-[#854F0B] text-white px-2.5 py-1 rounded-md"
-                  >
-                    Genera inviti ({targetsForBulk.length})
-                  </button>
-                ) : (
-                  <span className="text-[10px] text-[#854F0B]/60 italic text-right">
-                    Tutte le unità senza account hanno già un invito attivo
-                  </span>
-                )}
-                <button
-                  onClick={() => { setFilterSenzaAccount(false); setShowBulkConfirm(false) }}
-                  className="text-xs text-[#854F0B] underline"
-                >
-                  Mostra tutte
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="px-3 py-3 space-y-2.5">
-              <div>
-                <p className="text-xs font-medium text-[#854F0B]">
-                  Genera inviti per {targetsForBulk.length} {targetsForBulk.length === 1 ? 'unità' : 'unità'}?
-                </p>
-                <p className="text-[10px] text-[#854F0B]/70 mt-0.5">
-                  Verrà generato un link e QR per ogni unità priva di invito attivo.
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowBulkConfirm(false)}
-                  disabled={pending}
-                  className="px-3 py-1.5 text-xs text-[#854F0B] border border-[#854F0B]/30 rounded-md disabled:opacity-50"
-                >
-                  Annulla
-                </button>
-                <button
-                  onClick={handleBulkInvite}
-                  disabled={pending}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#854F0B] text-white rounded-md disabled:opacity-50"
-                >
-                  {pending && <Loader2 className="w-3 h-3 animate-spin" />}
-                  Conferma
-                </button>
-              </div>
-            </div>
-          )}
+        <div className="flex items-center justify-between px-3 py-2 gap-3 bg-semantic-amber-bg rounded-lg border border-semantic-amber/20">
+          <p className="text-xs text-semantic-amber shrink-0">
+            {displayUnits.length} unità senza account cliente
+          </p>
+          <button
+            onClick={() => setFilterSenzaAccount(false)}
+            className="text-xs text-semantic-amber underline shrink-0"
+          >
+            Mostra tutte
+          </button>
         </div>
       )}
 
