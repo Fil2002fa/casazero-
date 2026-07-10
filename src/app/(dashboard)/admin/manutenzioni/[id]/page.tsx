@@ -4,11 +4,14 @@ import Link from 'next/link'
 import { ChevronLeft, ShieldCheck, Wrench, Eye } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
-import { PriorityBadge } from '@/components/PriorityBadge'
 import { N3AdminActions } from '@/components/N3AdminActions'
-import type { MaintenancePriority, MaintenanceStatus, CompletionMode, ItemActivation } from '@/types/database'
+import { StatusBadge, PromemoriaBadge, TypeBadge } from '@/components/ui/Badge'
+import type { MaintenanceStatus, CompletionMode, ItemActivation, ObligationType } from '@/types/database'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
-import { isOverdueLive, isInCorso, resolveCompletionMode, type LiveStatusItem } from '@/lib/maintenance-status'
+import {
+  isOverdueLive, isInCorso, resolveCompletionMode, resolveObligationType, resolveFrequencyMonths,
+  type LiveStatusItem,
+} from '@/lib/maintenance-status'
 
 export const metadata: Metadata = { title: 'Dettaglio manutenzione' }
 
@@ -16,8 +19,8 @@ type Params = Promise<{ id: string }>
 
 type TplRow = {
   title: string; category: string; description: string | null
-  priority: MaintenancePriority; frequency_months: number; scope: string
-  completion_mode: CompletionMode | null; is_active: boolean
+  frequency_months: number; scope: string
+  completion_mode: CompletionMode | null; obligation_type: ObligationType | null; is_active: boolean
 }
 type SupplierRow = { name: string; phone: string | null; email: string | null }
 type CompletionRow = {
@@ -34,9 +37,9 @@ export default async function AdminItemDetailPage({ params }: { params: Params }
   const { data: rawItem } = await supabase
     .from('maintenance_items')
     .select(`
-      id, status, next_due_date, unit_id, residence_id, priority, warranty_info,
-      completion_mode, activation_status,
-      maintenance_templates(title, category, description, priority, frequency_months, scope, completion_mode, is_active),
+      id, status, next_due_date, unit_id, residence_id, warranty_info,
+      completion_mode, obligation_type, frequency_months, activation_status,
+      maintenance_templates(title, category, description, frequency_months, scope, completion_mode, obligation_type, is_active),
       suppliers(name, phone, email),
       residences(name),
       units(label)
@@ -48,9 +51,11 @@ export default async function AdminItemDetailPage({ params }: { params: Params }
 
   const item = rawItem as unknown as {
     id: string; status: string; next_due_date: string | null
-    unit_id: string | null; residence_id: string; priority: string | null
+    unit_id: string | null; residence_id: string
     warranty_info: string | null
     completion_mode: CompletionMode | null
+    obligation_type: ObligationType | null
+    frequency_months: number | null
     activation_status: ItemActivation
     maintenance_templates: TplRow | null
     suppliers: SupplierRow | null
@@ -60,7 +65,6 @@ export default async function AdminItemDetailPage({ params }: { params: Params }
 
   const tpl = item.maintenance_templates
   const supplier = item.suppliers
-  const effectivePriority = (item.priority ?? tpl?.priority ?? 'N2') as MaintenancePriority
   const status = item.status as MaintenanceStatus
 
   // Stato live: il cron non gira in locale, quindi 'scaduta' va calcolato da
@@ -77,6 +81,15 @@ export default async function AdminItemDetailPage({ params }: { params: Params }
   }
   const overdueNow = isOverdueLive(liveItem)
   const effectiveStatus: MaintenanceStatus = overdueNow ? 'scaduta' : status
+  const isReminder = resolveCompletionMode(liveItem) === 'promemoria'
+  const obligationType = resolveObligationType({
+    obligation_type: item.obligation_type,
+    maintenance_templates: tpl ? { obligation_type: tpl.obligation_type } : null,
+  })
+  const frequencyMonths = resolveFrequencyMonths({
+    frequency_months: item.frequency_months,
+    maintenance_templates: tpl ? { frequency_months: tpl.frequency_months } : null,
+  })
 
   const { data: rawCompletions } = await supabase
     .from('completions')
@@ -106,25 +119,30 @@ export default async function AdminItemDetailPage({ params }: { params: Params }
         </Link>
         <div className="flex-1 min-w-0">
           <p className="text-xs text-text-secondary">{tpl?.category}</p>
-          <h1 className="text-base font-medium text-text-primary truncate">{tpl?.title ?? '—'}</h1>
+          <h1 className="text-lg font-semibold text-text-primary truncate">{tpl?.title ?? '—'}</h1>
         </div>
-        <PriorityBadge priority={effectivePriority} status={status} />
+        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+          {isReminder
+            ? <PromemoriaBadge frequencyMonths={frequencyMonths} />
+            : <StatusBadge status={effectiveStatus} />}
+          {obligationType && <TypeBadge obligationType={obligationType} />}
+        </div>
       </div>
 
       <div className="p-4 space-y-4">
-        {/* Scadenza */}
-        {formattedDue && (
+        {/* Scadenza — mai per le voci promemoria: non confrontano mai date (invariante di prodotto) */}
+        {!isReminder && formattedDue && (
           <div className={`rounded-xl p-3 ${
-            status === 'scaduta'
-              ? 'bg-semantic-red-bg text-semantic-red'
-              : status === 'in_corso'
-              ? 'bg-semantic-amber-bg text-semantic-amber'
-              : 'bg-background text-text-secondary'
+            effectiveStatus === 'scaduta'
+              ? 'bg-status-overdue/8 text-status-overdue'
+              : effectiveStatus === 'in_corso'
+              ? 'bg-status-inprogress/8 text-status-inprogress'
+              : 'bg-neutral-600/7 text-neutral-600'
           }`}>
             <span className="text-sm">
-              {status === 'scaduta'
+              {effectiveStatus === 'scaduta'
                 ? 'Scaduta il '
-                : status === 'in_corso'
+                : effectiveStatus === 'in_corso'
                 ? 'Presa in carico · scaduta il '
                 : 'Prossima scadenza: '}
               <strong>{formattedDue}</strong>
@@ -132,13 +150,13 @@ export default async function AdminItemDetailPage({ params }: { params: Params }
           </div>
         )}
 
-        {/* Residenza / unità */}
-        <div className="bg-surface rounded-xl border border-border p-4">
-          {item.residences?.name && (
-            <p className="text-sm font-medium text-text-primary">{item.residences.name}</p>
-          )}
-          <p className="text-xs text-text-secondary mt-0.5">
-            {item.units?.label ? `Unità: ${formatUnitLabel(item.units.label)}` : 'Ambito condominiale'}
+        {/* Residenza / ambito */}
+        <div className="bg-surface rounded-xl border border-border p-6">
+          <p className="text-[13px] font-medium text-neutral-500 mb-1">Residenza</p>
+          <p className="text-sm text-neutral-900">{item.residences?.name ?? '—'}</p>
+          <p className="text-[13px] font-medium text-neutral-500 mt-3 mb-1">Ambito</p>
+          <p className="text-sm text-neutral-900">
+            {item.units?.label ? `Unità ${formatUnitLabel(item.units.label)}` : 'Condominiale'}
           </p>
         </div>
 
@@ -163,11 +181,11 @@ export default async function AdminItemDetailPage({ params }: { params: Params }
 
         {/* Fornitore */}
         {supplier && (
-          <div className="bg-surface rounded-xl border border-border p-4 flex gap-3">
+          <div className="bg-surface rounded-xl border border-border p-6 flex gap-3">
             <Wrench className="w-5 h-5 text-text-secondary flex-shrink-0 mt-0.5" strokeWidth={1.6} />
             <div className="flex-1">
-              <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-1">Fornitore</p>
-              <p className="text-sm font-medium text-text-primary">{supplier.name}</p>
+              <p className="text-[13px] font-medium text-neutral-500 mb-1">Fornitore</p>
+              <p className="text-sm font-medium text-neutral-900">{supplier.name}</p>
               {supplier.phone && (
                 <a href={`tel:${supplier.phone}`} className="text-sm text-brand-medium mt-1 block">
                   {supplier.phone}
