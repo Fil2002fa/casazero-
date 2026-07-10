@@ -1,4 +1,4 @@
-import type { CompletionMode, ItemActivation, MaintenanceStatus, ObligationType } from '@/types/database'
+import type { CompletionMode, ItemActivation, MaintenancePriority, MaintenanceStatus, ObligationType } from '@/types/database'
 import { pluralize } from './pluralize'
 
 // Fonte di verità per lo stato live delle manutenzioni.
@@ -38,6 +38,23 @@ export function todayISO(): string {
 
 export function resolveCompletionMode(i: LiveStatusItem): CompletionMode | null {
   return i.completion_mode ?? i.maintenance_templates?.completion_mode ?? null
+}
+
+/**
+ * Sigla legacy per componenti display non ancora migrati (es. PriorityBadge).
+ * Deriva SEMPRE da completion_mode risolto, mai dalla colonna priority salvata
+ * (che può essere desincronizzata — vedi handoff stato_scaduta_live). Stessa
+ * mappa di modeToPriority in admin/residences/[id]/fornitori/actions.ts, che
+ * resta privata perché serve al dual-write in scrittura, un concern diverso.
+ */
+export function modeToPriority(mode: CompletionMode | null): MaintenancePriority {
+  if (mode === null) return 'N2'
+  const map: Record<CompletionMode, MaintenancePriority> = {
+    promemoria:     'N1',
+    residente:      'N2',
+    amministratore: 'N3',
+  }
+  return map[mode]
 }
 
 /** Stesso pattern item→template di resolveCompletionMode, per obligation_type. */

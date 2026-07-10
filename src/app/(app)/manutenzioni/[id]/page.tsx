@@ -8,7 +8,10 @@ import { PriorityBadge } from '@/components/PriorityBadge'
 import { CompleteN2Form } from '@/components/CompleteN2Form'
 import { N3AdminActions } from '@/components/N3AdminActions'
 import { CommentsSection } from '@/components/CommentsSection'
-import type { MaintenancePriority, MaintenanceStatus } from '@/types/database'
+import {
+  isOverdueLive, resolveCompletionMode, resolveLiveStatus, modeToPriority, todayISO,
+  type LiveStatusItem,
+} from '@/lib/maintenance-status'
 
 export const metadata: Metadata = { title: 'Dettaglio manutenzione' }
 
@@ -22,8 +25,8 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
   const { data: item } = await supabase
     .from('maintenance_items')
     .select(`
-      id, status, next_due_date, unit_id, residence_id, priority, frequency_months, warranty_info,
-      maintenance_templates(title, category, description, priority, frequency_months, scope),
+      id, status, next_due_date, unit_id, residence_id, completion_mode, activation_status, frequency_months, warranty_info,
+      maintenance_templates!inner(title, category, description, completion_mode, is_active, frequency_months, scope),
       suppliers(name, phone, email)
     `)
     .eq('id', id)
@@ -33,12 +36,14 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
 
   const tpl = item.maintenance_templates as unknown as {
     title: string; category: string; description: string | null
-    priority: MaintenancePriority; frequency_months: number; scope: string
+    frequency_months: number; scope: string
   } | null
 
   const supplier = item.suppliers as unknown as { name: string; phone: string | null; email: string | null } | null
-  const effectivePriority = (item.priority ?? tpl?.priority ?? 'N2') as MaintenancePriority
-  const status = item.status as MaintenanceStatus
+  const liveItem = item as unknown as LiveStatusItem
+  const mode = resolveCompletionMode(liveItem)
+  const effectivePriority = modeToPriority(mode)
+  const status = resolveLiveStatus(liveItem, todayISO())
 
   const formattedDue = item.next_due_date
     ? new Date(item.next_due_date).toLocaleDateString('it-IT', {
@@ -54,7 +59,7 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
     .order('completed_at', { ascending: false })
     .limit(10)
 
-  // Unità attiva del client per il form N2
+  // Unità attiva del client per il form di completamento residente
   const { data: membership } = await supabase
     .from('unit_members')
     .select('unit_id')
@@ -62,14 +67,14 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
     .is('ended_at', null)
     .maybeSingle()
 
-  const canCompleteN2 =
-    effectivePriority === 'N2' &&
-    status === 'scaduta' &&
+  const canCompleteResident =
+    mode === 'residente' &&
+    isOverdueLive(liveItem, todayISO()) &&
     profile.role === 'client' &&
     membership?.unit_id === item.unit_id
 
   const isAdmin = profile.role === 'admin' || profile.role === 'super_admin'
-  const isN3 = effectivePriority === 'N3'
+  const isAdminMode = mode === 'amministratore'
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -86,8 +91,8 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
       </div>
 
       <div className="p-4 space-y-4">
-        {/* Scadenza */}
-        {formattedDue && (
+        {/* Scadenza — mai per le promemoria: nessun confronto data, nessun linguaggio scadenza */}
+        {formattedDue && mode !== 'promemoria' && (
           <div className={`rounded-xl p-3 flex items-center gap-3 ${
             status === 'scaduta'
               ? 'bg-semantic-red-bg text-semantic-red'
@@ -138,8 +143,8 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
           </div>
         )}
 
-        {/* Azione N2 — client */}
-        {canCompleteN2 && (
+        {/* Azione residente */}
+        {canCompleteResident && (
           <div className="bg-surface rounded-xl border border-border p-4 space-y-3">
             <p className="text-sm font-medium text-text-primary">Registra completamento</p>
             <CompleteN2Form
@@ -150,16 +155,16 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
           </div>
         )}
 
-        {/* Azioni N3 — admin */}
-        {isN3 && isAdmin && (status === 'scaduta' || status === 'in_corso') && (
+        {/* Azioni amministratore */}
+        {isAdminMode && isAdmin && (status === 'scaduta' || status === 'in_corso') && (
           <div className="bg-surface rounded-xl border border-border p-4 space-y-3">
             <p className="text-sm font-medium text-text-primary">Gestione amministratore</p>
             <N3AdminActions itemId={item.id} residenceId={item.residence_id} status={status} />
           </div>
         )}
 
-        {/* Info N3 — client (read-only) */}
-        {isN3 && profile.role === 'client' && (
+        {/* Info amministratore — client (read-only) */}
+        {isAdminMode && profile.role === 'client' && (
           <div className="bg-background rounded-xl p-3 border border-border">
             <p className="text-xs text-text-secondary">
               Questa manutenzione è a carico dell&apos;amministratore di condominio.

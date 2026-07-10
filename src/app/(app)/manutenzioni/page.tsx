@@ -2,26 +2,26 @@ import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import { requireProfile } from '@/lib/auth'
 import { MaintenanceCard } from '@/components/MaintenanceCard'
-import type { MaintenancePriority, MaintenanceStatus } from '@/types/database'
 import { redirect } from 'next/navigation'
+import {
+  isCountable, isOverdueLive, isInCorso, resolveCompletionMode, resolveFrequencyMonths,
+  resolveLiveStatus, modeToPriority, todayISO,
+  type LiveStatusItem,
+} from '@/lib/maintenance-status'
 
 export const metadata: Metadata = { title: 'Manutenzioni' }
 
-type ItemRow = {
+type ItemRow = LiveStatusItem & {
   id: string
-  status: MaintenanceStatus
-  next_due_date: string | null
   unit_id: string | null
   residence_id: string
-  priority: MaintenancePriority | null
   frequency_months: number | null
-  maintenance_templates: {
+  maintenance_templates: (LiveStatusItem['maintenance_templates'] & {
     title: string
     category: string
-    priority: MaintenancePriority
     scope: string
     frequency_months: number
-  } | null
+  }) | null
 }
 
 export default async function ManutenzioniPage() {
@@ -43,8 +43,8 @@ export default async function ManutenzioniPage() {
     supabase
       .from('maintenance_items')
       .select(`
-        id, status, next_due_date, unit_id, residence_id, priority, frequency_months,
-        maintenance_templates(title, category, priority, scope, frequency_months)
+        id, status, next_due_date, unit_id, residence_id, completion_mode, activation_status, frequency_months,
+        maintenance_templates!inner(title, category, completion_mode, is_active, scope, frequency_months)
       `)
       .neq('status', 'completata')
       .eq('activation_status', 'inclusa')
@@ -66,14 +66,19 @@ export default async function ManutenzioniPage() {
 
   const unit = membership.units as unknown as { residence_id: string; label: string; residences: { name: string } | null } | null
 
-  const items = (rawItems ?? []) as unknown as ItemRow[]
+  // Solo voci a catalogo attivo e incluse nella residenza (isCountable) entrano
+  // in un bucket: stesso invariante del Fascicolo/PDF, mai raw status/priority.
+  const items = ((rawItems ?? []) as unknown as ItemRow[]).filter(isCountable)
+  const today = todayISO()
 
-  // Raggruppa per sezione
-  const urgenti   = items.filter(i => i.status === 'scaduta' && effPriority(i) !== 'N1')
-  const inCorso   = items.filter(i => i.status === 'in_corso')
-  const consigliate = items.filter(i => effPriority(i) === 'N1')
-  const prossime  = items.filter(
-    i => i.status === 'in_attesa' && effPriority(i) !== 'N1' && i.next_due_date
+  // Raggruppa per sezione — stato live, mai il campo status/priority salvato
+  const urgenti      = items.filter(i => isOverdueLive(i, today))
+  const inCorso       = items.filter(i => isInCorso(i))
+  const consigliate  = items.filter(i => resolveCompletionMode(i) === 'promemoria')
+  const prossime     = items.filter(i =>
+    resolveLiveStatus(i, today) === 'in_attesa' &&
+    resolveCompletionMode(i) !== 'promemoria' &&
+    i.next_due_date
   )
 
   return (
@@ -99,8 +104,8 @@ export default async function ManutenzioniPage() {
             id={i.id}
             title={i.maintenance_templates?.title ?? '—'}
             category={i.maintenance_templates?.category ?? ''}
-            priority={effPriority(i)}
-            status={i.status}
+            priority={modeToPriority(resolveCompletionMode(i))}
+            status={resolveLiveStatus(i, today)}
             nextDueDate={i.next_due_date}
             scope={(i.maintenance_templates?.scope ?? 'unit') as 'unit' | 'condominium'}
           />
@@ -114,8 +119,8 @@ export default async function ManutenzioniPage() {
             id={i.id}
             title={i.maintenance_templates?.title ?? '—'}
             category={i.maintenance_templates?.category ?? ''}
-            priority={effPriority(i)}
-            status={i.status}
+            priority={modeToPriority(resolveCompletionMode(i))}
+            status={resolveLiveStatus(i, today)}
             nextDueDate={i.next_due_date}
             scope={(i.maintenance_templates?.scope ?? 'condominium') as 'unit' | 'condominium'}
           />
@@ -129,8 +134,8 @@ export default async function ManutenzioniPage() {
             id={i.id}
             title={i.maintenance_templates?.title ?? '—'}
             category={i.maintenance_templates?.category ?? ''}
-            priority={effPriority(i)}
-            status={i.status}
+            priority={modeToPriority(resolveCompletionMode(i))}
+            status={resolveLiveStatus(i, today)}
             nextDueDate={i.next_due_date}
             scope={(i.maintenance_templates?.scope ?? 'unit') as 'unit' | 'condominium'}
           />
@@ -145,19 +150,15 @@ export default async function ManutenzioniPage() {
             title={i.maintenance_templates?.title ?? '—'}
             category={i.maintenance_templates?.category ?? ''}
             priority="N1"
-            status={i.status}
+            status={resolveLiveStatus(i, today)}
             nextDueDate={i.next_due_date}
-            frequencyMonths={i.frequency_months ?? i.maintenance_templates?.frequency_months ?? null}
+            frequencyMonths={resolveFrequencyMonths(i)}
             scope={(i.maintenance_templates?.scope ?? 'unit') as 'unit' | 'condominium'}
           />
         ))}
       </Section>
     </div>
   )
-}
-
-function effPriority(item: ItemRow): MaintenancePriority {
-  return item.priority ?? item.maintenance_templates?.priority ?? 'N2'
 }
 
 function Section({
