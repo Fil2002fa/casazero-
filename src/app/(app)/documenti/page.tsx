@@ -3,6 +3,8 @@ import { FileText, Download } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireProfile } from '@/lib/auth'
 import { UploadDocumentForm } from '@/components/UploadDocumentForm'
+import { Input, Label } from '@/components/ui/Input'
+import { Button, buttonVariants } from '@/components/ui/Button'
 import type { DocumentCategory } from '@/types/database'
 
 export const metadata: Metadata = { title: 'Documenti' }
@@ -81,10 +83,10 @@ export default async function DocumentiPage({ searchParams }: { searchParams: Se
   for (const doc of docs) grouped.get(doc.category)?.push(doc)
 
   return (
-    <div className="p-6 space-y-6 pb-safe">
+    <div className="p-4 space-y-6 pb-safe">
       <header>
-        <h1 className="text-xl font-medium text-text-primary">Documenti</h1>
-        <p className="text-xs text-text-secondary mt-0.5">{docs.length} documento{docs.length !== 1 ? 's' : ''}</p>
+        <h1 className="font-serif text-[22px] font-semibold text-text-primary">Documenti</h1>
+        <p className="text-sm text-text-secondary mt-0.5">{docs.length} documento{docs.length !== 1 ? 's' : ''}</p>
       </header>
 
       {canUpload && residenceId && (
@@ -93,31 +95,25 @@ export default async function DocumentiPage({ searchParams }: { searchParams: Se
 
       {/* Ricerca */}
       <form method="GET" className="flex gap-2">
-        <input
+        <Label htmlFor="doc-search" className="sr-only">Cerca documento</Label>
+        <Input
+          id="doc-search"
           type="search"
           name="search"
           defaultValue={search ?? ''}
           placeholder="Cerca documento…"
-          className="flex-1 border border-border rounded-lg px-3 py-2 text-sm bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
+          className="flex-1"
         />
-        <button
-          type="submit"
-          className="border border-border rounded-lg px-4 py-2 text-sm text-text-secondary bg-surface"
-        >
-          Cerca
-        </button>
+        <Button type="submit" variant="secondary">Cerca</Button>
         {(search || catFilter) && (
-          <a
-            href="/documenti"
-            className="border border-border rounded-lg px-3 py-2 text-sm text-text-secondary bg-surface flex items-center"
-          >
+          <a href="/documenti" className={buttonVariants('secondary', 'default', 'px-3')} aria-label="Cancella ricerca">
             ✕
           </a>
         )}
       </form>
 
       {/* Filtri categoria */}
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-6 px-6 scrollbar-none">
+      <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-none">
         <Chip href="/documenti" label="Tutti" active={!catFilter || catFilter === 'all'} />
         {CATEGORIES.map(c => (
           <Chip key={c.value} href={`/documenti?category=${c.value}`} label={c.label} active={catFilter === c.value} />
@@ -127,7 +123,7 @@ export default async function DocumentiPage({ searchParams }: { searchParams: Se
       {/* Lista */}
       {docs.length === 0 ? (
         <div className="bg-surface rounded-xl border border-border p-8 text-center">
-          <p className="text-sm text-text-secondary">
+          <p className="text-base text-text-secondary">
             {search ? `Nessun risultato per "${search}".` : 'Nessun documento caricato.'}
           </p>
         </div>
@@ -142,11 +138,13 @@ export default async function DocumentiPage({ searchParams }: { searchParams: Se
             if (!list.length) return null
             return (
               <section key={cat.value} className="space-y-2">
-                <h2 className="text-sm font-medium text-text-primary flex items-center gap-2">
+                <h2 className="text-[13px] font-medium text-neutral-500 flex items-center gap-1.5">
                   {cat.icon} {cat.label}
-                  <span className="text-text-secondary font-normal text-xs">({list.length})</span>
+                  <span className="font-normal">({list.length})</span>
                 </h2>
-                {list.map(doc => <DocCard key={doc.id} doc={doc} />)}
+                <div className="space-y-2">
+                  {list.map(doc => <DocCard key={doc.id} doc={doc} />)}
+                </div>
               </section>
             )
           })}
@@ -161,22 +159,17 @@ function DocCard({ doc }: { doc: DocRow }) {
     day: 'numeric', month: 'short', year: 'numeric',
   })
   return (
-    <div className="bg-surface rounded-xl border border-border p-4 flex items-center gap-3">
-      <div className="w-10 h-10 bg-background rounded-lg flex items-center justify-center flex-shrink-0">
-        <FileText className="w-5 h-5 text-text-secondary" strokeWidth={1.6} />
-      </div>
+    <a
+      href={`/api/download?bucket=documents&path=${encodeURIComponent(doc.storage_path)}`}
+      className="flex items-center gap-3 h-14 px-4 bg-surface rounded-xl border border-border focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20"
+    >
+      <FileText className="w-5 h-5 text-neutral-400 flex-shrink-0" strokeWidth={1.6} />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-text-primary truncate">{doc.title}</p>
-        <p className="text-xs text-text-secondary mt-0.5">{doc.file_name} · {formattedDate}</p>
+        <p className="text-base font-medium text-text-primary truncate">{doc.title}</p>
+        <p className="text-xs text-neutral-500 truncate">{doc.file_name} · {formattedDate}</p>
       </div>
-      <a
-        href={`/api/download?bucket=documents&path=${encodeURIComponent(doc.storage_path)}`}
-        className="p-2 rounded-lg text-brand-medium flex-shrink-0 active:scale-95 transition-transform"
-        title="Scarica"
-      >
-        <Download className="w-5 h-5" strokeWidth={1.6} />
-      </a>
-    </div>
+      <Download className="w-4 h-4 text-neutral-400 flex-shrink-0" strokeWidth={1.6} aria-hidden="true" />
+    </a>
   )
 }
 
@@ -184,7 +177,7 @@ function Chip({ href, label, active }: { href: string; label: string; active: bo
   return (
     <a
       href={href}
-      className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium ${
+      className={`flex-shrink-0 flex items-center h-11 px-4 rounded-full text-sm font-medium focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 ${
         active ? 'bg-brand-dark text-white' : 'bg-surface border border-border text-text-secondary'
       }`}
     >

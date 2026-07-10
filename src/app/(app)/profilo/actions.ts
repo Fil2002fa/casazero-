@@ -5,25 +5,6 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/admin'
 
-export async function updateProfile(formData: FormData): Promise<{ error?: string }> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Non autenticato' }
-
-  const fullName = (formData.get('full_name') as string)?.trim() || null
-  const phone    = (formData.get('phone') as string)?.trim() || null
-
-  const { error } = await supabase
-    .from('profiles')
-    .update({ full_name: fullName, phone, updated_at: new Date().toISOString() })
-    .eq('id', user.id)
-
-  if (error) return { error: error.message }
-
-  revalidatePath('/profilo')
-  return {}
-}
-
 export async function createFamilyInvite(
   unitId: string,
   residenceId: string

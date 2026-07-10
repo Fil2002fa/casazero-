@@ -2,8 +2,9 @@
 
 import { useState, useTransition } from 'react'
 import Image from 'next/image'
-import { Edit2, Check, X, Copy, Trash2, UserPlus, Users, Bell, LogOut, Smartphone, Mail, Lock } from 'lucide-react'
-import { updateProfile, createFamilyInvite, revokeFamilyInvite, signOut, updateNotificationPrefs } from './actions'
+import { Check, Copy, Trash2, UserPlus, Users, Bell, LogOut, Smartphone, Mail, Lock } from 'lucide-react'
+import { Button } from '@/components/ui/Button'
+import { createFamilyInvite, revokeFamilyInvite, signOut, updateNotificationPrefs } from './actions'
 import type { NotificationPrefs } from '@/types/database'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 
@@ -50,27 +51,11 @@ export function ProfiloClient({
   const [pending, startTransition] = useTransition()
   const [savingKey, setSavingKey] = useState<string | null>(null)
 
-  const [editing, setEditing] = useState(false)
-  const [nameVal, setNameVal] = useState(fullName ?? '')
-  const [phoneVal, setPhoneVal] = useState(phone ?? '')
-  const [profileError, setProfileError] = useState<string | null>(null)
   const [inviteError, setInviteError] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
   const [prefs, setPrefs] = useState<NotificationPrefs>(notifPrefs)
   const [prefError, setPrefError] = useState<string | null>(null)
-
-  function handleSaveProfile() {
-    setProfileError(null)
-    const fd = new FormData()
-    fd.set('full_name', nameVal)
-    fd.set('phone', phoneVal)
-    startTransition(async () => {
-      const res = await updateProfile(fd)
-      if (res.error) setProfileError(res.error)
-      else setEditing(false)
-    })
-  }
 
   function handleGenerateInvite() {
     if (!unit) return
@@ -117,86 +102,31 @@ export function ProfiloClient({
     <div className="min-h-screen bg-background pb-28">
       {/* Header */}
       <div className="bg-surface border-b border-border px-4 py-4 sticky top-0 z-10">
-        <h1 className="text-base font-medium text-text-primary">Profilo</h1>
+        <h1 className="font-serif text-[22px] font-semibold text-text-primary">Profilo</h1>
       </div>
 
       <div className="p-4 space-y-4">
 
-        {/* Dati personali */}
+        {/* Dati personali — read-only */}
         <section className="bg-surface rounded-xl border border-border p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-medium text-text-primary">Dati personali</h2>
-            {!editing && (
-              <button
-                onClick={() => setEditing(true)}
-                className="flex items-center gap-1 text-xs text-brand-medium font-medium"
-              >
-                <Edit2 className="w-3.5 h-3.5" strokeWidth={1.8} />
-                Modifica
-              </button>
-            )}
-          </div>
+          <h2 className="text-sm font-medium text-text-primary">Dati personali</h2>
 
           <div className="space-y-3">
             <div>
               <p className="text-xs text-text-secondary mb-1">Nome</p>
-              {editing ? (
-                <input
-                  type="text"
-                  value={nameVal}
-                  onChange={e => setNameVal(e.target.value)}
-                  className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
-                  placeholder="Il tuo nome"
-                />
-              ) : (
-                <p className="text-sm font-medium text-text-primary">{fullName || '—'}</p>
-              )}
+              <p className="text-base font-medium text-text-primary">{fullName || '—'}</p>
             </div>
 
             <div>
               <p className="text-xs text-text-secondary mb-1">Email</p>
-              <p className="text-sm text-text-primary">{email}</p>
+              <p className="text-base text-text-primary">{email}</p>
             </div>
 
             <div>
               <p className="text-xs text-text-secondary mb-1">Telefono</p>
-              {editing ? (
-                <input
-                  type="tel"
-                  value={phoneVal}
-                  onChange={e => setPhoneVal(e.target.value)}
-                  className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
-                  placeholder="+39 000 000 0000"
-                />
-              ) : (
-                <p className="text-sm text-text-primary">{phone || '—'}</p>
-              )}
+              <p className="text-base text-text-primary">{phone || '—'}</p>
             </div>
           </div>
-
-          {profileError && (
-            <p className="text-xs text-semantic-red">{profileError}</p>
-          )}
-
-          {editing && (
-            <div className="flex gap-2 pt-1">
-              <button
-                onClick={handleSaveProfile}
-                disabled={pending}
-                className="flex items-center gap-1.5 px-4 py-2 bg-brand-dark text-white rounded-lg text-sm font-medium disabled:opacity-50"
-              >
-                <Check className="w-4 h-4" strokeWidth={2} />
-                Salva
-              </button>
-              <button
-                onClick={() => { setEditing(false); setNameVal(fullName ?? ''); setPhoneVal(phone ?? '') }}
-                className="flex items-center gap-1.5 px-4 py-2 border border-border rounded-lg text-sm text-text-secondary"
-              >
-                <X className="w-4 h-4" strokeWidth={1.8} />
-                Annulla
-              </button>
-            </div>
-          )}
         </section>
 
         {/* Residenza e unità */}
@@ -206,12 +136,12 @@ export function ProfiloClient({
             <div className="space-y-2">
               <div>
                 <p className="text-xs text-text-secondary">Residenza</p>
-                <p className="text-sm font-medium text-text-primary">{unit.residence_name}</p>
-                {unit.address && <p className="text-xs text-text-secondary mt-0.5">{unit.address}</p>}
+                <p className="text-base font-medium text-text-primary">{unit.residence_name}</p>
+                {unit.address && <p className="text-sm text-text-secondary mt-0.5">{unit.address}</p>}
               </div>
               <div>
                 <p className="text-xs text-text-secondary">Unità</p>
-                <p className="text-sm font-medium text-text-primary">{formatUnitLabel(unit.label)}</p>
+                <p className="text-base font-medium text-text-primary">{formatUnitLabel(unit.label)}</p>
               </div>
             </div>
           </section>
@@ -253,13 +183,13 @@ export function ProfiloClient({
                       <div key={inv.id} className="border border-border rounded-lg p-3 space-y-2">
                         <div className="flex items-start justify-between gap-2">
                           <div>
-                            <p className="text-xs font-medium text-text-primary">Invito familiare</p>
+                            <p className="text-sm font-medium text-text-primary">Invito familiare</p>
                             <p className="text-xs text-text-secondary">Scade il {expiry}</p>
                           </div>
                           <button
                             onClick={() => handleRevokeInvite(inv.id)}
                             disabled={pending}
-                            className="text-semantic-red p-1 rounded disabled:opacity-50"
+                            className="w-11 h-11 flex items-center justify-center text-semantic-red rounded-lg disabled:opacity-50 -mr-2 -mt-1 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20"
                             aria-label="Revoca invito"
                           >
                             <Trash2 className="w-4 h-4" strokeWidth={1.8} />
@@ -270,10 +200,10 @@ export function ProfiloClient({
                         </div>
                         <button
                           onClick={() => copyUrl(inv.token, inv.id)}
-                          className="w-full flex items-center justify-center gap-1.5 py-1.5 border border-border rounded-lg text-xs text-text-secondary"
+                          className="w-full flex items-center justify-center gap-1.5 h-11 border border-border rounded-lg text-sm text-text-secondary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20"
                         >
                           {copiedId === inv.id ? (
-                            <><Check className="w-3.5 h-3.5 text-green-600" strokeWidth={2} /> Copiato</>
+                            <><Check className="w-3.5 h-3.5 text-brand-dark" strokeWidth={2} /> Copiato</>
                           ) : (
                             <><Copy className="w-3.5 h-3.5" strokeWidth={1.8} /> Copia link</>
                           )}
@@ -290,7 +220,7 @@ export function ProfiloClient({
             <button
               onClick={handleGenerateInvite}
               disabled={pending || invites.length >= 5}
-              className="w-full flex items-center justify-center gap-2 py-2.5 border border-brand-medium rounded-lg text-sm font-medium text-brand-dark disabled:opacity-40"
+              className="w-full flex items-center justify-center gap-2 h-11 border border-brand-medium rounded-lg text-sm font-medium text-brand-dark disabled:opacity-40 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20"
             >
               <UserPlus className="w-4 h-4" strokeWidth={1.8} />
               {invites.length >= 5 ? 'Limite inviti raggiunto' : 'Genera invito familiare'}
@@ -313,11 +243,11 @@ export function ProfiloClient({
             <div className="flex-1" />
             <div className="w-12 flex items-center justify-center gap-1">
               <Smartphone className="w-3.5 h-3.5 text-text-secondary" strokeWidth={1.6} />
-              <span className="text-[10px] text-text-secondary">Push</span>
+              <span className="text-xs text-text-secondary">Push</span>
             </div>
             <div className="w-16 flex items-center justify-center gap-1">
               <Mail className="w-3.5 h-3.5 text-text-secondary" strokeWidth={1.6} />
-              <span className="text-[10px] text-text-secondary">Email</span>
+              <span className="text-xs text-text-secondary">Email</span>
             </div>
           </div>
 
@@ -325,7 +255,7 @@ export function ProfiloClient({
           <div className="divide-y divide-border">
             {PREF_ROWS.map(row => (
               <div key={row.pushKey} className="flex items-center gap-2 py-2.5 first:pt-0">
-                <p className="flex-1 text-sm text-text-primary leading-tight">{row.label}</p>
+                <p className="flex-1 text-base text-text-primary leading-tight">{row.label}</p>
 
                 {/* Push */}
                 <div className="w-12 flex justify-center">
@@ -366,13 +296,10 @@ export function ProfiloClient({
 
         {/* Logout */}
         <form action={signOut}>
-          <button
-            type="submit"
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-semantic-red text-semantic-red text-sm font-medium"
-          >
+          <Button type="submit" variant="ghost" className="w-full gap-2">
             <LogOut className="w-4 h-4" strokeWidth={1.8} />
             Esci dall&apos;account
-          </button>
+          </Button>
         </form>
 
         <p className="text-xs text-text-secondary text-center pb-2">

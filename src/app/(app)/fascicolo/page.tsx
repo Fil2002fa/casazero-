@@ -4,6 +4,7 @@ import { Download, Paperclip, FileDown } from 'lucide-react'
 import { createServiceClient } from '@/lib/supabase/admin'
 import { requireProfile } from '@/lib/auth'
 import type { MaintenancePriority } from '@/types/database'
+import { buttonVariants } from '@/components/ui/Button'
 import {
   isCountable, overdueLive, resolveCompletionMode, todayISO,
   LIVE_STATUS_FIELDS, LIVE_STATUS_TEMPLATE_FIELDS,
@@ -148,18 +149,14 @@ export default async function FascicoloPage({ searchParams }: { searchParams: Se
   ).length
 
   return (
-    <div className="p-6 space-y-6 pb-safe">
+    <div className="p-4 space-y-6 pb-safe">
       <header className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-medium text-text-primary">Fascicolo</h1>
-          <p className="text-xs text-text-secondary mt-0.5">Registro permanente degli interventi</p>
+          <h1 className="font-serif text-[22px] font-semibold text-text-primary">Fascicolo</h1>
+          <p className="text-sm text-text-secondary mt-0.5">Registro permanente degli interventi</p>
         </div>
         {reportHref && (
-          <a
-            href={reportHref}
-            download
-            className="flex items-center gap-1.5 px-3 py-2 border border-brand-medium rounded-lg text-xs font-medium text-brand-dark flex-shrink-0"
-          >
+          <a href={reportHref} download className={buttonVariants('secondary', 'default', 'flex-shrink-0 gap-1.5')}>
             <FileDown className="w-3.5 h-3.5" strokeWidth={1.8} />
             Report PDF
           </a>
@@ -174,7 +171,7 @@ export default async function FascicoloPage({ searchParams }: { searchParams: Se
             <span className={`text-4xl font-medium ${
               conformita >= 80 ? 'text-brand-dark' : conformita >= 60 ? 'text-semantic-amber' : 'text-semantic-red'
             }`}>{conformita}%</span>
-            <p className="text-xs text-text-secondary mt-1">manutenzioni in regola</p>
+            <p className="text-sm text-text-secondary mt-1">manutenzioni in regola</p>
           </div>
           <div className="flex-1 bg-background rounded-full h-2 mb-1">
             <div
@@ -200,7 +197,7 @@ export default async function FascicoloPage({ searchParams }: { searchParams: Se
           <Link
             key={s}
             href={`/fascicolo${s !== 'all' ? `?scope=${s}` : ''}`}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium ${
+            className={`flex items-center h-11 px-4 rounded-full text-sm font-medium focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 ${
               scope === s || (s === 'all' && scope !== 'unit' && scope !== 'condominium')
                 ? 'bg-brand-dark text-white'
                 : 'bg-surface border border-border text-text-secondary'
@@ -214,7 +211,7 @@ export default async function FascicoloPage({ searchParams }: { searchParams: Se
       {/* Timeline */}
       {completions.length === 0 ? (
         <div className="bg-surface rounded-xl border border-border p-8 text-center">
-          <p className="text-sm text-text-secondary">Nessun intervento registrato.</p>
+          <p className="text-base text-text-secondary">Nessun intervento registrato.</p>
         </div>
       ) : (
         <div className="space-y-1">
@@ -255,16 +252,16 @@ export default async function FascicoloPage({ searchParams }: { searchParams: Se
                   </div>
 
                   {/* Card */}
-                  <div className="flex-1 bg-surface rounded-xl border border-border p-3 mb-2">
+                  <div className="flex-1 bg-surface rounded-xl border border-border p-4 mb-2">
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-text-primary truncate">
+                        <p className="text-base font-medium text-text-primary truncate">
                           {tpl?.title ?? 'Intervento'}
                         </p>
                         <p className="text-xs text-text-secondary">{tpl?.category}</p>
                       </div>
                       <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
                           isCondominium
                             ? 'bg-brand-light text-brand-dark'
                             : 'bg-semantic-blue-bg text-semantic-blue'
@@ -283,7 +280,7 @@ export default async function FascicoloPage({ searchParams }: { searchParams: Se
                     )}
 
                     {c.notes && (
-                      <p className="text-sm text-text-secondary mt-1.5 leading-relaxed">{c.notes}</p>
+                      <p className="text-base text-text-secondary mt-1.5 leading-relaxed">{c.notes}</p>
                     )}
 
                     {c.attachments.length > 0 && (
@@ -292,11 +289,11 @@ export default async function FascicoloPage({ searchParams }: { searchParams: Se
                           <a
                             key={att.id}
                             href={`/api/download?bucket=attachments&path=${encodeURIComponent(att.storage_path)}`}
-                            className="flex items-center gap-1.5 text-xs text-brand-medium"
+                            className="flex items-center gap-1.5 h-11 -mx-1 px-1 rounded-lg text-sm text-brand-medium focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20"
                           >
-                            <Paperclip className="w-3 h-3" strokeWidth={1.6} />
-                            {att.file_name}
-                            <Download className="w-3 h-3 ml-auto" strokeWidth={1.6} />
+                            <Paperclip className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={1.6} />
+                            <span className="truncate">{att.file_name}</span>
+                            <Download className="w-3.5 h-3.5 ml-auto flex-shrink-0" strokeWidth={1.6} />
                           </a>
                         ))}
                       </div>
@@ -319,7 +316,7 @@ export default async function FascicoloPage({ searchParams }: { searchParams: Se
 
 function StatBox({ label, value, alert }: { label: string; value: number; alert?: boolean }) {
   return (
-    <div className={`rounded-xl p-3 text-center border ${
+    <div className={`rounded-xl p-4 text-center border ${
       alert ? 'bg-semantic-red-bg border-semantic-red/20' : 'bg-surface border-border'
     }`}>
       <p className={`text-2xl font-medium ${alert ? 'text-semantic-red' : 'text-text-primary'}`}>
