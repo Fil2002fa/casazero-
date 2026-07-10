@@ -5,7 +5,7 @@ import { ChevronLeft, ShieldCheck, Wrench, Phone } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireProfile } from '@/lib/auth'
 import { PriorityBadge } from '@/components/PriorityBadge'
-import { CompleteN2Form } from '@/components/CompleteN2Form'
+import { CompletionAction } from '../CompletionAction'
 import { N3AdminActions } from '@/components/N3AdminActions'
 import { CommentsSection } from '@/components/CommentsSection'
 import {
@@ -84,8 +84,8 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
           <ChevronLeft className="w-5 h-5" strokeWidth={1.6} />
         </Link>
         <div className="flex-1 min-w-0">
-          <p className="text-xs text-text-secondary">{tpl?.category}</p>
-          <h1 className="text-base font-medium text-text-primary truncate">{tpl?.title}</h1>
+          <p className="text-sm text-text-secondary">{tpl?.category}</p>
+          <h1 className="font-serif text-[22px] font-semibold text-text-primary truncate">{tpl?.title}</h1>
         </div>
         <PriorityBadge priority={effectivePriority} status={status} />
       </div>
@@ -100,7 +100,7 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
               ? 'bg-semantic-amber-bg text-semantic-amber'
               : 'bg-background text-text-secondary'
           }`}>
-            <span className="text-sm">
+            <span className="text-base">
               {status === 'scaduta' ? 'Scaduta il ' : status === 'in_corso' ? 'Presa in carico · scaduta il ' : 'Prossima scadenza: '}
               <strong>{formattedDue}</strong>
             </span>
@@ -111,7 +111,7 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
         {tpl?.description && (
           <div className="bg-surface rounded-xl border border-border p-4">
             <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-1">Descrizione</p>
-            <p className="text-sm text-text-primary leading-relaxed">{tpl.description}</p>
+            <p className="text-base text-text-primary leading-relaxed">{tpl.description}</p>
           </div>
         )}
 
@@ -121,7 +121,7 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
             <ShieldCheck className="w-5 h-5 text-brand-medium flex-shrink-0 mt-0.5" strokeWidth={1.6} />
             <div>
               <p className="text-xs font-medium text-brand-dark uppercase tracking-wide mb-1">Garanzia collegata</p>
-              <p className="text-sm text-brand-dark leading-relaxed">{item.warranty_info}</p>
+              <p className="text-base text-brand-dark leading-relaxed">{item.warranty_info}</p>
             </div>
           </div>
         )}
@@ -145,14 +145,12 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
 
         {/* Azione residente */}
         {canCompleteResident && (
-          <div className="bg-surface rounded-xl border border-border p-4 space-y-3">
-            <p className="text-sm font-medium text-text-primary">Registra completamento</p>
-            <CompleteN2Form
-              itemId={item.id}
-              unitId={item.unit_id!}
-              residenceId={item.residence_id}
-            />
-          </div>
+          <CompletionAction
+            itemId={item.id}
+            unitId={item.unit_id!}
+            residenceId={item.residence_id}
+            title={tpl?.title ?? ''}
+          />
         )}
 
         {/* Azioni amministratore */}
@@ -165,8 +163,8 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
 
         {/* Info amministratore — client (read-only) */}
         {isAdminMode && profile.role === 'client' && (
-          <div className="bg-background rounded-xl p-3 border border-border">
-            <p className="text-xs text-text-secondary">
+          <div className="bg-background rounded-xl p-4 border border-border">
+            <p className="text-base text-text-secondary">
               Questa manutenzione è a carico dell&apos;amministratore di condominio.
               {status === 'in_corso' && ' È attualmente in corso.'}
             </p>
@@ -202,7 +200,7 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
                       <p className="text-xs text-text-secondary">Eseguito da: {comp.performed_by_name}</p>
                     )}
                     {comp.notes && (
-                      <p className="text-sm text-text-secondary mt-1 leading-relaxed">{comp.notes}</p>
+                      <p className="text-base text-text-secondary mt-1 leading-relaxed">{comp.notes}</p>
                     )}
                   </div>
                 )

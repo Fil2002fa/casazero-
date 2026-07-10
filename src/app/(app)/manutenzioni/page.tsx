@@ -1,13 +1,14 @@
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import { requireProfile } from '@/lib/auth'
-import { MaintenanceCard } from '@/components/MaintenanceCard'
 import { redirect } from 'next/navigation'
 import {
-  isCountable, isOverdueLive, isInCorso, resolveCompletionMode, resolveFrequencyMonths,
-  resolveLiveStatus, modeToPriority, todayISO,
+  isCountable, isOverdueLive, resolveCompletionMode, resolveFrequencyMonths,
+  resolveObligationType, resolveLiveStatus, todayISO,
   type LiveStatusItem,
 } from '@/lib/maintenance-status'
+import { ManutenzioniList, type ListItem } from './ManutenzioniList'
+import type { ObligationType } from '@/types/database'
 
 export const metadata: Metadata = { title: 'Manutenzioni' }
 
@@ -16,11 +17,13 @@ type ItemRow = LiveStatusItem & {
   unit_id: string | null
   residence_id: string
   frequency_months: number | null
+  obligation_type: ObligationType | null
   maintenance_templates: (LiveStatusItem['maintenance_templates'] & {
     title: string
     category: string
     scope: string
     frequency_months: number
+    obligation_type: ObligationType | null
   }) | null
 }
 
@@ -43,8 +46,8 @@ export default async function ManutenzioniPage() {
     supabase
       .from('maintenance_items')
       .select(`
-        id, status, next_due_date, unit_id, residence_id, completion_mode, activation_status, frequency_months,
-        maintenance_templates!inner(title, category, completion_mode, is_active, scope, frequency_months)
+        id, status, next_due_date, unit_id, residence_id, completion_mode, activation_status, frequency_months, obligation_type,
+        maintenance_templates!inner(title, category, completion_mode, is_active, scope, frequency_months, obligation_type)
       `)
       .neq('status', 'completata')
       .eq('activation_status', 'inclusa')
@@ -53,10 +56,10 @@ export default async function ManutenzioniPage() {
 
   if (!membership) {
     return (
-      <div className="p-6 space-y-4">
-        <h1 className="text-xl font-medium text-text-primary">Manutenzioni</h1>
-        <div className="bg-surface rounded-xl border border-border p-6 text-center">
-          <p className="text-sm text-text-secondary">
+      <div className="p-4 space-y-4">
+        <h1 className="font-serif text-[22px] font-semibold text-text-primary">Manutenzioni</h1>
+        <div className="bg-surface rounded-xl border border-border p-4 text-center">
+          <p className="text-base text-text-secondary">
             Non sei ancora associato a nessuna unità. Contatta il costruttore.
           </p>
         </div>
@@ -71,116 +74,36 @@ export default async function ManutenzioniPage() {
   const items = ((rawItems ?? []) as unknown as ItemRow[]).filter(isCountable)
   const today = todayISO()
 
-  // Raggruppa per sezione — stato live, mai il campo status/priority salvato
-  const urgenti      = items.filter(i => isOverdueLive(i, today))
-  const inCorso       = items.filter(i => isInCorso(i))
-  const consigliate  = items.filter(i => resolveCompletionMode(i) === 'promemoria')
-  const prossime     = items.filter(i =>
-    resolveLiveStatus(i, today) === 'in_attesa' &&
-    resolveCompletionMode(i) !== 'promemoria' &&
-    i.next_due_date
-  )
+  const toListItem = (i: ItemRow): ListItem => ({
+    id: i.id,
+    title: i.maintenance_templates?.title ?? '—',
+    category: i.maintenance_templates?.category ?? '',
+    obligationType: resolveObligationType(i),
+    frequencyMonths: resolveFrequencyMonths(i),
+    status: resolveLiveStatus(i, today),
+    mode: resolveCompletionMode(i),
+    unitId: i.unit_id,
+    residenceId: i.residence_id,
+  })
+
+  // Tre sezioni, stato live — garanzia strutturale: le promemoria non
+  // condividono mai bucket con voci a data (invariante "mai scadenza su promemoria").
+  const daFare = items.filter(i => isOverdueLive(i, today)).map(toListItem)
+  const consigli = items.filter(i => resolveCompletionMode(i) === 'promemoria').map(toListItem)
+  const inProgramma = items
+    .filter(i => resolveCompletionMode(i) !== 'promemoria' && !isOverdueLive(i, today))
+    .map(toListItem)
 
   return (
-    <div className="p-6 space-y-6 pb-safe">
+    <div className="p-4 space-y-6 pb-safe">
       <header>
-        <p className="text-xs text-text-secondary uppercase tracking-wide">
+        <p className="text-sm text-text-secondary">
           {unit?.residences?.name ?? 'La tua residenza'} · {unit?.label ?? ''}
         </p>
-        <h1 className="text-xl font-medium text-text-primary mt-1">Manutenzioni</h1>
+        <h1 className="font-serif text-[22px] font-semibold text-text-primary mt-1">Manutenzioni</h1>
       </header>
 
-      {urgenti.length === 0 && inCorso.length === 0 && (
-        <div className="bg-brand-light rounded-xl p-4">
-          <p className="text-sm text-brand-dark font-medium">Tutto in ordine</p>
-          <p className="text-xs text-brand-medium mt-0.5">Nessuna manutenzione scaduta.</p>
-        </div>
-      )}
-
-      <Section title="Da completare" count={urgenti.length} accent="red">
-        {urgenti.map(i => (
-          <MaintenanceCard
-            key={i.id}
-            id={i.id}
-            title={i.maintenance_templates?.title ?? '—'}
-            category={i.maintenance_templates?.category ?? ''}
-            priority={modeToPriority(resolveCompletionMode(i))}
-            status={resolveLiveStatus(i, today)}
-            nextDueDate={i.next_due_date}
-            scope={(i.maintenance_templates?.scope ?? 'unit') as 'unit' | 'condominium'}
-          />
-        ))}
-      </Section>
-
-      <Section title="In corso" count={inCorso.length} accent="amber">
-        {inCorso.map(i => (
-          <MaintenanceCard
-            key={i.id}
-            id={i.id}
-            title={i.maintenance_templates?.title ?? '—'}
-            category={i.maintenance_templates?.category ?? ''}
-            priority={modeToPriority(resolveCompletionMode(i))}
-            status={resolveLiveStatus(i, today)}
-            nextDueDate={i.next_due_date}
-            scope={(i.maintenance_templates?.scope ?? 'condominium') as 'unit' | 'condominium'}
-          />
-        ))}
-      </Section>
-
-      <Section title="Prossime scadenze" count={prossime.length}>
-        {prossime.map(i => (
-          <MaintenanceCard
-            key={i.id}
-            id={i.id}
-            title={i.maintenance_templates?.title ?? '—'}
-            category={i.maintenance_templates?.category ?? ''}
-            priority={modeToPriority(resolveCompletionMode(i))}
-            status={resolveLiveStatus(i, today)}
-            nextDueDate={i.next_due_date}
-            scope={(i.maintenance_templates?.scope ?? 'unit') as 'unit' | 'condominium'}
-          />
-        ))}
-      </Section>
-
-      <Section title="Consigliate" count={consigliate.length} accent="blue">
-        {consigliate.map(i => (
-          <MaintenanceCard
-            key={i.id}
-            id={i.id}
-            title={i.maintenance_templates?.title ?? '—'}
-            category={i.maintenance_templates?.category ?? ''}
-            priority="N1"
-            status={resolveLiveStatus(i, today)}
-            nextDueDate={i.next_due_date}
-            frequencyMonths={resolveFrequencyMonths(i)}
-            scope={(i.maintenance_templates?.scope ?? 'unit') as 'unit' | 'condominium'}
-          />
-        ))}
-      </Section>
+      <ManutenzioniList daFare={daFare} inProgramma={inProgramma} consigli={consigli} />
     </div>
-  )
-}
-
-function Section({
-  title,
-  count,
-  accent,
-  children,
-}: {
-  title: string
-  count: number
-  accent?: 'red' | 'amber' | 'blue'
-  children: React.ReactNode
-}) {
-  if (count === 0) return null
-  const accentClass = accent === 'red' ? 'text-semantic-red' : accent === 'amber' ? 'text-semantic-amber' : accent === 'blue' ? 'text-semantic-blue' : 'text-text-primary'
-  return (
-    <section className="space-y-2">
-      <div className="flex items-center justify-between">
-        <h2 className={`text-sm font-medium ${accentClass}`}>{title}</h2>
-        <span className="text-xs text-text-secondary">{count}</span>
-      </div>
-      <div className="space-y-2">{children}</div>
-    </section>
   )
 }
