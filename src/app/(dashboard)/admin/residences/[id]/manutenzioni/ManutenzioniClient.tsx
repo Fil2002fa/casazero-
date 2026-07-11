@@ -241,19 +241,21 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
   return (
     <div className="p-4 space-y-5">
       {/* Segmented control: piano attivo vs tipi esclusi */}
-      <div className="flex rounded-lg border border-border p-0.5 bg-background">
+      <div className="flex rounded-lg border border-border p-0.5 bg-surface">
         <button
           onClick={() => setPlanView('attive')}
-          className={`flex-1 py-1.5 rounded-md text-sm font-medium transition-colors ${
-            planView === 'attive' ? 'bg-surface text-text-primary shadow-sm' : 'text-text-secondary'
+          aria-pressed={planView === 'attive'}
+          className={`flex-1 h-11 md:h-9 rounded-md text-sm font-medium text-text-primary transition-colors ${
+            planView === 'attive' ? 'bg-background shadow-sm' : ''
           }`}
         >
           Attive
         </button>
         <button
           onClick={() => setPlanView('escluse')}
-          className={`flex-1 py-1.5 rounded-md text-sm font-medium transition-colors ${
-            planView === 'escluse' ? 'bg-surface text-text-primary shadow-sm' : 'text-text-secondary'
+          aria-pressed={planView === 'escluse'}
+          className={`flex-1 h-11 md:h-9 rounded-md text-sm font-medium text-text-primary transition-colors ${
+            planView === 'escluse' ? 'bg-background shadow-sm' : ''
           }`}
         >
           Escluse{excludedTemplates.length > 0 ? ` (${excludedTemplates.length})` : ''}
