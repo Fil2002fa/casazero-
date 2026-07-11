@@ -7,7 +7,7 @@ import {
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import {
-  overdueLive, isCountable, todayISO,
+  overdueLive, isCountable, resolveCompletionMode, formatRelativeDue, todayISO,
   LIVE_STATUS_FIELDS, LIVE_STATUS_TEMPLATE_FIELDS,
 } from '@/lib/maintenance-status'
 import { unitHasNoActiveAccount } from '@/lib/unit-utils'
@@ -129,6 +129,20 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
   const overdueItems = overdueLive(planItems, today)
   const overdueCount = overdueItems.length
 
+  // Prossime scadenze: stessa planItems, nessuna query/conteggio nuovo. Escluse le
+  // promemoria per costruzione (solo mode residente/amministratore, mai "scaduta"
+  // su quelle voci) e le voci già mostrate nel blocco ritardi (niente doppioni).
+  // planItems arriva già ordinata per next_due_date ascendente dalla query.
+  const overdueIds = new Set(overdueItems.map(i => i.id))
+  const upcomingItems = planItems
+    .filter(item => {
+      const mode = resolveCompletionMode(item)
+      return (mode === 'residente' || mode === 'amministratore')
+        && !overdueIds.has(item.id)
+        && item.next_due_date !== null
+    })
+    .slice(0, 5)
+
   const adminProfile = (adminRaw as unknown as AdminRow)?.profiles ?? null
   const adminList = (adminListRaw ?? []) as AdminProfile[]
 
@@ -242,23 +256,13 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
         {overdueCount > 0 ? (
           <div className="bg-surface rounded-xl border border-border divide-y divide-border">
             {overdueItems.slice(0, 5).map(item => (
-              <div key={item.id} className="flex items-center justify-between gap-3 p-4">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-text-primary truncate">
-                    {item.maintenance_templates?.title ?? '—'}
-                  </p>
-                  <p className="text-xs text-text-secondary mt-0.5">
-                    {item.unit_id === null
-                      ? 'Condominio'
-                      : item.units ? formatUnitLabel(item.units.label) : '—'}
-                  </p>
-                </div>
-                {item.next_due_date && (
-                  <p className="text-xs text-status-overdue flex-shrink-0 tabular-nums">
-                    scaduta il {formatDate(item.next_due_date)}
-                  </p>
-                )}
-              </div>
+              <PlanSummaryRow
+                key={item.id}
+                title={item.maintenance_templates?.title ?? '—'}
+                unitLabel={item.unit_id === null ? 'Condominio' : item.units ? formatUnitLabel(item.units.label) : '—'}
+                dateLabel={item.next_due_date ? `scaduta il ${formatDate(item.next_due_date)}` : null}
+                dateClassName="text-status-overdue"
+              />
             ))}
           </div>
         ) : (
@@ -272,6 +276,27 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
             …e {pluralize(overdueCount - 5, 'altro intervento', 'altri interventi')} in ritardo
           </p>
         )}
+
+        {/* Prossime scadenze: solo mode residente/amministratore, mai promemoria
+            (garanzia strutturale "promemoria non è mai scaduta" — nessuna data di
+            confronto su quelle voci). Voci già nel blocco ritardi escluse a monte. */}
+        {upcomingItems.length > 0 && (
+          <div className="mt-6">
+            <h3 className="text-sm font-medium text-text-primary mb-3">Prossime scadenze</h3>
+            <div className="bg-surface rounded-xl border border-border divide-y divide-border">
+              {upcomingItems.map(item => (
+                <PlanSummaryRow
+                  key={item.id}
+                  title={item.maintenance_templates?.title ?? '—'}
+                  unitLabel={item.unit_id === null ? 'Condominio' : item.units ? formatUnitLabel(item.units.label) : '—'}
+                  dateLabel={formatRelativeDue(item.next_due_date!, today)}
+                  dateClassName="text-text-secondary"
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
         <Link
           href={overdueCount > 0
             ? `/admin/residences/${id}/manutenzioni?filtro=scaduta`
@@ -290,6 +315,25 @@ function formatDate(iso: string): string {
   return new Date(`${iso}T00:00:00`).toLocaleDateString('it-IT', {
     day: 'numeric', month: 'short', year: 'numeric',
   })
+}
+
+function PlanSummaryRow({ title, unitLabel, dateLabel, dateClassName }: {
+  title: string
+  unitLabel: string
+  dateLabel: string | null
+  dateClassName: string
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 p-4">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-text-primary truncate">{title}</p>
+        <p className="text-xs text-text-secondary mt-0.5">{unitLabel}</p>
+      </div>
+      {dateLabel && (
+        <p className={`text-xs flex-shrink-0 tabular-nums ${dateClassName}`}>{dateLabel}</p>
+      )}
+    </div>
+  )
 }
 
 function StatCard({ label, value, danger, href }: { label: string; value: number; danger?: boolean; href: string }) {
