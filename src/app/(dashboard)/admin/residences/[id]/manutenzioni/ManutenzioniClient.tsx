@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { ChevronDown, ChevronUp, Bell, Clock } from 'lucide-react'
 import { MaintenanceBadge } from '@/components/MaintenanceBadge'
+import { Select } from '@/components/ui/Input'
 import { ItemConfigForm } from './ItemConfigForm'
 import { setTemplateActivationForResidence } from '../fornitori/actions'
 import { isOverdueLive, isInCorso } from '@/lib/maintenance-status'
@@ -421,16 +422,15 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
 
       {/* Select filtro-unità (drill-down secondario) */}
       {activeFilter !== 'completate' && unitOptions.length > 0 && (
-        <select
+        <Select
           value={selectedUnitId ?? ''}
           onChange={e => { setSelectedUnitId(e.target.value || null); setExpandedTemplate(null) }}
-          className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-surface text-text-primary focus:outline-none"
         >
           <option value="">Tutte le unità</option>
           {unitOptions.map(u => (
             <option key={u.id} value={u.id}>{formatUnitLabel(u.label)}</option>
           ))}
-        </select>
+        </Select>
       )}
 
       {/* TESTA — zona attenzione (per-istanza) */}
