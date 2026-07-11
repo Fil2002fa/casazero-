@@ -152,7 +152,7 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
 
   return (
     <div className="max-w-6xl mx-auto px-8 py-8 pb-safe">
-      <Link href="/admin/residences" className="inline-flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary mb-6">
+      <Link href="/admin/residences" className="inline-flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary mb-6 rounded-lg focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2">
         <ChevronLeft className="w-4 h-4" strokeWidth={1.6} />
         Residenze
       </Link>
@@ -168,12 +168,12 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
       </div>
 
       {/* Gestione — navigazione principale, subito sotto la testata */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mt-4">
+      <nav aria-label="Sezioni residenza" className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mt-4">
         {porte.map(porta => (
           <Link
             key={porta.href}
             href={porta.href}
-            className="flex items-center gap-3 bg-surface rounded-xl border border-border p-4 hover:bg-background transition-colors"
+            className="flex items-center gap-3 bg-surface rounded-xl border border-border p-4 hover:bg-background transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2"
           >
             <div className="w-9 h-9 bg-background rounded-lg flex items-center justify-center text-text-secondary flex-shrink-0">
               <porta.icon className="w-4 h-4" strokeWidth={1.6} />
@@ -186,7 +186,7 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
             </div>
           </Link>
         ))}
-      </div>
+      </nav>
 
       {/* Numeri chiave */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
@@ -210,7 +210,7 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
       {unitsSenzaAccount > 0 && (
         <Link
           href={`/admin/residences/${id}/units?filter=senza_account`}
-          className="flex items-center gap-3 bg-semantic-amber-bg border border-semantic-amber/20 rounded-xl p-4 hover:brightness-[0.98] transition-all mt-8"
+          className="flex items-center gap-3 bg-semantic-amber-bg border border-semantic-amber/20 rounded-xl p-4 hover:brightness-[0.98] transition-all mt-8 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2"
         >
           <div className="w-8 h-8 rounded-full bg-semantic-amber/10 flex items-center justify-center flex-shrink-0">
             <AlertTriangle className="w-4 h-4 text-semantic-amber" strokeWidth={1.6} />
@@ -219,7 +219,7 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
             <p className="text-sm font-medium text-semantic-amber">
               Unità senza account cliente · {unitsSenzaAccount}
             </p>
-            <p className="text-xs text-semantic-amber/70">Inviti non ancora inviati</p>
+            <p className="text-xs text-semantic-amber">Inviti non ancora inviati</p>
           </div>
         </Link>
       )}
