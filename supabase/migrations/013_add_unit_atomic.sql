@@ -1,6 +1,10 @@
 -- ============================================================
 -- CasaZero — 013: aggiunta unità atomica
--- Applicata a mano nel SQL Editor il 2026-07-03 (smoke test ok).
+-- Applicata a mano nel SQL Editor il 2026-07-11 (smoke test ok,
+-- verificata su pg_proc, test dall'app ok). Il commento precedente
+-- dichiarava applicazione il 2026-07-03: era falso, la funzione non
+-- esisteva sul DB (assente da pg_proc) finché non è stata applicata
+-- davvero oggi — vedi query di verifica in fondo al file.
 -- Sostituisce i 2 insert PostgREST separati di createUnit in
 -- src/app/(dashboard)/admin/residences/[id]/units/actions.ts
 -- con un'unica transazione: unità + maintenance_items scope='unit'.
@@ -116,3 +120,15 @@ GRANT  EXECUTE ON FUNCTION czero_add_unit_with_items(uuid, text, integer) TO ser
 -- BEGIN;
 -- SELECT czero_add_unit_with_items(gen_random_uuid(), '__MAI_CREATA__', 1);
 -- ROLLBACK;
+
+-- ============================================================
+-- VERIFICA POST-APPLY (footer standard, da eseguire subito dopo ogni
+-- apply manuale — la prova che l'oggetto esiste sul DB è l'output di
+-- questa query, mai il commento in testa al file).
+-- Eseguita il 2026-07-11: 1 riga, args = "p_residence_id uuid,
+-- p_label text, p_floor integer" — firma confermata sul DB.
+-- ============================================================
+-- SELECT p.proname, pg_get_function_identity_arguments(p.oid) AS args
+-- FROM pg_proc p
+-- JOIN pg_namespace n ON n.oid = p.pronamespace
+-- WHERE n.nspname = 'public' AND p.proname = 'czero_add_unit_with_items';
