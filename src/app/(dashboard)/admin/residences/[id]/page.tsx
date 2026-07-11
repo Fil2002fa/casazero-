@@ -167,6 +167,27 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
         />
       </div>
 
+      {/* Gestione — navigazione principale, subito sotto la testata */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mt-4">
+        {porte.map(porta => (
+          <Link
+            key={porta.href}
+            href={porta.href}
+            className="flex items-center gap-3 bg-surface rounded-xl border border-border p-4 hover:bg-background transition-colors"
+          >
+            <div className="w-9 h-9 bg-background rounded-lg flex items-center justify-center text-text-secondary flex-shrink-0">
+              <porta.icon className="w-4 h-4" strokeWidth={1.6} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-text-primary">{porta.label}</p>
+              {porta.sub && (
+                <p className="text-xs text-text-secondary mt-0.5">{porta.sub}</p>
+              )}
+            </div>
+          </Link>
+        ))}
+      </div>
+
       {/* Numeri chiave */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
         <StatCard label="Unità" value={unitCount} />
@@ -227,26 +248,6 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
         )}
       </section>
 
-      {/* Gestione */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mt-8">
-        {porte.map(porta => (
-          <Link
-            key={porta.href}
-            href={porta.href}
-            className="flex items-center gap-3 bg-surface rounded-xl border border-border p-4 hover:bg-background transition-colors"
-          >
-            <div className="w-9 h-9 bg-background rounded-lg flex items-center justify-center text-text-secondary flex-shrink-0">
-              <porta.icon className="w-4 h-4" strokeWidth={1.6} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-text-primary">{porta.label}</p>
-              {porta.sub && (
-                <p className="text-xs text-text-secondary mt-0.5">{porta.sub}</p>
-              )}
-            </div>
-          </Link>
-        ))}
-      </div>
     </div>
   )
 }
