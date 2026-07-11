@@ -106,7 +106,7 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null)
   const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null)
   const [expandedCompletion, setExpandedCompletion] = useState<string | null>(null)
-  const [showExcluded, setShowExcluded] = useState(false)
+  const [planView, setPlanView] = useState<'attive' | 'escluse'>('attive')
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -238,6 +238,28 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
 
   return (
     <div className="p-4 space-y-5">
+      {/* Segmented control: piano attivo vs tipi esclusi */}
+      <div className="flex rounded-lg border border-border p-0.5 bg-background">
+        <button
+          onClick={() => setPlanView('attive')}
+          className={`flex-1 py-1.5 rounded-md text-sm font-medium transition-colors ${
+            planView === 'attive' ? 'bg-surface text-text-primary shadow-sm' : 'text-text-secondary'
+          }`}
+        >
+          Attive
+        </button>
+        <button
+          onClick={() => setPlanView('escluse')}
+          className={`flex-1 py-1.5 rounded-md text-sm font-medium transition-colors ${
+            planView === 'escluse' ? 'bg-surface text-text-primary shadow-sm' : 'text-text-secondary'
+          }`}
+        >
+          Escluse{excludedTemplates.length > 0 ? ` (${excludedTemplates.length})` : ''}
+        </button>
+      </div>
+
+      {planView === 'attive' && (
+      <>
       {/* Card-contatore cliccabili */}
       <div className="grid grid-cols-3 gap-3">
         <button
@@ -557,48 +579,42 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
         )
       )}
 
-      {/* Tipi esclusi dal piano — sorgente per l'inclusione (fan-out) */}
-      {activeFilter !== 'completate' && excludedTemplates.length > 0 && (
+      </>
+      )}
+
+      {/* Vista Escluse — tipi interamente archiviati, sorgente per la reinclusione */}
+      {planView === 'escluse' && (
         <section className="space-y-2">
-          <button
-            onClick={() => setShowExcluded(v => !v)}
-            className="w-full flex items-center justify-between text-left"
-          >
-            <h2 className="text-sm font-medium text-text-secondary">
-              {excludedTemplates.length} {excludedTemplates.length === 1 ? 'tipo escluso' : 'tipi esclusi'} dal piano
-            </h2>
-            {showExcluded
-              ? <ChevronUp className="w-4 h-4 text-text-secondary flex-shrink-0" strokeWidth={1.6} />
-              : <ChevronDown className="w-4 h-4 text-text-secondary flex-shrink-0" strokeWidth={1.6} />}
-          </button>
-          {showExcluded && (
-            <div className="space-y-2">
-              {excludedTemplates.map(t => (
-                <div key={t.templateId} className="bg-surface rounded-xl border border-border p-3 flex items-center gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-text-primary truncate">{t.title}</p>
-                    <div className="flex gap-3 mt-1 flex-wrap">
-                      <span className="text-xs text-text-secondary">{t.category}</span>
-                      <span className="text-xs text-text-secondary">
-                        {t.count} {t.count === 1 ? 'istanza' : 'istanze'}
-                      </span>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setPendingAction({
-                      templateId: t.templateId,
-                      title: t.title,
-                      targetStatus: 'inclusa',
-                      count: t.count,
-                      freqMonths: t.freq,
-                    })}
-                    className="text-xs text-brand-dark font-medium px-3 py-1.5 rounded-md bg-brand-light hover:brightness-95 transition-all flex-shrink-0"
-                  >
-                    Includi nel piano
-                  </button>
-                </div>
-              ))}
+          {excludedTemplates.length === 0 ? (
+            <div className="bg-surface rounded-xl border border-border p-6 text-center">
+              <p className="text-sm text-text-secondary">Nessun tipo escluso dal piano.</p>
             </div>
+          ) : (
+            excludedTemplates.map(t => (
+              <div key={t.templateId} className="bg-surface rounded-xl border border-border p-3 flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-text-primary truncate">{t.title}</p>
+                  <div className="flex gap-3 mt-1 flex-wrap">
+                    <span className="text-xs text-text-secondary">{t.category}</span>
+                    <span className="text-xs text-text-secondary">
+                      {t.count} {t.count === 1 ? 'istanza' : 'istanze'}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setPendingAction({
+                    templateId: t.templateId,
+                    title: t.title,
+                    targetStatus: 'inclusa',
+                    count: t.count,
+                    freqMonths: t.freq,
+                  })}
+                  className="text-xs text-brand-dark font-medium px-3 py-1.5 rounded-md bg-brand-light hover:brightness-95 transition-all flex-shrink-0"
+                >
+                  Includi nel piano
+                </button>
+              </div>
+            ))
           )}
         </section>
       )}
