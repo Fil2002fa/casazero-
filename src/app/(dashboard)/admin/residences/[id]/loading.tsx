@@ -14,6 +14,18 @@ export default function Loading() {
         </div>
       </div>
 
+      {/* Gestione — quick-nav sotto la testata */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mt-4">
+        {[0, 1, 2, 3, 4].map(i => (
+          <div key={i} className="bg-surface rounded-xl border border-border p-4 flex items-center gap-3">
+            <div className="w-9 h-9 bg-border rounded-lg flex-shrink-0" />
+            <div className="space-y-1.5 flex-1">
+              <div className="h-4 w-20 bg-border rounded" />
+            </div>
+          </div>
+        ))}
+      </div>
+
       {/* Numeri chiave */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
         {[0, 1, 2, 3].map(i => (
@@ -33,24 +45,17 @@ export default function Loading() {
         </div>
       </div>
 
-      {/* Tabelle */}
-      {[0, 1].map(i => (
-        <div key={i} className="mt-8">
-          <div className="h-5 w-32 bg-border rounded mb-3" />
-          <div className="bg-surface rounded-xl border border-border h-40" />
-        </div>
-      ))}
+      {/* Tabella unità */}
+      <div className="mt-8">
+        <div className="h-5 w-32 bg-border rounded mb-3" />
+        <div className="bg-surface rounded-xl border border-border h-40" />
+      </div>
 
-      {/* Gestione */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mt-8">
-        {[0, 1, 2, 3, 4].map(i => (
-          <div key={i} className="bg-surface rounded-xl border border-border p-4 flex items-center gap-3">
-            <div className="w-9 h-9 bg-border rounded-lg flex-shrink-0" />
-            <div className="space-y-1.5 flex-1">
-              <div className="h-4 w-20 bg-border rounded" />
-            </div>
-          </div>
-        ))}
+      {/* Piano manutenzioni — riepilogo compatto + bottone */}
+      <div className="mt-8">
+        <div className="h-5 w-40 bg-border rounded mb-3" />
+        <div className="bg-surface rounded-xl border border-border h-24" />
+        <div className="h-11 md:h-9 w-52 bg-border rounded-lg mt-3" />
       </div>
     </div>
   )
