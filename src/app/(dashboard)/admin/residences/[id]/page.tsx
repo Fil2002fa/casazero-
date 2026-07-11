@@ -7,16 +7,16 @@ import {
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import {
-  overdueLive, isCountable, resolveCompletionMode, resolveObligationType,
-  resolveFrequencyMonths, resolveLiveStatus, todayISO,
+  overdueLive, isCountable, todayISO,
   LIVE_STATUS_FIELDS, LIVE_STATUS_TEMPLATE_FIELDS,
 } from '@/lib/maintenance-status'
 import { unitHasNoActiveAccount } from '@/lib/unit-utils'
-import type { CompletionMode, ItemActivation, ObligationType } from '@/types/database'
+import { formatUnitLabel } from '@/lib/formatUnitLabel'
+import { pluralize } from '@/lib/pluralize'
+import type { CompletionMode, ItemActivation } from '@/types/database'
 import { AdminBlock, type AdminProfile } from './AdminBlock'
 import ResidencePhotoUpload from './ResidencePhotoUpload'
 import { UnitsSummaryTable, type UnitSummaryRow } from './UnitsSummaryTable'
-import { MaintenancePlanTable, type PlanRow } from './MaintenancePlanTable'
 
 export const metadata: Metadata = { title: 'Residenza' }
 
@@ -35,14 +35,11 @@ type PlanItemRow = {
   status: string
   next_due_date: string | null
   completion_mode: CompletionMode | null
-  obligation_type: ObligationType | null
-  frequency_months: number | null
   activation_status: ItemActivation
+  units: { label: string } | null
   maintenance_templates: {
     title: string
     completion_mode: CompletionMode | null
-    obligation_type: ObligationType | null
-    frequency_months: number | null
     is_active: boolean
   } | null
 }
@@ -80,8 +77,8 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
       .order('label', { ascending: true }),
     supabase.from('maintenance_items')
       .select(`
-        id, unit_id, obligation_type, frequency_months, ${LIVE_STATUS_FIELDS},
-        maintenance_templates!inner(title, obligation_type, frequency_months, ${LIVE_STATUS_TEMPLATE_FIELDS})
+        id, unit_id, ${LIVE_STATUS_FIELDS}, units(label),
+        maintenance_templates!inner(title, ${LIVE_STATUS_TEMPLATE_FIELDS})
       `)
       .eq('residence_id', id)
       .neq('status', 'completata')
@@ -127,17 +124,10 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
   // condiviso, stesso filtro auditato usato per i conteggi scadute/in corso).
   const planItems = ((itemsRaw ?? []) as unknown as PlanItemRow[]).filter(isCountable)
   const today = todayISO()
-  const overdueCount = overdueLive(planItems, today).length
-
-  const planRows: PlanRow[] = planItems.map(item => ({
-    id: item.id,
-    title: item.maintenance_templates?.title ?? '—',
-    mode: resolveCompletionMode(item),
-    obligationType: resolveObligationType(item),
-    status: resolveLiveStatus(item, today),
-    frequencyMonths: resolveFrequencyMonths(item),
-    nextDueDate: item.next_due_date,
-  }))
+  // Unica chiamata a overdueLive: la stat card e il riepilogo leggono lo stesso
+  // array. La query ordina già per next_due_date ascendente → i più in ritardo prima.
+  const overdueItems = overdueLive(planItems, today)
+  const overdueCount = overdueItems.length
 
   const adminProfile = (adminRaw as unknown as AdminRow)?.profiles ?? null
   const adminList = (adminListRaw ?? []) as AdminProfile[]
@@ -236,20 +226,68 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
         )}
       </section>
 
-      {/* Piano manutenzioni */}
+      {/* Piano manutenzioni — riepilogo: solo interventi in ritardo (max 5).
+          La lista completa per categoria vive nella pagina Manutenzioni dedicata. */}
       <section className="mt-8">
-        <h2 className="text-lg font-semibold text-text-primary mb-3">Piano manutenzioni</h2>
-        {planRows.length > 0 ? (
-          <MaintenancePlanTable residenceId={id} rows={planRows} />
+        <div className="flex items-baseline justify-between mb-3">
+          <h2 className="text-lg font-semibold text-text-primary">Piano manutenzioni</h2>
+          {overdueCount > 0 && (
+            <p className="text-sm font-medium text-status-overdue">
+              {pluralize(overdueCount, 'intervento in ritardo', 'interventi in ritardo')}
+            </p>
+          )}
+        </div>
+        {overdueCount > 0 ? (
+          <div className="bg-surface rounded-xl border border-border divide-y divide-border">
+            {overdueItems.slice(0, 5).map(item => (
+              <div key={item.id} className="flex items-center justify-between gap-3 p-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-text-primary truncate">
+                    {item.maintenance_templates?.title ?? '—'}
+                  </p>
+                  <p className="text-xs text-text-secondary mt-0.5">
+                    {item.unit_id === null
+                      ? 'Condominio'
+                      : item.units ? formatUnitLabel(item.units.label) : '—'}
+                  </p>
+                </div>
+                {item.next_due_date && (
+                  <p className="text-xs text-status-overdue flex-shrink-0 tabular-nums">
+                    scaduta il {formatDate(item.next_due_date)}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
         ) : (
-          <p className="text-sm text-neutral-500 py-6 text-center bg-surface rounded-xl border border-border">
-            Nessuna voce nel piano.
+          <div className="bg-brand-light rounded-xl p-4 flex items-center gap-3">
+            <span className="w-2.5 h-2.5 rounded-full bg-brand-medium flex-shrink-0" />
+            <p className="text-sm text-brand-dark">Nessun intervento in ritardo.</p>
+          </div>
+        )}
+        {overdueCount > 5 && (
+          <p className="text-xs text-text-secondary mt-2">
+            …e {pluralize(overdueCount - 5, 'altro intervento', 'altri interventi')} in ritardo
           </p>
         )}
+        <Link
+          href={overdueCount > 0
+            ? `/admin/residences/${id}/manutenzioni?filtro=scaduta`
+            : `/admin/residences/${id}/manutenzioni`}
+          className="inline-flex items-center justify-center h-11 md:h-9 px-4 mt-3 text-sm font-medium text-neutral-900 bg-surface border border-border rounded-lg hover:bg-background transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2"
+        >
+          Vedi tutte le manutenzioni
+        </Link>
       </section>
 
     </div>
   )
+}
+
+function formatDate(iso: string): string {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString('it-IT', {
+    day: 'numeric', month: 'short', year: 'numeric',
+  })
 }
 
 function StatCard({ label, value, danger, href }: { label: string; value: number; danger?: boolean; href: string }) {
