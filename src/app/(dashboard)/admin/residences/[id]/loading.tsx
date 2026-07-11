@@ -1,6 +1,6 @@
 export default function Loading() {
   return (
-    <div className="max-w-6xl mx-auto px-8 py-8 pb-safe animate-pulse">
+    <div className="max-w-6xl mx-auto px-8 pt-8 pb-12 animate-pulse">
       <div className="h-4 w-24 bg-border rounded mb-6" />
 
       {/* Testata */}

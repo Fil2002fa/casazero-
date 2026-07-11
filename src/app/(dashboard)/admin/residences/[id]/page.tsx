@@ -141,7 +141,9 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
   ]
 
   return (
-    <div className="max-w-6xl mx-auto px-8 py-8 pb-safe">
+    // pb-safe evitato di proposito: è unlayered in globals.css, quindi sovrascrive
+    // sempre il padding-bottom di py-*/pb-* invece di sommarcisi (azzerato su desktop).
+    <div className="max-w-6xl mx-auto px-8 pt-8 pb-12">
       <Link href="/admin/residences" className="inline-flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary mb-6 rounded-lg focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2">
         <ChevronLeft className="w-4 h-4" strokeWidth={1.6} />
         Residenze
