@@ -189,11 +189,12 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
     displayTemplate = activeFilter === 'completate' ? new Map() : byTemplate
   } else {
     const status = activeFilter
+    const matchesFilter = status === 'scaduta' ? isOverdueLive : isInCorso
     displayTemplate = new Map()
     for (const [cat, inner] of byTemplate) {
       const keptInner = new Map<string, ItemRow[]>()
       for (const [title, typeItems] of inner) {
-        const hasMatch = typeItems.some(i => i.status === status && resolveAxes(i).mode !== 'promemoria')
+        const hasMatch = typeItems.some(i => matchesFilter(i) && resolveAxes(i).mode !== 'promemoria')
         if (hasMatch) keptInner.set(title, typeItems)
       }
       if (keptInner.size > 0) displayTemplate.set(cat, keptInner)
