@@ -17,7 +17,7 @@ type CompletionRow = {
   performed_by_name: string | null
   maintenance_items: { maintenance_templates: { title: string } | null } | null
   units: { label: string } | null
-  attachments: { id: string }[]
+  attachments: { id: string; storage_path: string; file_name: string }[]
 }
 
 export default async function ResidenceFascicoloPage({ params }: { params: Params }) {
@@ -41,7 +41,7 @@ export default async function ResidenceFascicoloPage({ params }: { params: Param
       id, completed_at, unit_id, performed_by_name,
       maintenance_items(maintenance_templates(title)),
       units(label),
-      attachments(id)
+      attachments(id, storage_path, file_name)
     `)
     .eq('residence_id', residenceId)
     .order('completed_at', { ascending: false })
@@ -101,7 +101,6 @@ export default async function ResidenceFascicoloPage({ params }: { params: Param
                     const unitLabel = c.unit_id === null
                       ? 'Condominio'
                       : (c.units ? formatUnitLabel(c.units.label) : '—')
-                    const hasAttachment = c.attachments.length > 0
 
                     return (
                       <tr key={c.id} className="border-b border-border last:border-b-0">
@@ -110,8 +109,20 @@ export default async function ResidenceFascicoloPage({ params }: { params: Param
                         <td className="text-text-secondary px-4 py-2.5">{unitLabel}</td>
                         <td className="text-text-secondary px-4 py-2.5">{c.performed_by_name ?? '—'}</td>
                         <td className="px-4 py-2.5">
-                          {hasAttachment && (
-                            <Paperclip className="w-3.5 h-3.5 text-text-secondary" strokeWidth={1.6} aria-label="Allegato presente" />
+                          {c.attachments.length > 0 && (
+                            <div className="flex items-center gap-1.5">
+                              {c.attachments.map(att => (
+                                <a
+                                  key={att.id}
+                                  href={`/api/download?bucket=attachments&path=${encodeURIComponent(att.storage_path)}`}
+                                  aria-label={`Apri allegato: ${att.file_name}`}
+                                  title={att.file_name}
+                                  className="text-text-secondary hover:text-brand-dark transition-colors rounded focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2"
+                                >
+                                  <Paperclip className="w-3.5 h-3.5" strokeWidth={1.6} />
+                                </a>
+                              ))}
+                            </div>
                           )}
                         </td>
                       </tr>
