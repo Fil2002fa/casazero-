@@ -298,9 +298,7 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
         )}
 
         <Link
-          href={overdueCount > 0
-            ? `/admin/residences/${id}/manutenzioni?filtro=scaduta`
-            : `/admin/residences/${id}/manutenzioni`}
+          href={`/admin/residences/${id}/manutenzioni`}
           className="inline-flex items-center justify-center h-11 md:h-9 px-4 mt-3 text-sm font-medium text-neutral-900 bg-surface border border-border rounded-lg hover:bg-background transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2"
         >
           Vedi tutte le manutenzioni
