@@ -196,10 +196,10 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
 
       {/* Numeri chiave — ogni card porta alla superficie che approfondisce il numero */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
-        <StatCard label="Unità" value={unitCount} href={`/admin/residences/${id}/units`} />
-        <StatCard label="Voci attive" value={planItems.length} href={`/admin/residences/${id}/manutenzioni`} />
+        <StatCard label="Unità" value={unitCount} />
+        <StatCard label="Voci attive" value={planItems.length} />
         <StatCard label="Scadute" value={overdueCount} danger={overdueCount > 0} href={`/admin/residences/${id}/manutenzioni?filtro=scaduta`} />
-        <StatCard label="Completamenti" value={completionCount ?? 0} href={`/admin/residences/${id}/fascicolo`} />
+        <StatCard label="Completamenti" value={completionCount ?? 0} />
       </div>
 
       {/* Amministratore */}
@@ -334,17 +334,31 @@ function PlanSummaryRow({ title, unitLabel, dateLabel, dateClassName }: {
   )
 }
 
-function StatCard({ label, value, danger, href }: { label: string; value: number; danger?: boolean; href: string }) {
-  return (
-    <Link
-      href={href}
-      className="block bg-surface rounded-xl border border-border p-4 hover:bg-background transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2"
-    >
+function StatCard({ label, value, danger, href }: { label: string; value: number; danger?: boolean; href?: string }) {
+  const content = (
+    <>
       <p className="text-[13px] font-medium text-neutral-500">{label}</p>
       <div className="flex items-center gap-2 mt-1">
         <p className="font-serif text-3xl font-semibold text-brand-dark">{value}</p>
         {danger && <span className="w-2 h-2 rounded-full bg-status-overdue" />}
       </div>
+    </>
+  )
+
+  if (!href) {
+    return (
+      <div className="bg-surface rounded-xl border border-border p-4">
+        {content}
+      </div>
+    )
+  }
+
+  return (
+    <Link
+      href={href}
+      className="block bg-surface rounded-xl border border-border p-4 hover:bg-background transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2"
+    >
+      {content}
     </Link>
   )
 }
