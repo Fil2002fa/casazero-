@@ -142,7 +142,7 @@ export type FascicoloRow = {
   completed_at: string
   title: string
   unit_label: string | null // null = condominio
-  performed_by_name: string | null
+  registered_by: string // già risolta da formatRegisteredBy — mai un fallback qui
   has_attachment: boolean
 }
 
@@ -201,7 +201,7 @@ export function FascicoloDocument(data: FascicoloData) {
                   <Text style={S.cellData}>{fmtDate(r.completed_at)}</Text>
                   <Text style={S.cellVoce}>{r.title}</Text>
                   <Text style={S.cellUnita}>{r.unit_label ? formatUnitLabel(r.unit_label) : 'Condominio'}</Text>
-                  <Text style={S.cellRegistrato}>{r.performed_by_name ?? '—'}</Text>
+                  <Text style={S.cellRegistrato}>{r.registered_by}</Text>
                   <Text style={S.cellAllegato}>{r.has_attachment ? '📎' : ''}</Text>
                 </View>
               ))}

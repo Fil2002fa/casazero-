@@ -5,6 +5,8 @@ import { ChevronLeft, Paperclip, FileDown } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
+import { formatRegisteredBy } from '@/lib/formatRegisteredBy'
+import type { CompletionMode } from '@/types/database'
 
 export const metadata: Metadata = { title: 'Fascicolo residenza' }
 
@@ -15,7 +17,10 @@ type CompletionRow = {
   completed_at: string
   unit_id: string | null
   performed_by_name: string | null
-  maintenance_items: { maintenance_templates: { title: string } | null } | null
+  maintenance_items: {
+    completion_mode: CompletionMode | null
+    maintenance_templates: { title: string; completion_mode: CompletionMode | null } | null
+  } | null
   units: { label: string } | null
   attachments: { id: string; storage_path: string; file_name: string }[]
 }
@@ -39,7 +44,7 @@ export default async function ResidenceFascicoloPage({ params }: { params: Param
     .from('completions')
     .select(`
       id, completed_at, unit_id, performed_by_name,
-      maintenance_items(maintenance_templates(title)),
+      maintenance_items(completion_mode, maintenance_templates(title, completion_mode)),
       units(label),
       attachments(id, storage_path, file_name)
     `)
@@ -107,7 +112,13 @@ export default async function ResidenceFascicoloPage({ params }: { params: Param
                         <td className="text-right tabular-nums text-text-secondary px-4 py-2.5 whitespace-nowrap">{dateStr}</td>
                         <td className="text-text-primary font-medium px-4 py-2.5">{title}</td>
                         <td className="text-text-secondary px-4 py-2.5">{unitLabel}</td>
-                        <td className="text-text-secondary px-4 py-2.5">{c.performed_by_name ?? '—'}</td>
+                        <td className="text-text-secondary px-4 py-2.5">
+                          {formatRegisteredBy(
+                            c.performed_by_name,
+                            c.maintenance_items?.completion_mode ?? null,
+                            c.maintenance_items?.maintenance_templates?.completion_mode ?? null,
+                          )}
+                        </td>
                         <td className="px-4 py-2.5">
                           {c.attachments.length > 0 && (
                             <div className="flex items-center gap-1.5">

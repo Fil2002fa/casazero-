@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/admin'
 import { FascicoloDocument } from '@/lib/pdf/FascicoloDocument'
 import type { FascicoloData, FascicoloRow } from '@/lib/pdf/FascicoloDocument'
+import { formatRegisteredBy } from '@/lib/formatRegisteredBy'
+import type { CompletionMode } from '@/types/database'
 
 // Forza runtime Node.js — @react-pdf/renderer non è compatibile con Edge
 export const runtime = 'nodejs'
@@ -50,7 +52,10 @@ export async function GET(req: NextRequest) {
     completed_at: string
     unit_id: string | null
     performed_by_name: string | null
-    maintenance_items: { maintenance_templates: { title: string } | null } | null
+    maintenance_items: {
+      completion_mode: CompletionMode | null
+      maintenance_templates: { title: string; completion_mode: CompletionMode | null } | null
+    } | null
     units: { label: string } | null
     attachments: { id: string }[]
   }
@@ -59,7 +64,7 @@ export async function GET(req: NextRequest) {
     .from('completions')
     .select(`
       completed_at, unit_id, performed_by_name,
-      maintenance_items(maintenance_templates(title)),
+      maintenance_items(completion_mode, maintenance_templates(title, completion_mode)),
       units(label),
       attachments(id)
     `)
@@ -67,11 +72,15 @@ export async function GET(req: NextRequest) {
     .order('completed_at', { ascending: false })
 
   const rows: FascicoloRow[] = ((rawCompletions ?? []) as unknown as CompletionRaw[]).map(c => ({
-    completed_at:      c.completed_at,
-    title:              c.maintenance_items?.maintenance_templates?.title ?? '—',
-    unit_label:         c.unit_id === null ? null : (c.units?.label ?? null),
-    performed_by_name:  c.performed_by_name,
-    has_attachment:     (c.attachments ?? []).length > 0,
+    completed_at:   c.completed_at,
+    title:          c.maintenance_items?.maintenance_templates?.title ?? '—',
+    unit_label:     c.unit_id === null ? null : (c.units?.label ?? null),
+    registered_by:  formatRegisteredBy(
+      c.performed_by_name,
+      c.maintenance_items?.completion_mode ?? null,
+      c.maintenance_items?.maintenance_templates?.completion_mode ?? null,
+    ),
+    has_attachment: (c.attachments ?? []).length > 0,
   }))
 
   const fascicoloData: FascicoloData = {
