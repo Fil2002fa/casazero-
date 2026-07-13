@@ -6,7 +6,6 @@ import { ChevronLeft } from 'lucide-react'
 import IdentityTab from './IdentityTab'
 import NotificationsTab from './NotificationsTab'
 import AccountTab from './AccountTab'
-import SecurityTab from './SecurityTab'
 import type { AdminNotificationPrefs } from '@/types/database'
 
 interface Props {
@@ -21,7 +20,6 @@ const TABS = [
   { id: 'identity',      label: 'Identità costruttore' },
   { id: 'notifications', label: 'Notifiche ricevute'   },
   { id: 'account',       label: 'Profilo account'      },
-  { id: 'security',      label: 'Sicurezza'            },
 ] as const
 
 type TabId = (typeof TABS)[number]['id']
@@ -63,7 +61,6 @@ export default function SettingsShell(props: Props) {
         )}
         {active === 'notifications' && <NotificationsTab initialPrefs={props.notifPrefs} />}
         {active === 'account' && <AccountTab initialName={props.accountName} email={props.accountEmail} />}
-        {active === 'security' && <SecurityTab />}
       </div>
     </div>
   )
