@@ -126,6 +126,8 @@ export default async function ResidenceFascicoloPage({ params }: { params: Param
                                 <a
                                   key={att.id}
                                   href={`/api/download?bucket=attachments&path=${encodeURIComponent(att.storage_path)}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
                                   aria-label={`Apri allegato: ${att.file_name}`}
                                   title={att.file_name}
                                   className="text-text-secondary hover:text-brand-dark transition-colors rounded focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2"
