@@ -10,6 +10,8 @@ import { isOverdueLive, isInCorso } from '@/lib/maintenance-status'
 import type { MaintenancePriority, MaintenanceStatus, CompletionMode, ObligationType, ItemActivation } from '@/types/database'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import { formatFrequency } from '@/lib/formatFrequency'
+import { Button } from '@/components/ui/Button'
+import { useToast } from '@/components/ui/Toast'
 
 export type ItemRow = {
   id: string
@@ -101,6 +103,7 @@ type PendingAction = {
 }
 
 export function ManutenzioniClient({ residenceId, residenceName, items, completions, suppliers, unitPrimaryNames, initialFilter = null, initialModeFilter = null }: Props) {
+  const { showToast } = useToast()
   const [activeFilter, setActiveFilter] = useState<FilterState>(initialFilter)
   const modeFilter = initialModeFilter
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
@@ -467,7 +470,7 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
                       <p className="text-sm font-medium text-text-primary truncate">{tpl?.title}</p>
                       <MaintenanceBadge mode={effMode} obligation={effObl} status={badgeStatus} />
                     </div>
-                    <div className="flex gap-3 mt-1 flex-wrap">
+                    <div className="flex items-center gap-3 mt-1 flex-wrap">
                       <span className="text-xs text-text-secondary">{unitLabel}</span>
                       {overdueNow ? (
                         <span className="text-xs text-semantic-red">
@@ -475,6 +478,17 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
                         </span>
                       ) : (
                         <span className="text-xs text-semantic-amber">in corso</span>
+                      )}
+                      {overdueNow && (
+                        <Button
+                          variant="secondary"
+                          size="table"
+                          className="ml-auto gap-1.5 px-2.5 text-xs"
+                          onClick={() => showToast('success', 'Sollecito inviato all’amministratore')}
+                        >
+                          <Bell className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={1.6} />
+                          Sollecita
+                        </Button>
                       )}
                     </div>
                   </div>
