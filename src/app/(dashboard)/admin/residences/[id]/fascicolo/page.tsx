@@ -90,7 +90,7 @@ export default async function ResidenceFascicoloPage({ params }: { params: Param
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="text-right font-medium text-xs text-text-secondary px-4 py-2.5 whitespace-nowrap">Data</th>
+                    <th className="text-left font-medium text-xs text-text-secondary px-4 py-2.5 whitespace-nowrap">Data</th>
                     <th className="text-left font-medium text-xs text-text-secondary px-4 py-2.5">Voce</th>
                     <th className="text-left font-medium text-xs text-text-secondary px-4 py-2.5">Unità</th>
                     <th className="text-left font-medium text-xs text-text-secondary px-4 py-2.5">Registrato da</th>
@@ -109,7 +109,7 @@ export default async function ResidenceFascicoloPage({ params }: { params: Param
 
                     return (
                       <tr key={c.id} className="border-b border-border last:border-b-0">
-                        <td className="text-right tabular-nums text-text-secondary px-4 py-2.5 whitespace-nowrap">{dateStr}</td>
+                        <td className="text-left tabular-nums text-text-secondary px-4 py-2.5 whitespace-nowrap">{dateStr}</td>
                         <td className="text-text-primary font-medium px-4 py-2.5">{title}</td>
                         <td className="text-text-secondary px-4 py-2.5">{unitLabel}</td>
                         <td className="text-text-secondary px-4 py-2.5">
