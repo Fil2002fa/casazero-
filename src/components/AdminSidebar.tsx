@@ -35,9 +35,12 @@ export default function AdminSidebar({ role }: Props) {
 
   return (
     <aside className="w-60 flex-shrink-0 flex flex-col bg-background">
-      <div className="h-14 flex-shrink-0 flex items-center px-3">
+      <Link
+        href="/admin/residences"
+        className="h-14 flex-shrink-0 flex items-center px-3 rounded-lg focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2"
+      >
         <BrandMark />
-      </div>
+      </Link>
 
       <nav aria-label="Navigazione admin" className="flex-1 px-3 pb-3">
         <ul className="space-y-0.5">
