@@ -94,7 +94,7 @@ export default async function ResidenceFascicoloPage({ params }: { params: Param
                     <th className="text-left font-medium text-xs text-text-secondary px-4 py-2.5">Voce</th>
                     <th className="text-left font-medium text-xs text-text-secondary px-4 py-2.5">Unità</th>
                     <th className="text-left font-medium text-xs text-text-secondary px-4 py-2.5">Registrato da</th>
-                    <th className="text-left font-medium text-xs text-text-secondary px-4 py-2.5 w-8" aria-label="Allegato" />
+                    <th className="text-left font-medium text-xs text-text-secondary px-4 py-2.5 whitespace-nowrap">Allegati</th>
                   </tr>
                 </thead>
                 <tbody>

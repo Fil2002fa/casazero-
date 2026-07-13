@@ -190,7 +190,7 @@ export function FascicoloDocument(data: FascicoloData) {
                 <Text style={[S.cellVoce, S.headCell]}>Voce</Text>
                 <Text style={[S.cellUnita, S.headCell]}>Unità</Text>
                 <Text style={[S.cellRegistrato, S.headCell]}>Registrato da</Text>
-                <Text style={[S.cellAllegato, S.headCell]}> </Text>
+                <Text style={[S.cellAllegato, S.headCell]}>Allegati</Text>
               </View>
               {data.rows.map((r, i) => (
                 <View
