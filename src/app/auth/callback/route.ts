@@ -38,11 +38,16 @@ export async function GET(request: NextRequest) {
       }
 
       // Controlla se l'utente ha almeno un'associazione valida
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('builder_id, role')
         .eq('id', user.id)
         .single()
+
+      if (profileError) {
+        await supabase.auth.signOut()
+        return NextResponse.redirect(`${origin}/auth/login?error=no_access`)
+      }
 
       const hasRole =
         profile?.builder_id !== null ||
