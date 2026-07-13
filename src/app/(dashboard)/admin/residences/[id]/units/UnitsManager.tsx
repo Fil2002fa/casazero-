@@ -129,14 +129,14 @@ export function UnitsManager({
           <button
             onClick={handleBulkInvite}
             disabled={pending || bulkTargets.length === 0}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-semantic-amber text-white rounded-lg text-xs font-medium disabled:opacity-40"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-semantic-amber text-white rounded-lg text-xs font-medium disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
           >
             {pending && <Loader2 className="w-3 h-3 animate-spin" />}
             Genera inviti per tutte le unità{bulkTargets.length > 0 ? ` (${bulkTargets.length})` : ''}
           </button>
           <button
             onClick={() => setShowNewUnitForm(!showNewUnitForm)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-dark text-white rounded-lg text-xs font-medium"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-dark text-white rounded-lg text-xs font-medium cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" strokeWidth={2} />
             Aggiungi
