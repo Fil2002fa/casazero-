@@ -5,8 +5,8 @@ type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'destructive'
 type ButtonSize = 'default' | 'table'
 
 const BASE =
-  'inline-flex items-center justify-center rounded-lg px-4 text-sm font-medium transition-colors ' +
-  'disabled:opacity-40 disabled:pointer-events-none ' +
+  'inline-flex items-center justify-center rounded-lg px-4 text-sm font-medium transition-colors cursor-pointer ' +
+  'disabled:opacity-40 disabled:pointer-events-none disabled:cursor-not-allowed ' +
   'focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2'
 
 const VARIANT_STYLES: Record<ButtonVariant, string> = {
