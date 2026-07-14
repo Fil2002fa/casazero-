@@ -1,10 +1,9 @@
 import { cn } from '@/lib/cn'
 
-// Foglia CasaZero — unica sorgente del path. La usano il marchio della sidebar
-// (BrandMark) e il fallback dell'identità costruttore (BuilderIdentity) quando il
-// costruttore non ha un logo. Pensata per fondo chiaro: verde brand pieno con
-// venatura bianca.
-export function LeafIcon({ size = 20, className }: { size?: number; className?: string }) {
+// Foglia CasaZero — unica sorgente del path, per fondo chiaro: verde brand pieno
+// con venatura bianca. Serve solo il marchio della sidebar: l'identità costruttore
+// (BuilderIdentity) non ha fallback iconico, quando il logo manca resta il solo nome.
+function LeafIcon({ size = 20, className }: { size?: number; className?: string }) {
   return (
     <svg
       width={size}

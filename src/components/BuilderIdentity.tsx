@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { cn } from '@/lib/cn'
-import { LeafIcon } from '@/components/BrandMark'
 import { CONTENT_GRID } from '@/lib/layout'
 
 interface BuilderIdentityBarProps {
@@ -27,9 +26,11 @@ interface BuilderIdentityBarProps {
 // Impostazioni → Identità (IdentityTab.tsx): l'anteprima "così appare nell'header"
 // mostra letteralmente l'header, non una sua imitazione.
 //
-// Fallback grazioso: se il costruttore non ha un logo, o se l'URL fallisce (es.
-// logo_url che punta a un bucket privato e risponde 400), si torna alla foglia
-// CasaZero invece di mostrare un'icona rotta.
+// Fallback silenzioso: se il costruttore non ha un logo, o se l'URL fallisce (es.
+// logo_url che punta a un bucket privato e risponde 400), non si mostra alcuna icona
+// sostitutiva — resta il solo nome, con la stessa tipografia. Nessuna icona rotta e
+// nessun marchio CasaZero al posto di quello del costruttore. Il logo compare appena
+// esiste e carica: è il punto del whitelabel.
 export function BuilderIdentityBar({ name, logoSrc, className, children }: BuilderIdentityBarProps) {
   const [imgError, setImgError] = useState(false)
 
@@ -40,7 +41,7 @@ export function BuilderIdentityBar({ name, logoSrc, className, children }: Build
   return (
     <div className={cn('bg-surface border-b border-border', className)}>
       <div className={cn(CONTENT_GRID, 'h-14 flex items-center gap-2')}>
-        {showLogo ? (
+        {showLogo && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={logoSrc}
@@ -48,8 +49,6 @@ export function BuilderIdentityBar({ name, logoSrc, className, children }: Build
             className="w-5 h-5 object-contain flex-shrink-0"
             onError={() => setImgError(true)}
           />
-        ) : (
-          <LeafIcon size={20} className="flex-shrink-0" />
         )}
         <span className="text-sm font-medium text-text-primary truncate">{name || 'CasaZero'}</span>
         {children}
