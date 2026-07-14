@@ -65,8 +65,8 @@ export default async function UnitsPage({ params, searchParams }: { params: Para
   })
 
   return (
-    <div className="min-h-screen bg-background pb-24">
-      <div className="bg-surface border-b border-border px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
+    <>
+      <div className="flex items-center gap-3 mb-6">
         <Link href={`/admin/residences/${residenceId}`} className="text-text-secondary p-1 -ml-1 rounded-lg">
           <ChevronLeft className="w-5 h-5" strokeWidth={1.6} />
         </Link>
@@ -76,14 +76,12 @@ export default async function UnitsPage({ params, searchParams }: { params: Para
         </div>
       </div>
 
-      <div className="p-4">
-        <UnitsManager
-          residenceId={residenceId}
-          units={units}
-          appUrl={appUrl}
-          initialFilter={filter}
-        />
-      </div>
-    </div>
+      <UnitsManager
+        residenceId={residenceId}
+        units={units}
+        appUrl={appUrl}
+        initialFilter={filter}
+      />
+    </>
   )
 }

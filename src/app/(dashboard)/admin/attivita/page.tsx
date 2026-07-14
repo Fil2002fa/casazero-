@@ -90,7 +90,7 @@ export default async function AttivitaPage() {
   const groups = groupByDay(buildDemoEvents(now), now)
 
   return (
-    <div className="max-w-6xl mx-auto px-8 py-8 pb-safe">
+    <>
       <header>
         <h1 className="font-serif text-3xl font-semibold text-neutral-900">Attività</h1>
         <p className="text-sm text-neutral-500 mt-2">
@@ -140,6 +140,6 @@ export default async function AttivitaPage() {
           </div>
         )}
       </div>
-    </div>
+    </>
   )
 }

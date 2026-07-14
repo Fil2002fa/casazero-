@@ -66,7 +66,7 @@ export default async function AdminDetailPage({ params }: { params: Params }) {
 
   if (residenceIds.length === 0) {
     return (
-      <div className="p-6 space-y-6 pb-safe">
+      <div className="space-y-6">
         <BackHeader name={adminProfile.full_name} />
         <div className="bg-[#F4F3EF] rounded-xl p-6 text-center">
           <p className="text-sm text-[#20302A]/50">Nessuna residenza assegnata.</p>
@@ -162,7 +162,7 @@ export default async function AdminDetailPage({ params }: { params: Params }) {
       : { bg: 'bg-[#E1F5EE]', text: 'text-[#0F6E56]', label: 'In regola' }
 
   return (
-    <div className="p-6 space-y-6 pb-safe">
+    <div className="space-y-6">
       {/* Back */}
       <div className="flex items-center gap-3">
         <Link

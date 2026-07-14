@@ -150,7 +150,7 @@ export default async function AdminManutenzioniPage({ searchParams }: { searchPa
   const visibleRows = filteredItems.map(toRow)
 
   return (
-    <div className="p-6 space-y-6 pb-safe">
+    <div className="space-y-6">
       <header>
         <p className="text-xs text-text-secondary uppercase tracking-wide">Amministratore</p>
         <h1 className="text-xl font-medium text-text-primary mt-1">Manutenzioni condominiali</h1>

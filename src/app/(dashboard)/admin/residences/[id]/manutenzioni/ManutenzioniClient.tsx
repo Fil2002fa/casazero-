@@ -242,7 +242,7 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
   }
 
   return (
-    <div className="p-4 space-y-5">
+    <div className="space-y-5">
       {/* Segmented control: piano attivo vs tipi esclusi */}
       <div className="flex rounded-lg border border-border p-0.5 bg-surface">
         <button

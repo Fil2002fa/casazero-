@@ -43,7 +43,7 @@ export default async function ResidencesPage() {
   )
 
   return (
-    <div className="max-w-6xl mx-auto px-8 py-8 pb-safe">
+    <>
       <header className="flex items-center justify-between">
         <h1 className="font-serif text-3xl font-semibold text-text-primary">Residenze</h1>
         <Link href="/admin/residences/new" className={buttonVariants('primary', 'default', 'gap-2')}>
@@ -55,6 +55,6 @@ export default async function ResidencesPage() {
       <div className="mt-12">
         {rows.length === 0 ? <ResidencesEmptyState /> : <ResidencesTable rows={rows} />}
       </div>
-    </div>
+    </>
   )
 }

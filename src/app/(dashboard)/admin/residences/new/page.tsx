@@ -192,8 +192,8 @@ export default function NewResidencePage() {
   })() : null
 
   return (
-    <div className="min-h-screen bg-background pb-24">
-      <div className="bg-surface border-b border-border px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
+    <>
+      <div className="flex items-center gap-3 mb-6">
         <Link href="/admin/residences" className="text-text-secondary p-1 -ml-1 rounded-lg">
           <ChevronLeft className="w-5 h-5" strokeWidth={1.6} />
         </Link>
@@ -208,7 +208,7 @@ export default function NewResidencePage() {
       {/* Entrambi gli step restano montati (lo step non attivo è hidden):
           i valori non controllati dello step 1 devono restare nel DOM,
           perché il submit legge new FormData(form). */}
-      <form ref={formRef} onSubmit={handleSubmit} noValidate className="p-4 space-y-5">
+      <form ref={formRef} onSubmit={handleSubmit} noValidate className="space-y-5">
         {/* ============ STEP 1 — Dati residenza ============ */}
         <div className={step === 1 ? 'space-y-5' : 'hidden'}>
           <section className="bg-surface rounded-xl border border-border p-4 space-y-3">
@@ -442,7 +442,7 @@ export default function NewResidencePage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   )
 }
 

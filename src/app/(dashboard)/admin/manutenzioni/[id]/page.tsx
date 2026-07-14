@@ -112,8 +112,8 @@ export default async function AdminItemDetailPage({ params }: { params: Params }
     : null
 
   return (
-    <div className="min-h-screen bg-background pb-24">
-      <div className="bg-surface border-b border-border px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
+    <>
+      <div className="flex items-center gap-3 mb-6">
         <Link href="/admin/manutenzioni" className="text-text-secondary p-1 -ml-1 rounded-lg active:bg-background">
           <ChevronLeft className="w-5 h-5" strokeWidth={1.6} />
         </Link>
@@ -129,7 +129,7 @@ export default async function AdminItemDetailPage({ params }: { params: Params }
         </div>
       </div>
 
-      <div className="p-4 space-y-4">
+      <div className="space-y-4">
         {/* Scadenza — mai per le voci promemoria: non confrontano mai date (invariante di prodotto) */}
         {!isReminder && formattedDue && (
           <div className={`rounded-xl p-3 ${
@@ -244,6 +244,6 @@ export default async function AdminItemDetailPage({ params }: { params: Params }
           </div>
         )}
       </div>
-    </div>
+    </>
   )
 }

@@ -112,7 +112,7 @@ export function DocumentiClient({ residenceId, docs, units }: Props) {
   }
 
   return (
-    <div className="p-4 space-y-5">
+    <div className="space-y-5">
 
       {/* -------- Modale upload -------- */}
       {showModal && (

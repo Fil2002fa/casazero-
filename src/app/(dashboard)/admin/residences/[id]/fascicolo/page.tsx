@@ -54,8 +54,8 @@ export default async function ResidenceFascicoloPage({ params }: { params: Param
   const completions = (rawCompletions ?? []) as unknown as CompletionRow[]
 
   return (
-    <div className="min-h-screen bg-background pb-24">
-      <div className="bg-surface border-b border-border px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
+    <>
+      <div className="flex items-center gap-3 mb-6">
         <Link
           href={`/admin/residences/${residenceId}`}
           className="text-text-secondary p-1 -ml-1 rounded-lg"
@@ -76,8 +76,7 @@ export default async function ResidenceFascicoloPage({ params }: { params: Param
         </a>
       </div>
 
-      <div className="p-4">
-        {completions.length === 0 ? (
+      {completions.length === 0 ? (
           <div className="bg-surface rounded-xl border border-border p-8 text-center">
             <p className="text-sm font-medium text-text-primary">Nessun completamento registrato</p>
             <p className="text-xs text-text-secondary mt-1">
@@ -145,8 +144,7 @@ export default async function ResidenceFascicoloPage({ params }: { params: Param
               </table>
             </div>
           </div>
-        )}
-      </div>
-    </div>
+      )}
+    </>
   )
 }

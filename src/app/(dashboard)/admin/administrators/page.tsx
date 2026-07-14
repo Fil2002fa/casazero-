@@ -148,7 +148,7 @@ export default async function AdministratorsPage() {
   const needsAttention = sorted.filter(a => a.worstStatus !== 'green')
 
   return (
-    <div className="p-6 space-y-6 pb-safe">
+    <div className="space-y-6">
       <header>
         <h1 className="text-xl font-medium text-text-primary">Amministratori</h1>
       </header>
