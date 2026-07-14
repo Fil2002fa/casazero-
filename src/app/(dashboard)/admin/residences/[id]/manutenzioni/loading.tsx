@@ -1,7 +1,9 @@
 export default function Loading() {
   return (
     <div className="animate-pulse">
-      <div className="bg-surface border-b border-border px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
+      {/* Stessa intestazione in griglia della pagina: niente barra sticky, il
+          padding lo dà il container del layout. */}
+      <div className="flex items-center gap-3 mb-6">
         <div className="h-5 w-5 bg-border rounded" />
         <div className="space-y-1.5">
           <div className="h-4 w-32 bg-border rounded" />
@@ -9,7 +11,7 @@ export default function Loading() {
         </div>
       </div>
 
-      <div className="p-4 space-y-4">
+      <div className="space-y-4">
         <div className="flex gap-2">
           {[0, 1, 2, 3].map(i => (
             <div key={i} className="h-8 w-20 bg-border rounded-full" />
