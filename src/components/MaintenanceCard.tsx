@@ -32,7 +32,7 @@ export function MaintenanceCard({ id, title, category, priority, status, nextDue
 
   return (
     <Link href={href ?? `/manutenzioni/${id}`} className="block">
-      <div className={`bg-surface rounded-xl border border-border border-l-4 ${borderColor} p-4 flex items-center gap-3 active:scale-[0.98] transition-transform`}>
+      <div className={`bg-surface rounded-xl border border-border border-l-4 ${borderColor} p-4 flex items-center gap-3 active:bg-background`}>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <PriorityBadge priority={priority} status={status} size="xs" />

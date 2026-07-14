@@ -210,7 +210,7 @@ export default async function HomePage() {
         <section className="space-y-2">
           <h2 className="text-sm font-medium text-text-primary">Prossima manutenzione</h2>
           <Link href={`/manutenzioni/${nextItem.id}`} className="block">
-            <div className="bg-surface rounded-xl border border-border p-4 flex items-center gap-3 active:scale-[0.98] transition-transform">
+            <div className="bg-surface rounded-xl border border-border p-4 flex items-center gap-3 active:bg-background">
               <div className="w-10 h-10 rounded-lg bg-background flex items-center justify-center flex-shrink-0">
                 <CalendarClock className="w-5 h-5 text-brand-medium" strokeWidth={1.6} />
               </div>
@@ -232,7 +232,7 @@ export default async function HomePage() {
 
       {/* Teaser fascicolo — intero blocco cliccabile, nessun interattivo annidato */}
       <Link href="/fascicolo" className="block">
-        <div className="bg-surface rounded-xl border border-border p-4 flex items-center gap-3 active:scale-[0.98] transition-transform">
+        <div className="bg-surface rounded-xl border border-border p-4 flex items-center gap-3 active:bg-background">
           <div className="w-10 h-10 rounded-lg bg-brand-light flex items-center justify-center flex-shrink-0">
             <BookOpen className="w-5 h-5 text-brand-medium" strokeWidth={1.6} />
           </div>
