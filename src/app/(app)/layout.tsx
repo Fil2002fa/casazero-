@@ -16,7 +16,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       className="min-h-svh flex flex-col"
       style={{ '--wl-brand-dark': brandDark, '--wl-logo': logoUrl ? `url(${logoUrl})` : 'none' } as React.CSSProperties}
     >
-      <main className="flex-1 pb-20">{children}</main>
+      {/* Colonna centrata: stessa larghezza del contenuto della BottomNav
+          (max-w-lg), così la nav resta allineata e non orfana su viewport
+          larghi. Il background resta a piena pagina, è sul body. */}
+      <main className="flex-1 w-full max-w-lg mx-auto pb-20">{children}</main>
       <BottomNav />
     </div>
   )
