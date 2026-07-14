@@ -6,17 +6,12 @@ import { updateBuilderSettings, removeBuilderLogo } from './actions'
 import { Input, Label, FieldHelp } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
-import { WhitelabelStrip } from '@/components/WhitelabelStrip'
+import { BuilderIdentityBar } from '@/components/BuilderIdentity'
 
 interface Props {
   initialName: string
   initialLogoUrl: string | null
 }
-
-// Colore brand fisso CasaZero (design system §3 "Verde brand scuro"), usato
-// solo per lo sfondo dello swatch anteprima logo qui sotto — la striscia
-// "così appare nell'header" riusa lo stesso colore da WhitelabelStrip.
-const BRAND_DARK = '#04342C'
 
 export default function IdentityTab({ initialName, initialLogoUrl }: Props) {
   const { showToast } = useToast()
@@ -112,10 +107,7 @@ export default function IdentityTab({ initialName, initialLogoUrl }: Props) {
         {hasLogo ? (
           /* Stato A — logo presente */
           <div className="flex items-center gap-3">
-            <div
-              className="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0"
-              style={{ backgroundColor: BRAND_DARK }}
-            >
+            <div className="w-12 h-12 rounded-lg border border-border bg-background flex items-center justify-center overflow-hidden flex-shrink-0">
               {previewSrc && !thumbError ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -125,7 +117,7 @@ export default function IdentityTab({ initialName, initialLogoUrl }: Props) {
                   onError={() => setThumbError(true)}
                 />
               ) : (
-                <ImageIcon className="w-5 h-5 text-white/60" strokeWidth={1.6} />
+                <ImageIcon className="w-5 h-5 text-text-secondary" strokeWidth={1.6} />
               )}
             </div>
             <div className="flex-1 min-w-0">
@@ -170,9 +162,9 @@ export default function IdentityTab({ initialName, initialLogoUrl }: Props) {
 
         {/* Anteprima integrata — stesso componente dell'header reale della shell */}
         <div>
-          <WhitelabelStrip name={name} logoSrc={previewSrc}>
-            <span className="ml-auto text-[10px] text-white/50 flex-shrink-0">così appare nell&apos;header</span>
-          </WhitelabelStrip>
+          <BuilderIdentityBar name={name} logoSrc={previewSrc} className="rounded-lg border border-border overflow-hidden">
+            <span className="ml-auto text-[10px] text-text-secondary flex-shrink-0">così appare nell&apos;header</span>
+          </BuilderIdentityBar>
           <p className="text-xs text-text-secondary mt-2">
             PNG o SVG, max 2 MB. Se rimosso, si usa l&apos;icona CasaZero.
           </p>
