@@ -6,6 +6,7 @@ import { BottomSheet } from '@/components/ui/BottomSheet'
 import { Textarea, Label } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
+import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import { completeN2 } from './actions'
 
 interface Props {
@@ -15,9 +16,13 @@ interface Props {
   unitId: string
   residenceId: string
   title: string
+  residenceName: string
+  unitLabel: string
 }
 
-export function CompletionSheet({ open, onClose, itemId, unitId, residenceId, title }: Props) {
+export function CompletionSheet({
+  open, onClose, itemId, unitId, residenceId, title, residenceName, unitLabel,
+}: Props) {
   const router = useRouter()
   const { showToast } = useToast()
   const [pending, startTransition] = useTransition()
@@ -44,6 +49,10 @@ export function CompletionSheet({ open, onClose, itemId, unitId, residenceId, ti
         <input type="hidden" name="unitId" value={unitId} />
         <input type="hidden" name="residenceId" value={residenceId} />
         <input type="hidden" name="completedAt" value={new Date().toISOString().split('T')[0]} />
+
+        <p className="text-sm text-text-secondary">
+          Verrà registrato nel fascicolo di {residenceName} · {formatUnitLabel(unitLabel)}
+        </p>
 
         <div>
           <Label htmlFor="completion-notes">Note <span className="font-normal text-neutral-500">(facoltativo)</span></Label>

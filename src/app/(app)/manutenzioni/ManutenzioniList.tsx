@@ -21,11 +21,13 @@ export type ListItem = {
 }
 
 export function ManutenzioniList({
-  daFare, inProgramma, consigli,
+  daFare, inProgramma, consigli, residenceName, unitLabel,
 }: {
   daFare: ListItem[]
   inProgramma: ListItem[]
   consigli: ListItem[]
+  residenceName: string
+  unitLabel: string
 }) {
   const [sheetItem, setSheetItem] = useState<ListItem | null>(null)
 
@@ -100,6 +102,8 @@ export function ManutenzioniList({
           unitId={sheetItem.unitId!}
           residenceId={sheetItem.residenceId}
           title={sheetItem.title}
+          residenceName={residenceName}
+          unitLabel={unitLabel}
         />
       )}
     </div>

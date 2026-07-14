@@ -27,7 +27,9 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
     .select(`
       id, status, next_due_date, unit_id, residence_id, completion_mode, activation_status, frequency_months, warranty_info,
       maintenance_templates!inner(title, category, description, completion_mode, is_active, frequency_months, scope),
-      suppliers(name, phone, email)
+      suppliers(name, phone, email),
+      units(label),
+      residences(name)
     `)
     .eq('id', id)
     .single()
@@ -40,6 +42,8 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
   } | null
 
   const supplier = item.suppliers as unknown as { name: string; phone: string | null; email: string | null } | null
+  const unit = item.units as unknown as { label: string } | null
+  const residence = item.residences as unknown as { name: string } | null
   const liveItem = item as unknown as LiveStatusItem
   const mode = resolveCompletionMode(liveItem)
   const effectivePriority = modeToPriority(mode)
@@ -150,6 +154,8 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
             unitId={item.unit_id!}
             residenceId={item.residence_id}
             title={tpl?.title ?? ''}
+            residenceName={residence?.name ?? 'La tua residenza'}
+            unitLabel={unit?.label ?? ''}
           />
         )}
 

@@ -103,7 +103,13 @@ export default async function ManutenzioniPage() {
         <h1 className="font-serif text-[22px] font-semibold text-text-primary mt-1">Manutenzioni</h1>
       </header>
 
-      <ManutenzioniList daFare={daFare} inProgramma={inProgramma} consigli={consigli} />
+      <ManutenzioniList
+        daFare={daFare}
+        inProgramma={inProgramma}
+        consigli={consigli}
+        residenceName={unit?.residences?.name ?? 'La tua residenza'}
+        unitLabel={unit?.label ?? ''}
+      />
     </div>
   )
 }

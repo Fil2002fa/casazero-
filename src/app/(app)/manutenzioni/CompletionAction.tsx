@@ -9,9 +9,11 @@ interface Props {
   unitId: string
   residenceId: string
   title: string
+  residenceName: string
+  unitLabel: string
 }
 
-export function CompletionAction({ itemId, unitId, residenceId, title }: Props) {
+export function CompletionAction({ itemId, unitId, residenceId, title, residenceName, unitLabel }: Props) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -26,6 +28,8 @@ export function CompletionAction({ itemId, unitId, residenceId, title }: Props) 
         unitId={unitId}
         residenceId={residenceId}
         title={title}
+        residenceName={residenceName}
+        unitLabel={unitLabel}
       />
     </>
   )
