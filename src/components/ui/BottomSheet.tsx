@@ -11,6 +11,8 @@ interface BottomSheetProps {
   open: boolean
   onClose: () => void
   title: string
+  /** Riga di contesto sotto il titolo. Il nome accessibile resta `title`. */
+  subtitle?: ReactNode
   children: ReactNode
 }
 
@@ -18,8 +20,11 @@ interface BottomSheetProps {
  * Variante mobile di Modal: ancorata al bordo inferiore, radius solo in alto,
  * handle di trascinamento visivo. Stesso focus trap/portal/Escape di Modal —
  * una modale non apre mai un'altra modale, vale anche per la bottom sheet.
+ *
+ * Il titolo è in Source Serif 4 come le intestazioni di pagina: la sheet apre
+ * un atto formale (una scrittura nel fascicolo), non un'azione di servizio.
  */
-export function BottomSheet({ open, onClose, title, children }: BottomSheetProps) {
+export function BottomSheet({ open, onClose, title, subtitle, children }: BottomSheetProps) {
   const panelRef = useRef<HTMLDivElement>(null)
   const previouslyFocused = useRef<HTMLElement | null>(null)
 
@@ -85,9 +90,12 @@ export function BottomSheet({ open, onClose, title, children }: BottomSheetProps
         <div className="flex justify-center pb-3">
           <span className="h-1 w-10 rounded-full bg-border" aria-hidden="true" />
         </div>
-        <h2 id="sheet-title" className="text-base font-medium text-text-primary mb-4">
-          {title}
-        </h2>
+        <div className="mb-4 space-y-1">
+          <h2 id="sheet-title" className="font-serif text-[22px] font-semibold text-text-primary">
+            {title}
+          </h2>
+          {subtitle && <div className="text-sm text-text-secondary">{subtitle}</div>}
+        </div>
         {children}
       </div>
     </div>,
