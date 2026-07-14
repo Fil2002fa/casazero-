@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { ChevronRight } from 'lucide-react'
 import type { CompletionMode, MaintenanceStatus, ObligationType } from '@/types/database'
 import { StatusBadge, PromemoriaBadge, TypeBadge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -44,22 +45,32 @@ export function ManutenzioniList({
 
       <Section title="Da fare" count={daFare.length}>
         {daFare.map(item => (
-          <div key={item.id} className="bg-surface rounded-xl border border-border p-4 space-y-3">
-            <Link href={`/manutenzioni/${item.id}`} className="block space-y-1.5">
-              <div className="flex items-center gap-2 flex-wrap">
-                <StatusBadge status="scaduta" />
-                {item.obligationType && <TypeBadge obligationType={item.obligationType} />}
+          /* Link e Button sono fratelli, mai annidati; il Link porta lui il
+             padding così l'area di tocco copre la card fino ai bordi. */
+          <div key={item.id} className="bg-surface rounded-xl border border-border">
+            <Link
+              href={`/manutenzioni/${item.id}`}
+              className="flex items-center gap-3 p-4 rounded-t-xl active:bg-background"
+            >
+              <div className="flex-1 min-w-0 space-y-1.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <StatusBadge status="scaduta" />
+                  {item.obligationType && <TypeBadge obligationType={item.obligationType} />}
+                </div>
+                <p className="text-base font-medium text-text-primary">{item.title}</p>
+                <p className="text-sm text-text-secondary">{formatFrequency(item.frequencyMonths)}</p>
               </div>
-              <p className="text-base font-medium text-text-primary">{item.title}</p>
-              <p className="text-sm text-text-secondary">{formatFrequency(item.frequencyMonths)}</p>
+              <ChevronRight className="w-4 h-4 text-text-secondary flex-shrink-0" strokeWidth={1.6} />
             </Link>
-            {item.mode === 'residente' ? (
-              <Button className="w-full" onClick={() => setSheetItem(item)}>
-                Registra completamento
-              </Button>
-            ) : (
-              <p className="text-sm text-text-secondary">A carico dell&apos;amministratore di condominio.</p>
-            )}
+            <div className="px-4 pb-4">
+              {item.mode === 'residente' ? (
+                <Button className="w-full" onClick={() => setSheetItem(item)}>
+                  Registra completamento
+                </Button>
+              ) : (
+                <p className="text-sm text-text-secondary">A carico dell&apos;amministratore di condominio.</p>
+              )}
+            </div>
           </div>
         ))}
       </Section>
@@ -69,14 +80,17 @@ export function ManutenzioniList({
           <Link
             key={item.id}
             href={`/manutenzioni/${item.id}`}
-            className="block bg-surface rounded-xl border border-border p-4 space-y-1.5"
+            className="flex items-center gap-3 bg-surface rounded-xl border border-border p-4 active:bg-background"
           >
-            <div className="flex items-center gap-2 flex-wrap">
-              <StatusBadge status={item.status} />
-              {item.obligationType && <TypeBadge obligationType={item.obligationType} />}
+            <div className="flex-1 min-w-0 space-y-1.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <StatusBadge status={item.status} />
+                {item.obligationType && <TypeBadge obligationType={item.obligationType} />}
+              </div>
+              <p className="text-base font-medium text-text-primary">{item.title}</p>
+              <p className="text-sm text-text-secondary">{formatFrequency(item.frequencyMonths)}</p>
             </div>
-            <p className="text-base font-medium text-text-primary">{item.title}</p>
-            <p className="text-sm text-text-secondary">{formatFrequency(item.frequencyMonths)}</p>
+            <ChevronRight className="w-4 h-4 text-text-secondary flex-shrink-0" strokeWidth={1.6} />
           </Link>
         ))}
       </Section>
@@ -86,10 +100,13 @@ export function ManutenzioniList({
           <Link
             key={item.id}
             href={`/manutenzioni/${item.id}`}
-            className="block bg-surface rounded-xl border border-border p-4 space-y-1.5"
+            className="flex items-center gap-3 bg-surface rounded-xl border border-border p-4 active:bg-background"
           >
-            <PromemoriaBadge frequencyMonths={item.frequencyMonths} />
-            <p className="text-base font-medium text-text-primary">{item.title}</p>
+            <div className="flex-1 min-w-0 space-y-1.5">
+              <PromemoriaBadge frequencyMonths={item.frequencyMonths} />
+              <p className="text-base font-medium text-text-primary">{item.title}</p>
+            </div>
+            <ChevronRight className="w-4 h-4 text-text-secondary flex-shrink-0" strokeWidth={1.6} />
           </Link>
         ))}
       </Section>
