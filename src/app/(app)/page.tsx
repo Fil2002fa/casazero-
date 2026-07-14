@@ -4,12 +4,12 @@ import { createClient } from '@/lib/supabase/server'
 import { requireProfile } from '@/lib/auth'
 import { MaintenanceCard } from '@/components/MaintenanceCard'
 import { OBLIGATION_LABELS } from '@/components/MaintenanceBadge'
-import type { MaintenancePriority, ObligationType } from '@/types/database'
+import type { ObligationType } from '@/types/database'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import { pluralize } from '@/lib/pluralize'
 import {
-  isCountable, isInCorso, isOverdueLive, resolveCompletionMode, resolveLiveStatus,
-  formatRelativeDue, todayISO,
+  isCountable, isInCorso, isOverdueLive, modeToPriority, resolveCompletionMode,
+  resolveLiveStatus, formatRelativeDue, todayISO,
   LIVE_STATUS_FIELDS, LIVE_STATUS_TEMPLATE_FIELDS, type LiveStatusItem,
 } from '@/lib/maintenance-status'
 
@@ -17,12 +17,10 @@ import {
 // stato mostrato deriva da next_due_date, mai dal campo status salvato.
 type ItemRow = LiveStatusItem & {
   id: string
-  priority: MaintenancePriority | null
   maintenance_templates:
     | (NonNullable<LiveStatusItem['maintenance_templates']> & {
         title: string
         category: string
-        priority: MaintenancePriority
         scope: string
       })
     | null
@@ -69,8 +67,8 @@ export default async function HomePage() {
     supabase
       .from('maintenance_items')
       .select(`
-        id, ${LIVE_STATUS_FIELDS}, priority,
-        maintenance_templates!inner(${LIVE_STATUS_TEMPLATE_FIELDS}, title, category, priority, scope)
+        id, ${LIVE_STATUS_FIELDS},
+        maintenance_templates!inner(${LIVE_STATUS_TEMPLATE_FIELDS}, title, category, scope)
       `)
       .neq('status', 'completata')
       .eq('activation_status', 'inclusa')
@@ -197,7 +195,7 @@ export default async function HomePage() {
                 id={i.id}
                 title={i.maintenance_templates?.title ?? '—'}
                 category={i.maintenance_templates?.category ?? ''}
-                priority={(i.priority ?? i.maintenance_templates?.priority ?? 'N2') as MaintenancePriority}
+                priority={modeToPriority(resolveCompletionMode(i))}
                 status={resolveLiveStatus(i, today)}
                 nextDueDate={i.next_due_date}
                 scope={(i.maintenance_templates?.scope ?? 'unit') as 'unit' | 'condominium'}
