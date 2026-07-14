@@ -1,3 +1,11 @@
+/*
+ * SMONTATO PER DEMO — nessun consumatore (vedi commit "commenti: smonta la
+ * sezione dalla UI per la demo"). La feature era write-only verso
+ * l'amministrazione: nessuna vista admin legge i commenti e nessuna notifica
+ * viene inviata. Riattivazione post customer discovery, quando sarà deciso se
+ * il commento è un thread tra vicini o un canale verso l'amministrazione.
+ * Tabella comments, RLS e server action addComment sono rimaste in piedi.
+ */
 import { createClient } from '@/lib/supabase/server'
 import { AddCommentForm } from './AddCommentForm'
 import { MessageSquare } from 'lucide-react'

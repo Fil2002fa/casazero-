@@ -7,7 +7,6 @@ import { requireProfile } from '@/lib/auth'
 import { PriorityBadge } from '@/components/PriorityBadge'
 import { CompletionAction } from '../CompletionAction'
 import { N3AdminActions } from '@/components/N3AdminActions'
-import { CommentsSection } from '@/components/CommentsSection'
 import {
   isOverdueLive, resolveCompletionMode, resolveLiveStatus, modeToPriority, todayISO,
   type LiveStatusItem,
@@ -215,10 +214,6 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
           </div>
         )}
 
-        {/* Commenti */}
-        <div className="bg-surface rounded-xl border border-border p-4">
-          <CommentsSection itemId={id} />
-        </div>
       </div>
     </div>
   )

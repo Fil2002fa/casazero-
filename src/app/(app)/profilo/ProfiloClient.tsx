@@ -24,7 +24,9 @@ const PREF_ROWS: PrefRow[] = [
   { label: 'Promemoria periodici',    pushKey: 'push_reminders',       emailKey: 'email_reminders', emailLocked: false },
   { label: 'Cambio stato lavori (N3)',pushKey: 'push_n3_status',       emailKey: 'email_n3_status', emailLocked: false },
   { label: 'Nuovi documenti',         pushKey: 'push_new_document',    emailKey: null,              emailLocked: false },
-  { label: 'Nuovi commenti',          pushKey: 'push_new_comment',     emailKey: null,              emailLocked: false },
+  /* 'Nuovi commenti' (push_new_comment) rimosso: feature commenti smontata per
+     la demo e nessun motore ha mai inviato quella notifica. La chiave resta nel
+     tipo e nel default JSONB per la riattivazione post customer discovery. */
 ]
 
 export function ProfiloClient({
