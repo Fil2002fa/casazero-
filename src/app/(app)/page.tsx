@@ -4,27 +4,28 @@ import { createClient } from '@/lib/supabase/server'
 import { requireProfile } from '@/lib/auth'
 import { MaintenanceCard } from '@/components/MaintenanceCard'
 import { OBLIGATION_LABELS } from '@/components/MaintenanceBadge'
-import type { MaintenancePriority, MaintenanceStatus, ObligationType } from '@/types/database'
+import type { MaintenancePriority, ObligationType } from '@/types/database'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import { pluralize } from '@/lib/pluralize'
 import {
-  isCountable, resolveCompletionMode, formatRelativeDue, todayISO,
+  isCountable, isInCorso, isOverdueLive, resolveCompletionMode, resolveLiveStatus,
+  formatRelativeDue, todayISO,
   LIVE_STATUS_FIELDS, LIVE_STATUS_TEMPLATE_FIELDS, type LiveStatusItem,
 } from '@/lib/maintenance-status'
 
-type ItemRow = {
+// Card urgenti: campi live (helper) + display. Estende LiveStatusItem così lo
+// stato mostrato deriva da next_due_date, mai dal campo status salvato.
+type ItemRow = LiveStatusItem & {
   id: string
-  status: MaintenanceStatus
-  next_due_date: string | null
-  unit_id: string | null
-  residence_id: string
   priority: MaintenancePriority | null
-  maintenance_templates: {
-    title: string
-    category: string
-    priority: MaintenancePriority
-    scope: string
-  } | null
+  maintenance_templates:
+    | (NonNullable<LiveStatusItem['maintenance_templates']> & {
+        title: string
+        category: string
+        priority: MaintenancePriority
+        scope: string
+      })
+    | null
 }
 
 // Prossima manutenzione: campi live (helper) + display. Estende LiveStatusItem
@@ -49,11 +50,10 @@ export default async function HomePage() {
   const today = todayISO()
 
   // In parallelo (indipendenti tra loro, scopate da RLS): membership, urgenti e
-  // candidati "prossima manutenzione". Il banner urgenti usa il count 'exact'
-  // della STESSA query delle card (il limit non influenza il count).
+  // candidati "prossima manutenzione".
   const [
     { data: membership },
-    { data: rawUrgent, count: urgentCount },
+    { data: rawUrgent },
     { data: rawNext },
   ] = await Promise.all([
     supabase
@@ -62,16 +62,19 @@ export default async function HomePage() {
       .eq('profile_id', profile.id)
       .is('ended_at', null)
       .maybeSingle(),
+    // Candidati urgenti: si scarta in SQL solo ciò che non può mai esserlo
+    // (completata, esclusa dal piano) e si deriva lo stato in JS con
+    // isOverdueLive/isInCorso. Filtrare su status IN ('scaduta','in_corso')
+    // qui darebbe un conteggio stale: quel campo lo avanza solo il cron.
     supabase
       .from('maintenance_items')
       .select(`
-        id, status, next_due_date, unit_id, residence_id, priority,
-        maintenance_templates(title, category, priority, scope)
-      `, { count: 'exact' })
-      .in('status', ['scaduta', 'in_corso'])
+        id, ${LIVE_STATUS_FIELDS}, priority,
+        maintenance_templates!inner(${LIVE_STATUS_TEMPLATE_FIELDS}, title, category, priority, scope)
+      `)
+      .neq('status', 'completata')
       .eq('activation_status', 'inclusa')
-      .order('next_due_date', { ascending: true, nullsFirst: false })
-      .limit(3),
+      .order('next_due_date', { ascending: true, nullsFirst: false }),
     // Candidati alla "Prossima manutenzione": item datati futuri, non completati,
     // inclusi nel piano. Promemoria e template inattivi si scartano in JS via
     // isCountable/resolveCompletionMode (asse canonico completion_mode).
@@ -93,7 +96,12 @@ export default async function HomePage() {
     residences: { name: string; photo_url: string | null } | null
   } | null
 
-  const urgentItems = (rawUrgent ?? []) as unknown as ItemRow[]
+  // Banner e card leggono la STESSA lista filtrata: il conteggio non può
+  // divergere da ciò che si vede (bug class count/list divergence).
+  const urgent = ((rawUrgent ?? []) as unknown as ItemRow[])
+    .filter(i => isOverdueLive(i, today) || isInCorso(i))
+  const urgentCount = urgent.length
+  const urgentItems = urgent.slice(0, 3)
 
   // Prossimo item DATATO futuro, escluse le promemoria: prima riga countable non-promemoria.
   const nextItem =
@@ -156,7 +164,7 @@ export default async function HomePage() {
       </div>
 
       {/* Banner scadenze */}
-      {(urgentCount ?? 0) > 0 ? (
+      {urgentCount > 0 ? (
         <Link href="/manutenzioni">
           <div className="bg-semantic-red-bg border border-semantic-red/20 rounded-xl px-4 py-3 flex items-center justify-between">
             <div>
@@ -190,7 +198,7 @@ export default async function HomePage() {
                 title={i.maintenance_templates?.title ?? '—'}
                 category={i.maintenance_templates?.category ?? ''}
                 priority={(i.priority ?? i.maintenance_templates?.priority ?? 'N2') as MaintenancePriority}
-                status={i.status}
+                status={resolveLiveStatus(i, today)}
                 nextDueDate={i.next_due_date}
                 scope={(i.maintenance_templates?.scope ?? 'unit') as 'unit' | 'condominium'}
               />
