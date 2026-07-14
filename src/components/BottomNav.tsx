@@ -17,7 +17,7 @@ export default function BottomNav() {
 
   return (
     <nav
-      className="fixed bottom-0 inset-x-0 bg-surface border-t border-border pb-safe z-50"
+      className="fixed bottom-0 inset-x-0 bg-surface border-t border-border pb-safe z-sticky"
       aria-label="Navigazione principale"
     >
       <div className="flex items-center justify-around h-16 px-2 max-w-lg mx-auto">
