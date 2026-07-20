@@ -69,7 +69,7 @@ export default async function ResidenceDocumentiPage({
           </p>
           <Link
             href={`/admin/residences/${residenceId}`}
-            className="flex-shrink-0 text-sm font-medium text-brand-dark hover:underline"
+            className="flex-shrink-0 text-sm font-medium text-brand-medium hover:underline"
           >
             Salta per ora
           </Link>
