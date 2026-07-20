@@ -10,7 +10,7 @@ colors:
   surface: "#FFFFFF"
   border: "#E4E6E2"
   text-primary: "#20302A"
-  text-secondary: "#6B7A74"
+  text-secondary: "#5F6E68"
   neutral-500: "#737373"
   neutral-600: "#525252"
   neutral-700: "#404040"

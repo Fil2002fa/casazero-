@@ -14,7 +14,10 @@
 
   /* Text */
   --color-text-primary: #20302A;
-  --color-text-secondary: #6B7A74;
+  /* #6B7A74 dava 4.06:1 su bg-background, sotto AA 4.5:1 quando il testo poggia
+     sulla pagina invece che su una card. #5F6E68 (stessa tinta, un passo più scuro)
+     dà 4.83:1 su background e 5.36:1 su surface. */
+  --color-text-secondary: #5F6E68;
 
   /* Override scala neutra v2 — neutral-500 stock Tailwind (#737373) dava ~4.27:1 su
      bg-background, sotto la soglia AA 4.5:1 quando il testo poggia sulla pagina invece
