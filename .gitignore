@@ -24,6 +24,9 @@ docs/handoffs/
 # claude code — settings locali per macchina
 .claude/settings.local.json
 
+# skill impeccable — stato/cache runtime locale, non versionato
+.impeccable/
+
 # misc
 .DS_Store
 *.pem
