@@ -217,11 +217,20 @@ CREATE POLICY "documents bucket: delete scoped residenza"
 --
 -- 3. Guardia cast: 'non-un-uuid/file.pdf' → NULL; path reale → uuid corretto.
 --
--- 3b. Non eseguito il probe SQL isolato: sostituito dallo smoke funzionale
---     reale (punto 4), più forte perché passa dal client applicativo.
+-- 3b. Eseguito: INSERT impersonato (pippoloro02, super_admin) in
+--     transazione con ROLLBACK finale → nessun errore RLS. Conferma
+--     diretta, con lo stesso metodo che aveva trovato il bug, che il
+--     ramo super_admin ora lega objects.name e non più residences.name.
 --
--- 4. Smoke funzionale reale eseguito da Filippo: upload e download OK per
---    più file su più residenze (non solo il caso singolo pianificato).
+-- 4. Smoke funzionale reale eseguito da Filippo:
+--    · upload PDF veri di Cavaccio da super_admin → OK (prova end-to-end
+--      che il ramo super_admin della policy scrive davvero)
+--    · download → il file SCARICA invece di aprirsi nel tab, conferma
+--      { download: true } (commit 77e9ad8)
+--    · upload PWA come admin (filippoloro02) → NON eseguito: bloccato da
+--      un bug pre-esistente e indipendente (le card residenze nella
+--      dashboard admin non sono cliccabili) — annotato a backlog, non
+--      una regressione di questa migrazione
 --    Verificato a query dopo l'uso reale: 0 righe demo residue, 7 righe in
 --    `documents`, 8 oggetti nel bucket — lo scarto di 1 è
 --    45196dac-.../proprieta/1781300312305_Certeficato_enegertico.pdf, un
