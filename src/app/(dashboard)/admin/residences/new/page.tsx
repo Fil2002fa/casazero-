@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useTransition } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { ChevronLeft, ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react'
 import { createResidence } from './actions'
@@ -66,8 +66,45 @@ export default function NewResidencePage() {
   const [genCount, setGenCount] = useState('')
   const [genPerFloor, setGenPerFloor] = useState('2')
   const [showReplaceConfirm, setShowReplaceConfirm] = useState(false)
+  const [resetNotice, setResetNotice] = useState(false)
 
   const formRef = useRef<HTMLFormElement>(null)
+  // true solo tra l'avvio di una createResidence e l'esito: distingue
+  // "sto per creare, potrei essere reindirizzato altrove" da un semplice
+  // passaggio tra step. Il redirect di successo lancia lato server, quindi
+  // non c'è mai un callback client su cui azzerare il form prima di
+  // navigare via — l'unico momento per farlo è al ritorno.
+  const submitAttemptedRef = useRef(false)
+
+  // Nessuna idempotency key lato RPC (fuori scope B2): se il browser
+  // ripristina questa pagina dal bfcache dopo un redirect di successo
+  // (form ancora compilato, step 2, pulsante non più "in corso"), un
+  // ri-click su "Crea residenza" creerebbe una seconda residenza.
+  // pageshow + persisted è l'unico segnale esplicito per "pagina
+  // ripristinata dalla cache, non caricata da zero" — si azzera solo se
+  // c'era stato un vero tentativo di submit, per non cancellare la
+  // compilazione di chi torna indietro senza aver mai inviato il form.
+  useEffect(() => {
+    function handlePageShow(e: PageTransitionEvent) {
+      if (!e.persisted || !submitAttemptedRef.current) return
+      submitAttemptedRef.current = false
+      formRef.current?.reset()
+      setStep(1)
+      setUnits([])
+      setRowErrors({})
+      setListError(null)
+      setError(null)
+      setExistingBuilding(false)
+      setShowDateWizard(false)
+      setGenPrefix('Unità')
+      setGenCount('')
+      setGenPerFloor('2')
+      setShowReplaceConfirm(false)
+      setResetNotice(true)
+    }
+    window.addEventListener('pageshow', handlePageShow)
+    return () => window.removeEventListener('pageshow', handlePageShow)
+  }, [])
 
   // Il form è noValidate: la validazione nativa non blocca mai il submit da sola
   // (i required dello step 1 sono nascosti allo step 2 e il browser fallirebbe
@@ -171,6 +208,7 @@ export default function NewResidencePage() {
     formData.set('units', JSON.stringify(
       units.map(u => ({ label: u.label.trim(), floor: Number(u.floor) }))
     ))
+    submitAttemptedRef.current = true
     startTransition(async () => {
       const res = await createResidence(formData)
       if (res?.error) setError(res.error)
@@ -204,6 +242,15 @@ export default function NewResidencePage() {
           </p>
         </div>
       </div>
+
+      {resetNotice && (
+        <div className="bg-semantic-blue-bg border border-semantic-blue/20 rounded-xl p-3 mb-5">
+          <p className="text-sm text-semantic-blue">
+            Il modulo è stato azzerato: la residenza precedente risultava già creata.
+            Compila di nuovo per crearne un&apos;altra.
+          </p>
+        </div>
+      )}
 
       {/* Entrambi gli step restano montati (lo step non attivo è hidden):
           i valori non controllati dello step 1 devono restare nel DOM,
