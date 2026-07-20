@@ -10,9 +10,17 @@ import type { DocRow, UnitRow } from './DocumentiClient'
 export const metadata: Metadata = { title: 'Documenti residenza' }
 
 type Params = Promise<{ id: string }>
+type SearchParams = Promise<{ onboarding?: string }>
 
-export default async function ResidenceDocumentiPage({ params }: { params: Params }) {
+export default async function ResidenceDocumentiPage({
+  params, searchParams,
+}: {
+  params: Params
+  searchParams: SearchParams
+}) {
   const { id: residenceId } = await params
+  const { onboarding } = await searchParams
+  const isOnboarding = onboarding === '1'
   await requireRole(['super_admin'], '/admin/manutenzioni')
   const supabase = await createClient()
 
@@ -51,6 +59,22 @@ export default async function ResidenceDocumentiPage({ params }: { params: Param
           <p className="text-xs text-text-secondary">{residence.name}</p>
         </div>
       </div>
+
+      {/* Solo informativo: nessun gate, la pagina funziona identica senza ?onboarding=1 */}
+      {isOnboarding && (
+        <div className="bg-brand-light rounded-xl p-4 flex items-center gap-3 mb-5">
+          <p className="text-sm text-brand-dark flex-1 min-w-0">
+            Residenza creata. Puoi caricare ora i documenti di consegna, oppure farlo in
+            qualsiasi momento da questa pagina.
+          </p>
+          <Link
+            href={`/admin/residences/${residenceId}`}
+            className="flex-shrink-0 text-sm font-medium text-brand-dark hover:underline"
+          >
+            Salta per ora
+          </Link>
+        </div>
+      )}
 
       <DocumentiClient
         residenceId={residenceId}

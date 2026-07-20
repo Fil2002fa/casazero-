@@ -55,7 +55,7 @@ export async function createResidence(formData: FormData) {
   if (rpcErr || !residenceId) return { error: rpcErr?.message ?? 'Errore creazione residenza' }
 
   revalidatePath('/admin/residences')
-  redirect(`/admin/residences/${residenceId}`)
+  redirect(`/admin/residences/${residenceId}/documenti?onboarding=1`)
 }
 
 const MAX_UNITS = 200
