@@ -179,6 +179,7 @@ export default function NewResidencePage() {
 
     setError(null)
     setListError(null)
+    setResetNotice(false)
 
     // Rete di sicurezza: se un required dello step 1 (ora nascosto) non è più
     // valido, si torna allo step 1 e lo si segnala lì, mai fallire in silenzio.
@@ -244,8 +245,8 @@ export default function NewResidencePage() {
       </div>
 
       {resetNotice && (
-        <div className="bg-semantic-blue-bg border border-semantic-blue/20 rounded-xl p-3 mb-5">
-          <p className="text-sm text-semantic-blue">
+        <div className="bg-brand-light rounded-xl p-3 mb-5">
+          <p className="text-sm text-brand-dark">
             Il modulo è stato azzerato: la residenza precedente risultava già creata.
             Compila di nuovo per crearne un&apos;altra.
           </p>
