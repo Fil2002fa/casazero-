@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useMemo, useTransition } from 'react'
+import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { FileText, Download, Upload, X } from 'lucide-react'
+import { FileText, Download, Upload, X, Loader2, CheckCircle2, AlertCircle, Clock } from 'lucide-react'
 import type { DocumentCategory } from '@/types/database'
-import { uploadDocumentiAdmin } from './actions'
-import type { UploadResult } from './actions'
+import { createUploadUrl, confirmDocument } from './actions'
+import { ALLOWED_DOCUMENT_MIME, MAX_DOCUMENT_SIZE } from '@/lib/document-upload'
+import { createClient } from '@/lib/supabase/client'
 
 export type DocRow = {
   id: string
@@ -39,6 +40,86 @@ const CAT_LABELS: Record<DocumentCategory, string> = {
   amministrativi: 'Amministrativi',
 }
 
+// --- upload client-direct: un task indipendente per file selezionato ---
+type TaskStatus = 'in_coda' | 'in_caricamento' | 'fatto' | 'errore'
+
+type FileTask = {
+  id: string
+  file: File
+  status: TaskStatus
+  error?: string
+}
+
+function makeTaskId() {
+  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random()}`
+}
+
+type UploadContext = {
+  residenceId: string
+  unitId: string | null
+  category: DocumentCategory
+  fileDate: string | null
+}
+
+// Genera URL → carica direttamente su Supabase (bypassa il bodySizeLimit
+// di Next.js) → conferma. Ogni file è indipendente: il fallimento di uno
+// non blocca né tocca lo stato degli altri, ciascuno aggiorna solo la
+// propria riga in `tasks` via updateTask.
+async function runFileTask(
+  task: FileTask,
+  ctx: UploadContext,
+  updateTask: (id: string, patch: Partial<FileTask>) => void
+): Promise<TaskStatus> {
+  const { file } = task
+  updateTask(task.id, { status: 'in_caricamento' })
+
+  if (!ALLOWED_DOCUMENT_MIME.has(file.type)) {
+    updateTask(task.id, { status: 'errore', error: 'Tipo file non supportato (PDF, immagini, Word)' })
+    return 'errore'
+  }
+  if (file.size > MAX_DOCUMENT_SIZE) {
+    updateTask(task.id, { status: 'errore', error: 'File troppo grande (max 50 MB)' })
+    return 'errore'
+  }
+
+  const urlResult = await createUploadUrl(ctx.residenceId, ctx.category, file.name, file.type)
+  if ('error' in urlResult) {
+    updateTask(task.id, { status: 'errore', error: urlResult.error })
+    return 'errore'
+  }
+
+  const browserSupabase = createClient()
+  const { error: uploadError } = await browserSupabase.storage
+    .from('documents')
+    .uploadToSignedUrl(urlResult.path, urlResult.token, file)
+
+  if (uploadError) {
+    updateTask(task.id, { status: 'errore', error: `Errore upload: ${uploadError.message}` })
+    return 'errore'
+  }
+
+  const title = file.name.replace(/\.[^/.]+$/, '') || file.name
+  const confirmResult = await confirmDocument({
+    residenceId: ctx.residenceId,
+    unitId: ctx.unitId,
+    category: ctx.category,
+    title,
+    storagePath: urlResult.path,
+    fileName: file.name,
+    fileDate: ctx.fileDate,
+  })
+
+  if ('error' in confirmResult) {
+    updateTask(task.id, { status: 'errore', error: confirmResult.error })
+    return 'errore'
+  }
+
+  updateTask(task.id, { status: 'fatto' })
+  return 'fatto'
+}
+
 interface Props {
   residenceId: string
   docs: DocRow[]
@@ -51,11 +132,11 @@ export function DocumentiClient({ residenceId, docs, units }: Props) {
   const [search, setSearch]       = useState('')
 
   // --- upload modal state ---
-  const [showModal, setShowModal]         = useState(false)
-  const [scope, setScope]                 = useState<'residenza' | 'unita'>('residenza')
-  const [uploadResult, setUploadResult]   = useState<UploadResult | null>(null)
-  const [uploadError, setUploadError]     = useState<string | null>(null)
-  const [uploadPending, startTransition]  = useTransition()
+  const [showModal, setShowModal] = useState(false)
+  const [scope, setScope]         = useState<'residenza' | 'unita'>('residenza')
+  const [tasks, setTasks]         = useState<FileTask[]>([])
+  const [submitted, setSubmitted] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
   const router = useRouter()
 
   // --- computed ---
@@ -89,26 +170,39 @@ export function DocumentiClient({ residenceId, docs, units }: Props) {
 
   // --- handlers ---
   function closeModal() {
-    if (uploadPending) return
+    if (isUploading) return
     setShowModal(false)
-    setUploadResult(null)
-    setUploadError(null)
+    setTasks([])
+    setSubmitted(false)
     setScope('residenza')
   }
 
-  function handleUpload(e: React.FormEvent<HTMLFormElement>) {
+  function updateTask(id: string, patch: Partial<FileTask>) {
+    setTasks(prev => prev.map(t => (t.id === id ? { ...t, ...patch } : t)))
+  }
+
+  function handleFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? [])
+    setTasks(files.map(file => ({ id: makeTaskId(), file, status: 'in_coda' as const })))
+  }
+
+  async function handleUpload(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    setUploadError(null)
+    if (tasks.length === 0) return
+
     const formData = new FormData(e.currentTarget)
-    startTransition(async () => {
-      const result = await uploadDocumentiAdmin(formData)
-      if (result.error) {
-        setUploadError(result.error)
-      } else {
-        setUploadResult(result)
-        if (result.uploaded.length > 0) router.refresh()
-      }
-    })
+    const unitId   = (formData.get('unitId') as string) || null
+    const category = formData.get('category') as DocumentCategory
+    const fileDate = (formData.get('fileDate') as string) || null
+    const ctx: UploadContext = { residenceId, unitId, category, fileDate }
+
+    setSubmitted(true)
+    setIsUploading(true)
+
+    const results = await Promise.all(tasks.map(task => runFileTask(task, ctx, updateTask)))
+
+    setIsUploading(false)
+    if (results.some(r => r === 'fatto')) router.refresh()
   }
 
   return (
@@ -124,37 +218,25 @@ export function DocumentiClient({ residenceId, docs, units }: Props) {
               <p className="text-sm font-medium text-[#20302A]">Carica documenti</p>
               <button
                 onClick={closeModal}
-                disabled={uploadPending}
+                disabled={isUploading}
                 className="p-1 text-text-secondary rounded-lg hover:bg-background disabled:opacity-50"
               >
                 <X className="w-4 h-4" strokeWidth={1.6} />
               </button>
             </div>
 
-            {/* ---- Stato risultato ---- */}
-            {uploadResult ? (
+            {/* ---- Stato task per-file ---- */}
+            {submitted ? (
               <div className="space-y-3">
-                {uploadResult.uploaded.length > 0 && (
-                  <div className="text-sm text-brand-dark bg-brand-light rounded-lg px-3 py-2.5">
-                    {uploadResult.uploaded.length} documento{uploadResult.uploaded.length !== 1 ? 'i' : ''} caricato{uploadResult.uploaded.length !== 1 ? 'i' : ''} con successo
-                  </div>
-                )}
-                {uploadResult.failed.length > 0 && (
-                  <div className="bg-semantic-red-bg rounded-lg px-3 py-2.5 space-y-1.5">
-                    <p className="text-xs font-medium text-semantic-red">
-                      {uploadResult.failed.length} file non caricato{uploadResult.failed.length !== 1 ? 'i' : ''}:
-                    </p>
-                    {uploadResult.failed.map((f, i) => (
-                      <p key={i} className="text-xs text-semantic-red leading-snug">
-                        · {f.name}: {f.reason}
-                      </p>
-                    ))}
-                  </div>
-                )}
+                <div className="space-y-1.5">
+                  {tasks.map(task => (
+                    <TaskRow key={task.id} task={task} />
+                  ))}
+                </div>
                 <div className="flex gap-2 pt-1">
-                  {uploadResult.uploaded.length === 0 && (
+                  {!isUploading && tasks.some(t => t.status === 'errore') && (
                     <button
-                      onClick={() => setUploadResult(null)}
+                      onClick={() => { setSubmitted(false); setTasks([]) }}
                       className="flex-1 border border-border rounded-xl py-2.5 text-sm text-text-secondary"
                     >
                       Riprova
@@ -162,9 +244,10 @@ export function DocumentiClient({ residenceId, docs, units }: Props) {
                   )}
                   <button
                     onClick={closeModal}
-                    className="flex-1 bg-brand-dark text-white rounded-xl py-2.5 text-sm font-medium"
+                    disabled={isUploading}
+                    className="flex-1 bg-brand-dark text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-50"
                   >
-                    Chiudi
+                    {isUploading ? 'Caricamento…' : 'Chiudi'}
                   </button>
                 </div>
               </div>
@@ -172,8 +255,6 @@ export function DocumentiClient({ residenceId, docs, units }: Props) {
             ) : (
             /* ---- Form upload ---- */
               <form onSubmit={handleUpload} className="space-y-4">
-                <input type="hidden" name="residenceId" value={residenceId} />
-
                 {/* Destinazione */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-text-secondary block">Destinazione *</label>
@@ -251,36 +332,33 @@ export function DocumentiClient({ residenceId, docs, units }: Props) {
                   <label className="text-xs font-medium text-text-secondary block">File *</label>
                   <input
                     type="file"
-                    name="files"
                     multiple
                     required
+                    onChange={handleFilesSelected}
                     accept="image/jpeg,image/png,image/webp,application/pdf,.doc,.docx"
                     className="w-full text-sm text-text-secondary cursor-pointer file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-brand-light file:text-brand-dark"
                   />
-                  <p className="text-xs text-text-secondary">PDF, immagini, Word · max 50 MB per file</p>
-                </div>
-
-                {uploadError && (
-                  <p className="text-xs text-semantic-red bg-semantic-red-bg rounded-lg px-3 py-2">
-                    {uploadError}
+                  <p className="text-xs text-text-secondary">
+                    {tasks.length > 0
+                      ? `${tasks.length} file selezionat${tasks.length !== 1 ? 'i' : 'o'}`
+                      : 'PDF, immagini, Word · max 50 MB per file'}
                   </p>
-                )}
+                </div>
 
                 <div className="flex gap-2 pt-1">
                   <button
                     type="button"
                     onClick={closeModal}
-                    disabled={uploadPending}
-                    className="flex-1 border border-border rounded-xl py-2.5 text-sm text-text-secondary disabled:opacity-50"
+                    className="flex-1 border border-border rounded-xl py-2.5 text-sm text-text-secondary"
                   >
                     Annulla
                   </button>
                   <button
                     type="submit"
-                    disabled={uploadPending}
+                    disabled={tasks.length === 0}
                     className="flex-1 bg-brand-dark text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-50"
                   >
-                    {uploadPending ? 'Caricamento…' : 'Carica'}
+                    Carica
                   </button>
                 </div>
               </form>
@@ -396,6 +474,27 @@ function CategoryChip({
     >
       {label}
     </button>
+  )
+}
+
+function TaskRow({ task }: { task: FileTask }) {
+  const icon = {
+    in_coda:        <Clock className="w-4 h-4 text-text-secondary" strokeWidth={1.6} />,
+    in_caricamento: <Loader2 className="w-4 h-4 text-brand-medium animate-spin" strokeWidth={1.6} />,
+    fatto:           <CheckCircle2 className="w-4 h-4 text-brand-medium" strokeWidth={1.6} />,
+    errore:          <AlertCircle className="w-4 h-4 text-semantic-red" strokeWidth={1.6} />,
+  }[task.status]
+
+  return (
+    <div className="flex items-start gap-2 text-sm">
+      <span className="mt-0.5 flex-shrink-0">{icon}</span>
+      <div className="min-w-0 flex-1">
+        <p className="text-text-primary truncate">{task.file.name}</p>
+        {task.status === 'errore' && task.error && (
+          <p className="text-xs text-semantic-red leading-snug">{task.error}</p>
+        )}
+      </div>
+    </div>
   )
 }
 
