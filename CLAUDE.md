@@ -36,6 +36,10 @@ date, qualunque cosa dica il DB: rendering sempre "Consigliata · ogni X mesi", 
 Vietato il linguaggio scadenza/scaduta su queste voci. Garanzia strutturale, non cosmetica.
 Piano ≠ fascicolo. Item archiviati (activation_status) spariscono dal piano attivo
 ma i loro completamenti restano visibili nello storico/fascicolo.
+L'immutabilità del fascicolo si estende agli allegati che ne sono prova: il bucket
+storage attachments non ha policy DELETE per nessun ruolo, nemmeno l'uploader. Un
+eventuale cleanup va fatto solo via service role, mai riaprendo una policy DELETE
+per utenti autenticati.
 Email utenti da auth.users via service role client (auth.admin.getUserById),
 mai da profiles (che non ha colonna email — non aggiungerla: due fonti di verità).
 admin_assignments è stato corrente, non storico. Cambio admin = DELETE + INSERT.
@@ -58,6 +62,9 @@ Messaggi di commit: MAI here-string PowerShell con virgolette doppie. Usare riga
 singola senza caratteri speciali, oppure git commit -F <file> con messaggio su file.
 Migrazioni e RLS: solo anteprima. Mostrare lo SQL e fermarsi — le applica Filippo
 a mano nel SQL Editor di Supabase. Mai auto-eseguire DDL o scritture sul DB.
+Se un probe di verifica pianificato non è eseguibile per un limite d'ambiente
+(permessi del SQL Editor, protezioni di sistema), il footer di verifica riporta
+il motivo esatto e cosa lo ha sostituito — mai un esito positivo non verificato.
 Fine sessione: generare l'handoff con /handoff. Non modificare mai questo file
 (CLAUDE.md) direttamente: proporre i cambiamenti nella sezione "Leggi emerse" dell'handoff.
 
@@ -70,6 +77,11 @@ Pluralizzazione italiana via helper ("1 mese", non "1 mesi").
 Mai elementi interattivi annidati (button dentro button/link) → hydration error.
 Gap di configurazione: se esiste un elemento dedicato (es. card admin), il gap si
 mostra lì; le tile ambra della zona attenzione sono solo per gap senza elemento dedicato.
+Nelle policy RLS su storage.objects con subquery su un'altra tabella, qualificare
+sempre i riferimenti alle colonne di storage.objects (objects.name, objects.owner_id...),
+anche quando la tabella nella subquery non ha una colonna omonima: un riferimento non
+qualificato si lega silenziosamente alla tabella sbagliata, senza errore di parsing —
+il ramo della policy risulta sempre-falso o sempre-vero e si scopre solo a runtime.
 
 Comandi
 bashnpm run dev          # server di sviluppo (finestra PowerShell separata)
@@ -77,3 +89,14 @@ npm run build        # build di verifica prima di ogni commit
 Account di test
 pippoloro02 (super_admin) · filippoloro02 (admin) · lorofilippo2002 (residente)
 Alias demo admin: pippoloro02+adminB/C@gmail.com
+
+## Wiki Knowledge Base
+Path: C:\progetti\CasaZeroVault\wiki
+
+Quando serve contesto non già presente in questo progetto:
+1. Leggi prima wiki/hot.md (cache del contesto recente)
+2. Se non basta, leggi wiki/index.md
+3. Se servono dettagli di dominio, leggi il sub-index del dominio pertinente
+4. Solo allora entra nelle pagine specifiche della wiki
+
+Non leggere la wiki per domande generiche di coding o task estranei a CasaZero.
