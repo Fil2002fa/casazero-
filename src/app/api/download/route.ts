@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await supabase.storage
     .from(bucket)
-    .createSignedUrl(path, 3600)
+    .createSignedUrl(path, 3600, { download: true })
 
   if (error || !data) {
     return NextResponse.json({ error: error?.message ?? 'Errore generazione URL' }, { status: 500 })
