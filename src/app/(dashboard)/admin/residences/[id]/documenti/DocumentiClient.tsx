@@ -2,10 +2,11 @@
 
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { FileText, Download, Upload, X, Loader2, CheckCircle2, AlertCircle, Clock } from 'lucide-react'
+import { FileText, Download, Upload, X, Loader2, CheckCircle2, AlertCircle, Clock, Sparkles } from 'lucide-react'
 import type { DocumentCategory } from '@/types/database'
 import { createUploadUrl, confirmDocument } from './actions'
 import { ALLOWED_DOCUMENT_MIME, MAX_DOCUMENT_SIZE } from '@/lib/document-upload'
+import type { ClassificationStatus } from '@/lib/document-classification'
 import { createClient } from '@/lib/supabase/client'
 
 export type DocRow = {
@@ -17,6 +18,7 @@ export type DocRow = {
   file_date: string | null
   unit_id: string | null
   created_at: string
+  classification_status: ClassificationStatus
 }
 
 export type UnitRow = {
@@ -139,6 +141,11 @@ export function DocumentiClient({ residenceId, docs, units }: Props) {
   const [isUploading, setIsUploading] = useState(false)
   const router = useRouter()
 
+  // --- classificazione AI (batch sequenziale) ---
+  const [classifying, setClassifying] = useState(false)
+  const [classifyProgress, setClassifyProgress] = useState<{ done: number; total: number } | null>(null)
+  const pendingClassification = docs.filter(d => d.classification_status === 'non_classificato')
+
   // --- computed ---
   const isFiltered = catFilter !== 'all' || search.trim() !== ''
 
@@ -203,6 +210,37 @@ export function DocumentiClient({ residenceId, docs, units }: Props) {
 
     setIsUploading(false)
     if (results.some(r => r === 'fatto')) router.refresh()
+  }
+
+  // Sequenziale di proposito (mai Promise.all): un documento per invocazione,
+  // un fallimento non ferma gli altri, progress visibile durante il batch.
+  async function handleClassify() {
+    if (pendingClassification.length === 0 || classifying) return
+    setClassifying(true)
+    setClassifyProgress({ done: 0, total: pendingClassification.length })
+
+    for (const [i, doc] of pendingClassification.entries()) {
+      try {
+        const res = await fetch('/api/classify-document', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ documentId: doc.id }),
+        })
+        const result = await res.json().catch(() => null)
+        if (res.ok) {
+          console.log(`[classifica] ${doc.title}:`, result)
+        } else {
+          console.error(`[classifica] ${doc.title} fallita:`, result?.error ?? res.statusText)
+        }
+      } catch (err) {
+        console.error(`[classifica] ${doc.title} fallita:`, err)
+      }
+      setClassifyProgress({ done: i + 1, total: pendingClassification.length })
+    }
+
+    setClassifying(false)
+    setClassifyProgress(null)
+    router.refresh()
   }
 
   return (
@@ -368,7 +406,7 @@ export function DocumentiClient({ residenceId, docs, units }: Props) {
       )}
 
       {/* -------- Pulsante upload -------- */}
-      <div>
+      <div className="flex flex-wrap gap-2">
         <button
           onClick={() => setShowModal(true)}
           className="flex items-center gap-2 bg-brand-dark text-white rounded-xl px-4 py-2.5 text-sm font-medium active:scale-[0.98] transition-transform"
@@ -376,6 +414,23 @@ export function DocumentiClient({ residenceId, docs, units }: Props) {
           <Upload className="w-4 h-4" strokeWidth={1.8} />
           Carica documenti
         </button>
+
+        {pendingClassification.length > 0 && (
+          <button
+            onClick={handleClassify}
+            disabled={classifying}
+            className="flex items-center gap-2 border border-border text-text-secondary rounded-xl px-4 py-2.5 text-sm font-medium disabled:opacity-50"
+          >
+            {classifying ? (
+              <Loader2 className="w-4 h-4 animate-spin" strokeWidth={1.8} />
+            ) : (
+              <Sparkles className="w-4 h-4" strokeWidth={1.8} />
+            )}
+            {classifying && classifyProgress
+              ? `Classificazione: ${classifyProgress.done} di ${classifyProgress.total}`
+              : `Classifica documenti (${pendingClassification.length})`}
+          </button>
+        )}
       </div>
 
       {/* -------- Ricerca -------- */}

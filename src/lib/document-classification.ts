@@ -53,3 +53,12 @@ export const DOC_TYPE_TO_CATEGORY: Record<DocType, DocumentCategory | null> = {
 // Sotto soglia → classification_status 'da_revisionare' anche se la chiamata
 // AI ha prodotto un doc_type valido (coda di revisione umana, commit 4/5).
 export const CLASSIFICATION_CONFIDENCE_THRESHOLD = 0.8
+
+// Stati della pipeline di classificazione (025_documents_classification_status_review.sql,
+// CHECK su documents.classification_status). Fonte unica del tipo lato TS.
+export type ClassificationStatus =
+  | 'non_classificato'
+  | 'in_corso'
+  | 'completata'
+  | 'da_revisionare'
+  | 'fallita'
