@@ -19,6 +19,18 @@ export const maxDuration = 120
 // limite applicativo di upload, che è 50MB — vedi MAX_DOCUMENT_SIZE).
 const MAX_PDF_BYTES_FOR_API = 32 * 1024 * 1024
 
+// documents può contenere anche immagini/Word (ALLOWED_DOCUMENT_MIME):
+// questa route classifica solo PDF, quindi verifica i magic bytes prima di
+// spendere una chiamata API — un file non-PDF inviato come 'application/pdf'
+// produrrebbe un 400 dall'API a ogni tentativo, mai un 'fallita' risolvibile.
+const PDF_MAGIC_BYTES = [0x25, 0x50, 0x44, 0x46] // %PDF
+
+function hasPdfMagicBytes(buffer: ArrayBuffer): boolean {
+  if (buffer.byteLength < 4) return false
+  const bytes = new Uint8Array(buffer, 0, 4)
+  return PDF_MAGIC_BYTES.every((b, i) => bytes[i] === b)
+}
+
 const CLASSIFICATION_SCHEMA = {
   type: 'object',
   properties: {
@@ -118,6 +130,16 @@ export async function POST(req: NextRequest) {
     }
 
     const arrayBuffer = await fileBlob.arrayBuffer()
+
+    if (!hasPdfMagicBytes(arrayBuffer)) {
+      await admin.from('documents').update({
+        classification_status: 'da_revisionare',
+        extracted_metadata: {
+          skipped_reason: 'tipo file non supportato per classificazione automatica',
+        },
+      }).eq('id', documentId)
+      return NextResponse.json({ status: 'da_revisionare', reason: 'not_a_pdf' })
+    }
 
     if (arrayBuffer.byteLength > MAX_PDF_BYTES_FOR_API) {
       await admin.from('documents').update({
