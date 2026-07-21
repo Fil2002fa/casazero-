@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import type { DocumentCategory } from '@/types/database'
+import { ALLOWED_DOCUMENT_MIME, MAX_DOCUMENT_SIZE } from '@/lib/document-upload'
 
 export async function uploadDocument(
   formData: FormData
@@ -32,7 +33,10 @@ export async function uploadDocument(
     return { error: 'Tutti i campi obbligatori devono essere compilati' }
   }
 
-  if (file.size > 52428800) return { error: 'File troppo grande (max 50 MB)' }
+  if (file.size > MAX_DOCUMENT_SIZE) return { error: 'File troppo grande (max 50 MB)' }
+  if (!ALLOWED_DOCUMENT_MIME.has(file.type)) {
+    return { error: 'Tipo file non supportato (PDF, immagini, Word)' }
+  }
 
   const ext = file.name.split('.').pop() ?? 'bin'
   const safeTitle = title.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40)
