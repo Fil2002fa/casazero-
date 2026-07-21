@@ -4,10 +4,24 @@ import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { FileText, Download, Upload, X, Loader2, CheckCircle2, AlertCircle, Clock, Sparkles } from 'lucide-react'
 import type { DocumentCategory } from '@/types/database'
-import { createUploadUrl, confirmDocument } from './actions'
+import { createUploadUrl, confirmDocument, confirmClassification } from './actions'
 import { ALLOWED_DOCUMENT_MIME, MAX_DOCUMENT_SIZE } from '@/lib/document-upload'
-import type { ClassificationStatus } from '@/lib/document-classification'
+import {
+  DOC_TYPES,
+  DOC_TYPE_LABELS,
+  type DocType,
+  type ClassificationStatus,
+} from '@/lib/document-classification'
 import { createClient } from '@/lib/supabase/client'
+
+// Sottoinsieme letto di extracted_metadata (jsonb): la proposta AI completa,
+// oppure una nota di skip. Tutti i campi opzionali — si legge in difesa.
+type ClassificationMetadata = {
+  motivazione?: string
+  unita_riferimento?: string | null
+  skipped_reason?: string
+  nota?: string
+}
 
 export type DocRow = {
   id: string
@@ -19,6 +33,9 @@ export type DocRow = {
   unit_id: string | null
   created_at: string
   classification_status: ClassificationStatus
+  doc_type: DocType | null
+  classification_confidence: number | null
+  extracted_metadata: ClassificationMetadata | null
 }
 
 export type UnitRow = {
@@ -144,20 +161,23 @@ export function DocumentiClient({ residenceId, docs, units }: Props) {
   // --- classificazione AI (batch sequenziale) ---
   const [classifying, setClassifying] = useState(false)
   const [classifyProgress, setClassifyProgress] = useState<{ done: number; total: number } | null>(null)
+  const [reviewOnly, setReviewOnly] = useState(false)
   const pendingClassification = docs.filter(d => d.classification_status === 'non_classificato')
+  const reviewCount = docs.filter(d => d.classification_status === 'da_revisionare').length
 
   // --- computed ---
-  const isFiltered = catFilter !== 'all' || search.trim() !== ''
+  const isFiltered = catFilter !== 'all' || search.trim() !== '' || reviewOnly
 
   const filtered = useMemo(() => {
     let result = docs
     if (catFilter !== 'all') result = result.filter(d => d.category === catFilter)
+    if (reviewOnly) result = result.filter(d => d.classification_status === 'da_revisionare')
     if (search.trim()) {
       const q = search.toLowerCase()
       result = result.filter(d => d.title.toLowerCase().includes(q))
     }
     return result
-  }, [docs, catFilter, search])
+  }, [docs, catFilter, reviewOnly, search])
 
   const residenceDocs = filtered.filter(d => d.unit_id === null)
 
@@ -444,7 +464,7 @@ export function DocumentiClient({ residenceId, docs, units }: Props) {
         />
         {isFiltered && (
           <button
-            onClick={() => { setSearch(''); setCatFilter('all') }}
+            onClick={() => { setSearch(''); setCatFilter('all'); setReviewOnly(false) }}
             className="border border-border rounded-xl px-3 py-2 text-sm text-text-secondary bg-surface"
           >
             ✕
@@ -452,17 +472,24 @@ export function DocumentiClient({ residenceId, docs, units }: Props) {
         )}
       </div>
 
-      {/* -------- Chip categorie -------- */}
+      {/* -------- Chip categorie + coda revisione -------- */}
       <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-1 scrollbar-none">
-        <CategoryChip label="Tutti" active={catFilter === 'all'} onClick={() => setCatFilter('all')} />
+        <CategoryChip label="Tutti" active={catFilter === 'all' && !reviewOnly} onClick={() => { setCatFilter('all'); setReviewOnly(false) }} />
         {CATEGORIES.map(c => (
           <CategoryChip
             key={c.value}
             label={c.label}
-            active={catFilter === c.value}
-            onClick={() => setCatFilter(prev => prev === c.value ? 'all' : c.value)}
+            active={!reviewOnly && catFilter === c.value}
+            onClick={() => { setReviewOnly(false); setCatFilter(prev => prev === c.value ? 'all' : c.value) }}
           />
         ))}
+        {reviewCount > 0 && (
+          <CategoryChip
+            label={`Da rivedere (${reviewCount})`}
+            active={reviewOnly}
+            onClick={() => setReviewOnly(v => !v)}
+          />
+        )}
       </div>
 
       {/* -------- Contatore -------- */}
@@ -553,29 +580,158 @@ function TaskRow({ task }: { task: FileTask }) {
   )
 }
 
+// Fonte unica per label + colore del badge di stato classificazione, riusata
+// da ogni card. 'da_revisionare'/'fallita' non usano mai la parola "fallita"
+// né linguaggio di scadenza (stessa filosofia dell'invariante promemoria).
+// Colori dalla famiglia di 2ª generazione ammessa ai componenti nuovi
+// (status-*/brand/neutral): mai semantic-* (Regola delle Due Generazioni,
+// DESIGN.md). 'non_classificato' → nessun badge.
+function classificationBadgeInfo(
+  doc: DocRow
+): { label: string; className: string; spinner?: boolean } | null {
+  switch (doc.classification_status) {
+    case 'completata':
+      return {
+        label: doc.doc_type ? DOC_TYPE_LABELS[doc.doc_type] : 'Classificato',
+        className: 'bg-brand-dark/8 text-brand-dark',
+      }
+    case 'da_revisionare':
+      return { label: 'Da rivedere', className: 'bg-status-inprogress/8 text-status-inprogress' }
+    case 'fallita':
+      return { label: 'Errore, riprova', className: 'bg-neutral-600/7 text-neutral-600' }
+    case 'in_corso':
+      return { label: 'Classificazione…', className: 'bg-neutral-600/7 text-neutral-600', spinner: true }
+    case 'non_classificato':
+      return null
+  }
+}
+
+function ClassificationBadge({ doc }: { doc: DocRow }) {
+  const info = classificationBadgeInfo(doc)
+  if (!info) return null
+  return (
+    <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium ${info.className}`}>
+      {info.spinner && <Loader2 className="w-3 h-3 animate-spin" strokeWidth={2} />}
+      {info.label}
+    </span>
+  )
+}
+
 function DocCard({ doc }: { doc: DocRow }) {
+  const [reviewOpen, setReviewOpen] = useState(false)
   const formattedDate = new Date(doc.file_date ?? doc.created_at).toLocaleDateString('it-IT', {
     day: 'numeric', month: 'short', year: 'numeric',
   })
+  // La revisione umana ha senso solo dove c'è (o dovrebbe esserci) un doc_type
+  // da confermare/correggere: 'fallita' è un errore tecnico da riclassificare,
+  // non da rivedere nel merito.
+  const canReview = doc.classification_status === 'da_revisionare' || doc.classification_status === 'completata'
   return (
-    <div className="bg-surface rounded-xl border border-border p-4 flex items-center gap-3">
-      <div className="w-10 h-10 bg-background rounded-lg flex items-center justify-center flex-shrink-0">
-        <FileText className="w-5 h-5 text-text-secondary" strokeWidth={1.6} />
+    <div className="bg-surface rounded-xl border border-border">
+      <div className="p-4 flex items-center gap-3">
+        <div className="w-10 h-10 bg-background rounded-lg flex items-center justify-center flex-shrink-0">
+          <FileText className="w-5 h-5 text-text-secondary" strokeWidth={1.6} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-text-primary truncate">{doc.title}</p>
+          <p className="text-xs text-text-secondary mt-0.5 truncate">{doc.file_name} · {formattedDate}</p>
+          {/* Due assi distinti, mai fusi (legge di dominio 024): categoria a
+              sinistra, stato/tipo classificazione a destra. */}
+          <div className="flex flex-wrap items-center gap-1.5 mt-1">
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-light text-brand-dark font-medium">
+              {CAT_LABELS[doc.category]}
+            </span>
+            <ClassificationBadge doc={doc} />
+          </div>
+        </div>
+        <a
+          href={`/api/download?bucket=documents&path=${encodeURIComponent(doc.storage_path)}`}
+          className="p-2 rounded-lg text-brand-medium flex-shrink-0 hover:bg-brand-light transition-colors"
+          title="Scarica documento"
+        >
+          <Download className="w-5 h-5" strokeWidth={1.6} />
+        </a>
       </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-text-primary truncate">{doc.title}</p>
-        <p className="text-xs text-text-secondary mt-0.5 truncate">{doc.file_name} · {formattedDate}</p>
-        <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full bg-brand-light text-brand-dark font-medium">
-          {CAT_LABELS[doc.category]}
-        </span>
+
+      {canReview && (
+        <div className="border-t border-border px-4 py-2">
+          <button
+            onClick={() => setReviewOpen(v => !v)}
+            className="text-xs font-medium text-brand-medium"
+          >
+            {reviewOpen ? 'Chiudi revisione' : 'Rivedi classificazione'}
+          </button>
+          {reviewOpen && <ReviewPanel doc={doc} onDone={() => setReviewOpen(false)} />}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ReviewPanel({ doc, onDone }: { doc: DocRow; onDone: () => void }) {
+  const router = useRouter()
+  const [selected, setSelected] = useState<DocType>(doc.doc_type ?? 'altro')
+  const [saving, setSaving]     = useState(false)
+  const [error, setError]       = useState<string | null>(null)
+
+  const confidencePct = doc.classification_confidence != null
+    ? Math.round(doc.classification_confidence * 100)
+    : null
+
+  async function handleConfirm() {
+    setSaving(true)
+    setError(null)
+    const res = await confirmClassification({ documentId: doc.id, docType: selected })
+    setSaving(false)
+    if ('error' in res) {
+      setError(res.error)
+    } else {
+      onDone()
+      router.refresh()
+    }
+  }
+
+  return (
+    <div className="mt-2 space-y-2">
+      {/* Proposta AI (sola lettura) */}
+      <div className="text-xs text-text-secondary space-y-0.5">
+        {doc.doc_type ? (
+          <p>
+            Proposta AI: <span className="text-text-primary font-medium">{DOC_TYPE_LABELS[doc.doc_type]}</span>
+            {confidencePct != null && ` · ${confidencePct}% di confidenza`}
+          </p>
+        ) : (
+          <p>
+            Nessuna proposta automatica
+            {doc.extracted_metadata?.skipped_reason ? ` (${doc.extracted_metadata.skipped_reason})` : ''}.
+          </p>
+        )}
+        {doc.extracted_metadata?.motivazione && (
+          <p className="italic">{doc.extracted_metadata.motivazione}</p>
+        )}
       </div>
-      <a
-        href={`/api/download?bucket=documents&path=${encodeURIComponent(doc.storage_path)}`}
-        className="p-2 rounded-lg text-brand-medium flex-shrink-0 hover:bg-brand-light transition-colors"
-        title="Scarica documento"
+
+      {/* Conferma o correzione */}
+      <select
+        value={selected}
+        onChange={e => setSelected(e.target.value as DocType)}
+        aria-label="Tipo documento"
+        className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
       >
-        <Download className="w-5 h-5" strokeWidth={1.6} />
-      </a>
+        {DOC_TYPES.map(t => (
+          <option key={t} value={t}>{DOC_TYPE_LABELS[t]}</option>
+        ))}
+      </select>
+
+      {error && <p className="text-xs text-semantic-red">{error}</p>}
+
+      <button
+        onClick={handleConfirm}
+        disabled={saving}
+        className="w-full bg-brand-dark text-white rounded-xl py-2 text-sm font-medium disabled:opacity-50"
+      >
+        {saving ? 'Salvataggio…' : 'Conferma classificazione'}
+      </button>
     </div>
   )
 }

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import type { DocumentCategory } from '@/types/database'
 import { ALLOWED_DOCUMENT_MIME } from '@/lib/document-upload'
+import { DOC_TYPES, type DocType } from '@/lib/document-classification'
 
 type AuthorizedUser = { user: { id: string } }
 type AuthError = { error: string }
@@ -178,5 +179,48 @@ export async function confirmDocument(input: ConfirmDocumentInput): Promise<Conf
   }
 
   revalidatePath(`/admin/residences/${residenceId}/documenti`)
+  return { success: true }
+}
+
+export type ConfirmClassificationResult = { success: true } | { error: string }
+
+// Conferma umana della classificazione AI (decisione #7: l'AI propone, l'umano
+// decide). È l'UNICO punto che scrive reviewed_by/reviewed_at, e li scrive
+// SERVER-SIDE (auth.user.id + now()), mai da valori passati dal client. Usa il
+// client scoped-utente: la policy RLS "documents: admin e super_admin
+// gestiscono" (002_rls.sql) autorizza l'UPDATE solo al super_admin del builder
+// proprietario — il residente non ha alcuna policy di scrittura su documents.
+export async function confirmClassification(input: {
+  documentId: string
+  docType: DocType
+}): Promise<ConfirmClassificationResult> {
+  const supabase = await createClient()
+  const auth = await getAuthorizedSuperAdmin(supabase)
+  if ('error' in auth) return { error: auth.error }
+
+  const { documentId, docType } = input
+  if (!documentId || !(DOC_TYPES as string[]).includes(docType)) {
+    return { error: 'Parametri non validi' }
+  }
+
+  const { data, error } = await supabase
+    .from('documents')
+    .update({
+      doc_type: docType,
+      classification_status: 'completata',
+      reviewed_by: auth.user.id,
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq('id', documentId)
+    .select('residence_id')
+
+  if (error) return { error: `Errore salvataggio: ${error.message}` }
+  // RLS può filtrare la riga senza errore se il documento è fuori dallo scope
+  // del super_admin: nessuna riga aggiornata.
+  if (!data || data.length === 0) {
+    return { error: 'Documento non trovato o non accessibile' }
+  }
+
+  revalidatePath(`/admin/residences/${data[0].residence_id}/documenti`)
   return { success: true }
 }

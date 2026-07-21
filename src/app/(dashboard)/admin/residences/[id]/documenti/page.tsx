@@ -35,7 +35,7 @@ export default async function ResidenceDocumentiPage({
   const [{ data: rawDocs }, { data: rawUnits }] = await Promise.all([
     supabase
       .from('documents')
-      .select('id, title, category, file_name, storage_path, file_date, unit_id, created_at, classification_status')
+      .select('id, title, category, file_name, storage_path, file_date, unit_id, created_at, classification_status, doc_type, classification_confidence, extracted_metadata')
       .eq('residence_id', residenceId)
       .order('created_at', { ascending: false }),
     supabase
