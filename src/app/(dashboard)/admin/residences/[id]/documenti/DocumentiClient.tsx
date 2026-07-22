@@ -163,22 +163,29 @@ export function DocumentiClient({ residenceId, docs, units }: Props) {
   const [classifying, setClassifying] = useState(false)
   const [classifyProgress, setClassifyProgress] = useState<{ done: number; total: number } | null>(null)
   const [reviewOnly, setReviewOnly] = useState(false)
+  const [docTypeFilter, setDocTypeFilter] = useState<DocType | 'all'>('all')
   const pendingClassification = docs.filter(d => d.classification_status === 'non_classificato')
   const reviewCount = docs.filter(d => d.classification_status === 'da_revisionare').length
+  // Solo i doc_type davvero presenti tra i documenti (niente chip vuoti),
+  // in ordine canonico dalla costante fonte unica.
+  const presentDocTypes = DOC_TYPES.filter(t => docs.some(d => d.doc_type === t))
 
   // --- computed ---
-  const isFiltered = catFilter !== 'all' || search.trim() !== '' || reviewOnly
+  // category e doc_type sono assi distinti e combinabili (AND): l'uno non
+  // azzera l'altro, solo il reset ✕ azzera tutto.
+  const isFiltered = catFilter !== 'all' || search.trim() !== '' || reviewOnly || docTypeFilter !== 'all'
 
   const filtered = useMemo(() => {
     let result = docs
     if (catFilter !== 'all') result = result.filter(d => d.category === catFilter)
+    if (docTypeFilter !== 'all') result = result.filter(d => d.doc_type === docTypeFilter)
     if (reviewOnly) result = result.filter(d => d.classification_status === 'da_revisionare')
     if (search.trim()) {
       const q = search.toLowerCase()
       result = result.filter(d => d.title.toLowerCase().includes(q))
     }
     return result
-  }, [docs, catFilter, reviewOnly, search])
+  }, [docs, catFilter, docTypeFilter, reviewOnly, search])
 
   const residenceDocs = filtered.filter(d => d.unit_id === null)
 
@@ -465,7 +472,7 @@ export function DocumentiClient({ residenceId, docs, units }: Props) {
         />
         {isFiltered && (
           <button
-            onClick={() => { setSearch(''); setCatFilter('all'); setReviewOnly(false) }}
+            onClick={() => { setSearch(''); setCatFilter('all'); setReviewOnly(false); setDocTypeFilter('all') }}
             className="border border-border rounded-xl px-3 py-2 text-sm text-text-secondary bg-surface"
           >
             ✕
@@ -492,6 +499,21 @@ export function DocumentiClient({ residenceId, docs, units }: Props) {
           />
         )}
       </div>
+
+      {/* -------- Chip per tipo documento (asse doc_type, combinabile) -------- */}
+      {presentDocTypes.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-1 scrollbar-none">
+          <CategoryChip label="Tutti i tipi" active={docTypeFilter === 'all'} onClick={() => setDocTypeFilter('all')} />
+          {presentDocTypes.map(t => (
+            <CategoryChip
+              key={t}
+              label={DOC_TYPE_LABELS[t]}
+              active={docTypeFilter === t}
+              onClick={() => setDocTypeFilter(prev => prev === t ? 'all' : t)}
+            />
+          ))}
+        </div>
+      )}
 
       {/* -------- Contatore -------- */}
       {!isEmpty && (
