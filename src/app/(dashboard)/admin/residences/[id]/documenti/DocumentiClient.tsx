@@ -6,6 +6,7 @@ import { FileText, Download, Upload, X, Loader2, CheckCircle2, AlertCircle, Cloc
 import type { DocumentCategory } from '@/types/database'
 import { createUploadUrl, confirmDocument, confirmClassification } from './actions'
 import { ALLOWED_DOCUMENT_MIME, MAX_DOCUMENT_SIZE } from '@/lib/document-upload'
+import { pluralize } from '@/lib/pluralize'
 import {
   DOC_TYPES,
   DOC_TYPE_LABELS,
@@ -495,7 +496,7 @@ export function DocumentiClient({ residenceId, docs, units }: Props) {
       {/* -------- Contatore -------- */}
       {!isEmpty && (
         <p className="text-xs text-text-secondary">
-          {filtered.length} documento{filtered.length !== 1 ? 'i' : ''}
+          {pluralize(filtered.length, 'documento', 'documenti')}
         </p>
       )}
 
