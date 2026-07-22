@@ -54,6 +54,48 @@ export const DOC_TYPE_TO_CATEGORY: Record<DocType, DocumentCategory | null> = {
 // AI ha prodotto un doc_type valido (coda di revisione umana, commit 4/5).
 export const CLASSIFICATION_CONFIDENCE_THRESHOLD = 0.8
 
+// Asse `sistema` — a QUALE impianto si riferisce un documento (prerequisito B4:
+// "manca la conformità dell'impianto termico"). Ortogonale a doc_type: un
+// edificio ha più impianti, ciascuno con le proprie dich. conformità/collaudi/
+// manuali/garanzie. Vive in extracted_metadata (jsonb), NON è una colonna né
+// tocca doc_type/category/path (nessuna migrazione). null quando il documento
+// non riguarda un impianto specifico o in caso di dubbio: mai indovinare, un
+// valore inventato genererebbe falsi "mancanti" in B4.
+export type Sistema =
+  | 'elettrico'
+  | 'termico'
+  | 'gas'
+  | 'idrico_sanitario'
+  | 'antincendio'
+  | 'ascensore'
+  | 'fotovoltaico'
+  | 'vmc'
+  | 'altro'
+
+export const SISTEMI: Sistema[] = [
+  'elettrico',
+  'termico',
+  'gas',
+  'idrico_sanitario',
+  'antincendio',
+  'ascensore',
+  'fotovoltaico',
+  'vmc',
+  'altro',
+]
+
+export const SISTEMA_LABELS: Record<Sistema, string> = {
+  elettrico:        'Impianto elettrico',
+  termico:          'Impianto termico',
+  gas:              'Impianto gas',
+  idrico_sanitario: 'Impianto idrico-sanitario',
+  antincendio:      'Impianto antincendio',
+  ascensore:        'Ascensore',
+  fotovoltaico:     'Impianto fotovoltaico',
+  vmc:              'VMC (ventilazione meccanica)',
+  altro:            'Altro impianto',
+}
+
 // Stati della pipeline di classificazione (025_documents_classification_status_review.sql,
 // CHECK su documents.classification_status). Fonte unica del tipo lato TS.
 export type ClassificationStatus =

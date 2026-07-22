@@ -10,7 +10,9 @@ import { pluralize } from '@/lib/pluralize'
 import {
   DOC_TYPES,
   DOC_TYPE_LABELS,
+  SISTEMA_LABELS,
   type DocType,
+  type Sistema,
   type ClassificationStatus,
 } from '@/lib/document-classification'
 import { createClient } from '@/lib/supabase/client'
@@ -18,6 +20,7 @@ import { createClient } from '@/lib/supabase/client'
 // Sottoinsieme letto di extracted_metadata (jsonb): la proposta AI completa,
 // oppure una nota di skip. Tutti i campi opzionali — si legge in difesa.
 type ClassificationMetadata = {
+  sistema?: Sistema | null
   motivazione?: string
   unita_riferimento?: string | null
   skipped_reason?: string
@@ -613,11 +616,16 @@ function classificationBadgeInfo(
   doc: DocRow
 ): { label: string; className: string; spinner?: boolean } | null {
   switch (doc.classification_status) {
-    case 'completata':
+    case 'completata': {
+      // sistema (impianto) accanto al doc_type quando presente — assi distinti,
+      // il sistema qualifica il tipo, non lo sostituisce.
+      const sistema = doc.extracted_metadata?.sistema
+      const base = doc.doc_type ? DOC_TYPE_LABELS[doc.doc_type] : 'Classificato'
       return {
-        label: doc.doc_type ? DOC_TYPE_LABELS[doc.doc_type] : 'Classificato',
+        label: sistema ? `${base} · ${SISTEMA_LABELS[sistema]}` : base,
         className: 'bg-brand-dark/8 text-brand-dark',
       }
+    }
     case 'da_revisionare':
       return { label: 'Da rivedere', className: 'bg-status-inprogress/8 text-status-inprogress' }
     case 'fallita':
@@ -721,6 +729,7 @@ function ReviewPanel({ doc, onDone }: { doc: DocRow; onDone: () => void }) {
         {doc.doc_type ? (
           <p>
             Proposta AI: <span className="text-text-primary font-medium">{DOC_TYPE_LABELS[doc.doc_type]}</span>
+            {doc.extracted_metadata?.sistema && ` · ${SISTEMA_LABELS[doc.extracted_metadata.sistema]}`}
             {confidencePct != null && ` · ${confidencePct}% di confidenza`}
           </p>
         ) : (

@@ -6,7 +6,10 @@ import {
   DOC_TYPES,
   DOC_TYPE_LABELS,
   CLASSIFICATION_CONFIDENCE_THRESHOLD,
+  SISTEMI,
+  SISTEMA_LABELS,
   type DocType,
+  type Sistema,
 } from '@/lib/document-classification'
 
 // Forza runtime Node.js — @anthropic-ai/sdk e il download storage non sono
@@ -35,11 +38,12 @@ const CLASSIFICATION_SCHEMA = {
   type: 'object',
   properties: {
     doc_type: { type: 'string', enum: DOC_TYPES },
+    sistema: { anyOf: [{ type: 'string', enum: SISTEMI }, { type: 'null' }] },
     confidence: { type: 'number' },
     unita_riferimento: { anyOf: [{ type: 'string' }, { type: 'null' }] },
     motivazione: { type: 'string' },
   },
-  required: ['doc_type', 'confidence', 'unita_riferimento', 'motivazione'],
+  required: ['doc_type', 'sistema', 'confidence', 'unita_riferimento', 'motivazione'],
   additionalProperties: false,
 }
 
@@ -50,6 +54,11 @@ ${DOC_TYPES.map(t => `- ${t}: ${DOC_TYPE_LABELS[t]}`).join('\n')}
 
 Se il documento non è chiaramente riconducibile a nessuna delle categorie sopra (escluso "altro"), usa "altro".
 
+Il campo "sistema" indica a QUALE impianto tecnico si riferisce il documento. Valorizzalo SOLO quando il documento riguarda un impianto specifico — tipicamente per dich_conformita_dm37, collaudo, manuale, garanzia. Per ape, agibilita, capitolato, altro → sempre null.
+Valori ammessi per "sistema":
+${SISTEMI.map(s => `- ${s}: ${SISTEMA_LABELS[s]}`).join('\n')}
+Usa un valore specifico solo se l'impianto è chiaramente identificabile dal documento; usa "altro" solo se è chiaramente un impianto ma non rientra nell'elenco. In OGNI caso di dubbio → null: NON indovinare mai l'impianto, un valore inventato produce falsi allarmi di documenti mancanti a valle.
+
 Se il documento cita esplicitamente un'unità immobiliare specifica (es. numero interno, scala, piano) riportalo in unita_riferimento; se il documento riguarda l'intero condominio o non cita un'unità specifica, usa null.
 
 Assegna un valore di confidence tra 0 e 1 che rifletta quanto sei sicuro della classificazione: valori bassi per documenti ambigui, di scarsa qualità, o dove il contenuto non corrisponde chiaramente a nessuna categoria specifica.
@@ -58,6 +67,7 @@ Rispondi SOLO con l'oggetto JSON richiesto dallo schema, nessun altro testo.`
 
 type ClassificationResult = {
   doc_type: DocType
+  sistema: Sistema | null
   confidence: number
   unita_riferimento: string | null
   motivazione: string
@@ -67,6 +77,7 @@ function isValidClassificationResult(value: unknown): value is ClassificationRes
   if (!value || typeof value !== 'object') return false
   const v = value as Record<string, unknown>
   if (typeof v.doc_type !== 'string' || !(DOC_TYPES as string[]).includes(v.doc_type)) return false
+  if (v.sistema !== null && (typeof v.sistema !== 'string' || !(SISTEMI as string[]).includes(v.sistema))) return false
   if (typeof v.confidence !== 'number' || Number.isNaN(v.confidence) || v.confidence < 0 || v.confidence > 1) return false
   if (v.unita_riferimento !== null && typeof v.unita_riferimento !== 'string') return false
   if (typeof v.motivazione !== 'string') return false
