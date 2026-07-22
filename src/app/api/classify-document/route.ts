@@ -225,6 +225,10 @@ export async function POST(req: NextRequest) {
     await admin.from('documents').update({
       classification_status: finalStatus,
       doc_type: parsed.doc_type,
+      // Colonna `sistema` = verità (per ora, dalla proposta AI; l'umano la
+      // può correggere in revisione). Coerente con extracted_metadata, che
+      // resta il verbale della proposta. null = nessun impianto specifico.
+      sistema: parsed.sistema,
       classification_confidence: parsed.confidence,
       extracted_metadata: parsed,
     }).eq('id', documentId)

@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import type { DocumentCategory } from '@/types/database'
 import { ALLOWED_DOCUMENT_MIME } from '@/lib/document-upload'
-import { DOC_TYPES, type DocType } from '@/lib/document-classification'
+import { DOC_TYPES, SISTEMI, type DocType, type Sistema } from '@/lib/document-classification'
 
 type AuthorizedUser = { user: { id: string } }
 type AuthError = { error: string }
@@ -190,16 +190,24 @@ export type ConfirmClassificationResult = { success: true } | { error: string }
 // client scoped-utente: la policy RLS "documents: admin e super_admin
 // gestiscono" (002_rls.sql) autorizza l'UPDATE solo al super_admin del builder
 // proprietario — il residente non ha alcuna policy di scrittura su documents.
+//
+// sistema = verità confermata dell'impianto (OPZIONE B, B4): scritta nella
+// colonna dedicata, mai in extracted_metadata (che resta il verbale immutabile
+// della proposta AI e NON va riallineato). null = nessun impianto specifico.
 export async function confirmClassification(input: {
   documentId: string
   docType: DocType
+  sistema: Sistema | null
 }): Promise<ConfirmClassificationResult> {
   const supabase = await createClient()
   const auth = await getAuthorizedSuperAdmin(supabase)
   if ('error' in auth) return { error: auth.error }
 
-  const { documentId, docType } = input
+  const { documentId, docType, sistema } = input
   if (!documentId || !(DOC_TYPES as string[]).includes(docType)) {
+    return { error: 'Parametri non validi' }
+  }
+  if (sistema !== null && !(SISTEMI as string[]).includes(sistema)) {
     return { error: 'Parametri non validi' }
   }
 
@@ -207,6 +215,7 @@ export async function confirmClassification(input: {
     .from('documents')
     .update({
       doc_type: docType,
+      sistema,
       classification_status: 'completata',
       reviewed_by: auth.user.id,
       reviewed_at: new Date().toISOString(),

@@ -10,6 +10,7 @@ import { pluralize } from '@/lib/pluralize'
 import {
   DOC_TYPES,
   DOC_TYPE_LABELS,
+  SISTEMI,
   SISTEMA_LABELS,
   type DocType,
   type Sistema,
@@ -702,6 +703,9 @@ function DocCard({ doc }: { doc: DocRow }) {
 function ReviewPanel({ doc, onDone }: { doc: DocRow; onDone: () => void }) {
   const router = useRouter()
   const [selected, setSelected] = useState<DocType>(doc.doc_type ?? 'altro')
+  // Precompilato con la proposta AI (extracted_metadata) quando c'è; '' = nessun
+  // impianto specifico (→ null in colonna documents.sistema, verità confermata).
+  const [sistema, setSistema]   = useState<Sistema | ''>(doc.extracted_metadata?.sistema ?? '')
   const [saving, setSaving]     = useState(false)
   const [error, setError]       = useState<string | null>(null)
 
@@ -712,7 +716,11 @@ function ReviewPanel({ doc, onDone }: { doc: DocRow; onDone: () => void }) {
   async function handleConfirm() {
     setSaving(true)
     setError(null)
-    const res = await confirmClassification({ documentId: doc.id, docType: selected })
+    const res = await confirmClassification({
+      documentId: doc.id,
+      docType: selected,
+      sistema: sistema === '' ? null : sistema,
+    })
     setSaving(false)
     if ('error' in res) {
       setError(res.error)
@@ -743,17 +751,36 @@ function ReviewPanel({ doc, onDone }: { doc: DocRow; onDone: () => void }) {
         )}
       </div>
 
-      {/* Conferma o correzione */}
-      <select
-        value={selected}
-        onChange={e => setSelected(e.target.value as DocType)}
-        aria-label="Tipo documento"
-        className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
-      >
-        {DOC_TYPES.map(t => (
-          <option key={t} value={t}>{DOC_TYPE_LABELS[t]}</option>
-        ))}
-      </select>
+      {/* Conferma o correzione: tipo documento */}
+      <div className="space-y-1.5">
+        <label htmlFor={`doctype-${doc.id}`} className="text-xs font-medium text-text-secondary block">Tipo documento</label>
+        <select
+          id={`doctype-${doc.id}`}
+          value={selected}
+          onChange={e => setSelected(e.target.value as DocType)}
+          className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
+        >
+          {DOC_TYPES.map(t => (
+            <option key={t} value={t}>{DOC_TYPE_LABELS[t]}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Impianto di riferimento (verità confermata → documents.sistema) */}
+      <div className="space-y-1.5">
+        <label htmlFor={`sistema-${doc.id}`} className="text-xs font-medium text-text-secondary block">Impianto di riferimento</label>
+        <select
+          id={`sistema-${doc.id}`}
+          value={sistema}
+          onChange={e => setSistema(e.target.value as Sistema | '')}
+          className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
+        >
+          <option value="">Nessun impianto specifico</option>
+          {SISTEMI.map(s => (
+            <option key={s} value={s}>{SISTEMA_LABELS[s]}</option>
+          ))}
+        </select>
+      </div>
 
       {error && <p className="text-xs text-semantic-red">{error}</p>}
 
