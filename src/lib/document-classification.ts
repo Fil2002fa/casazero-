@@ -14,6 +14,16 @@ export type DocType =
   | 'collaudo'
   | 'agibilita'
   | 'capitolato'
+  | 'libretto_impianto'
+  | 'as_built'
+  | 'planimetria_catastale'
+  | 'piano_manutenzione_opera'
+  | 'cert_linee_vita'
+  | 'regolamento_condominiale'
+  | 'tabelle_millesimali'
+  | 'polizza_decennale'
+  | 'elenco_fornitori'
+  | 'schede_materiali'
   | 'altro'
 
 export const DOC_TYPES: DocType[] = [
@@ -24,6 +34,16 @@ export const DOC_TYPES: DocType[] = [
   'collaudo',
   'agibilita',
   'capitolato',
+  'libretto_impianto',
+  'as_built',
+  'planimetria_catastale',
+  'piano_manutenzione_opera',
+  'cert_linee_vita',
+  'regolamento_condominiale',
+  'tabelle_millesimali',
+  'polizza_decennale',
+  'elenco_fornitori',
+  'schede_materiali',
   'altro',
 ]
 
@@ -35,6 +55,16 @@ export const DOC_TYPE_LABELS: Record<DocType, string> = {
   collaudo: 'Collaudo',
   agibilita: 'Agibilità',
   capitolato: 'Capitolato',
+  libretto_impianto: 'Libretto d’impianto',
+  as_built: 'Elaborati as-built',
+  planimetria_catastale: 'Planimetria catastale',
+  piano_manutenzione_opera: 'Piano di manutenzione dell’opera',
+  cert_linee_vita: 'Certificazione linee vita',
+  regolamento_condominiale: 'Regolamento condominiale',
+  tabelle_millesimali: 'Tabelle millesimali',
+  polizza_decennale: 'Polizza decennale postuma',
+  elenco_fornitori: 'Elenco fornitori e manutentori',
+  schede_materiali: 'Schede materiali e finiture',
   altro: 'Altro',
 }
 
@@ -47,6 +77,16 @@ export const DOC_TYPE_TO_CATEGORY: Record<DocType, DocumentCategory | null> = {
   collaudo: 'tecnici',
   agibilita: 'amministrativi',
   capitolato: 'tecnici',
+  libretto_impianto: 'tecnici',
+  as_built: 'tecnici',
+  planimetria_catastale: 'proprieta',
+  piano_manutenzione_opera: 'tecnici',
+  cert_linee_vita: 'conformita',
+  regolamento_condominiale: 'amministrativi',
+  tabelle_millesimali: 'amministrativi',
+  polizza_decennale: 'amministrativi',
+  elenco_fornitori: 'amministrativi',
+  schede_materiali: 'tecnici',
   altro: null,
 }
 

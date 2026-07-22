@@ -54,6 +54,8 @@ ${DOC_TYPES.map(t => `- ${t}: ${DOC_TYPE_LABELS[t]}`).join('\n')}
 
 Se il documento non è chiaramente riconducibile a nessuna delle categorie sopra (escluso "altro"), usa "altro".
 
+Distinzione importante — "libretto_impianto" vs "manuale": il libretto d'impianto è il documento di registrazione degli interventi e dei controlli di efficienza energetica previsto dalla normativa sugli impianti termici (DPR 74/2013), tipicamente con tabelle da compilare a ogni manutenzione; il manuale è invece la documentazione d'uso e manutenzione fornita dal produttore dell'apparecchio (istruzioni, caratteristiche tecniche). Non confonderli.
+
 Il campo "sistema" indica a QUALE impianto tecnico si riferisce il documento. Valorizzalo SOLO quando il documento riguarda un impianto specifico — tipicamente per dich_conformita_dm37, collaudo, manuale, garanzia. Per ape, agibilita, capitolato, altro → sempre null.
 Valori ammessi per "sistema":
 ${SISTEMI.map(s => `- ${s}: ${SISTEMA_LABELS[s]}`).join('\n')}
