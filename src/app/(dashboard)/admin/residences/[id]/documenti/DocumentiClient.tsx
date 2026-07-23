@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { FileText, Download, Upload, X, Loader2, CheckCircle2, AlertCircle, Clock, Sparkles } from 'lucide-react'
+import { FileText, Download, Upload, X, Loader2, CheckCircle2, AlertCircle, Clock, Sparkles, ChevronDown } from 'lucide-react'
 import type { DocumentCategory } from '@/types/database'
 import { createUploadUrl, confirmDocument, confirmClassification } from './actions'
 import { ALLOWED_DOCUMENT_MIME, MAX_DOCUMENT_SIZE } from '@/lib/document-upload'
@@ -699,8 +699,12 @@ function DocCard({ doc }: { doc: DocRow }) {
         <div className="border-t border-border px-4 py-2">
           <button
             onClick={() => setReviewOpen(v => !v)}
-            className="text-xs font-medium text-brand-medium"
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-border text-xs font-medium text-brand-medium hover:bg-background transition-colors"
           >
+            <ChevronDown
+              className={`w-3.5 h-3.5 transition-transform ${reviewOpen ? 'rotate-180' : ''}`}
+              strokeWidth={1.8}
+            />
             {reviewOpen ? 'Chiudi revisione' : 'Rivedi classificazione'}
           </button>
           {reviewOpen && <ReviewPanel doc={doc} onDone={() => setReviewOpen(false)} />}
