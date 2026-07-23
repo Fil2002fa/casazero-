@@ -625,8 +625,12 @@ function classificationBadgeInfo(
   switch (doc.classification_status) {
     case 'completata': {
       // sistema (impianto) accanto al doc_type quando presente — assi distinti,
-      // il sistema qualifica il tipo, non lo sostituisce.
-      const sistema = doc.extracted_metadata?.sistema
+      // il sistema qualifica il tipo, non lo sostituisce. Legge SOLO la colonna
+      // confermata documents.sistema (regola B4: il display legge le colonne,
+      // mai il verbale). Nessun fallback a extracted_metadata: la route la scrive
+      // già in auto-conferma, e un fallback farebbe riapparire sulla card una
+      // proposta AI che l'umano ha rifiutato scegliendo "Nessun impianto".
+      const sistema = doc.sistema
       const base = doc.doc_type ? DOC_TYPE_LABELS[doc.doc_type] : 'Classificato'
       return {
         label: sistema ? `${base} · ${SISTEMA_LABELS[sistema]}` : base,
