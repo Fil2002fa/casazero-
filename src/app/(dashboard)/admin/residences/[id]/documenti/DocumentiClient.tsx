@@ -804,7 +804,7 @@ function ReviewPanel({ doc, onDone }: { doc: DocRow; onDone: () => void }) {
       <button
         onClick={handleConfirm}
         disabled={saving}
-        className="w-full bg-brand-dark text-white rounded-xl py-2 text-sm font-medium disabled:opacity-50"
+        className="w-full bg-brand-dark text-white rounded-xl py-2.5 text-sm font-medium shadow-sm active:scale-[0.98] transition-transform disabled:opacity-50"
       >
         {saving ? 'Salvataggio…' : 'Conferma classificazione'}
       </button>
