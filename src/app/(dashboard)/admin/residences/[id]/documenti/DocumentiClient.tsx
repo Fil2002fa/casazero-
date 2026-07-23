@@ -158,7 +158,6 @@ interface Props {
 
 export function DocumentiClient({ residenceId, docs, units }: Props) {
   // --- filter state ---
-  const [catFilter, setCatFilter] = useState<DocumentCategory | 'all'>('all')
   const [search, setSearch]       = useState('')
 
   // --- upload modal state ---
@@ -176,18 +175,21 @@ export function DocumentiClient({ residenceId, docs, units }: Props) {
   const [docTypeFilter, setDocTypeFilter] = useState<DocType | 'all'>('all')
   const pendingClassification = docs.filter(d => d.classification_status === 'non_classificato')
   const reviewCount = docs.filter(d => d.classification_status === 'da_revisionare').length
-  // Solo i doc_type davvero presenti tra i documenti (niente chip vuoti),
-  // in ordine canonico dalla costante fonte unica.
-  const presentDocTypes = DOC_TYPES.filter(t => docs.some(d => d.doc_type === t))
+  // Solo i doc_type davvero presenti tra i documenti, ordinati alfabeticamente
+  // per etichetta: in una tendina si cerca per nome, non per l'ordine tecnico
+  // della costante.
+  const presentDocTypes = DOC_TYPES
+    .filter(t => docs.some(d => d.doc_type === t))
+    .sort((a, b) => DOC_TYPE_LABELS[a].localeCompare(DOC_TYPE_LABELS[b], 'it'))
 
   // --- computed ---
-  // category e doc_type sono assi distinti e combinabili (AND): l'uno non
-  // azzera l'altro, solo il reset ✕ azzera tutto.
-  const isFiltered = catFilter !== 'all' || search.trim() !== '' || reviewOnly || docTypeFilter !== 'all'
+  // In dashboard il filtro categoria è rimosso (asse ridondante rispetto a
+  // doc_type). category resta su upload, badge card e vista PWA residente.
+  // Tipo documento, coda revisione e ricerca restano combinabili in AND.
+  const isFiltered = search.trim() !== '' || reviewOnly || docTypeFilter !== 'all'
 
   const filtered = useMemo(() => {
     let result = docs
-    if (catFilter !== 'all') result = result.filter(d => d.category === catFilter)
     if (docTypeFilter !== 'all') result = result.filter(d => d.doc_type === docTypeFilter)
     if (reviewOnly) result = result.filter(d => d.classification_status === 'da_revisionare')
     if (search.trim()) {
@@ -195,7 +197,7 @@ export function DocumentiClient({ residenceId, docs, units }: Props) {
       result = result.filter(d => d.title.toLowerCase().includes(q))
     }
     return result
-  }, [docs, catFilter, docTypeFilter, reviewOnly, search])
+  }, [docs, docTypeFilter, reviewOnly, search])
 
   const residenceDocs = filtered.filter(d => d.unit_id === null)
 
@@ -471,59 +473,68 @@ export function DocumentiClient({ residenceId, docs, units }: Props) {
         )}
       </div>
 
-      {/* -------- Ricerca -------- */}
-      <div className="flex gap-2">
+      {/* -------- Ricerca + filtri (tipo a tendina · coda revisione) -------- */}
+      <div className="flex flex-wrap items-center gap-2">
         <input
           type="search"
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Cerca documento…"
-          className="flex-1 border border-border rounded-xl px-3 py-2 text-sm bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
+          className="flex-1 min-w-[10rem] border border-border rounded-xl px-3 py-2 text-sm bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
         />
+
+        {/* Coda revisione: azione di workflow, controllo separato sempre visibile
+            (non è un tipo, non entra nella tendina). */}
+        {reviewCount > 0 && (
+          <button
+            onClick={() => setReviewOnly(v => !v)}
+            aria-pressed={reviewOnly}
+            className={`flex-shrink-0 rounded-xl border px-3 py-2 text-sm font-medium transition-colors ${
+              reviewOnly
+                ? 'bg-status-inprogress/10 text-status-inprogress border-status-inprogress/30'
+                : 'bg-surface text-text-secondary border-border hover:bg-background'
+            }`}
+          >
+            Da rivedere ({reviewCount})
+          </button>
+        )}
+
+        {/* Filtro tipo documento: tendina nativa (coerente coi select del modale).
+            Il bottone si autodescrive con la selezione corrente; stato attivo
+            evidenziato quando la lista è filtrata. */}
+        {presentDocTypes.length > 0 && (
+          <div className="relative flex-shrink-0">
+            <select
+              value={docTypeFilter}
+              onChange={e => setDocTypeFilter(e.target.value as DocType | 'all')}
+              aria-label="Filtra per tipo documento"
+              className={`appearance-none w-[200px] truncate rounded-xl border pl-3 pr-9 py-2 text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-brand-medium transition-colors ${
+                docTypeFilter !== 'all'
+                  ? 'border-brand-medium bg-brand-light/40 text-brand-dark font-medium'
+                  : 'border-border text-text-secondary'
+              }`}
+            >
+              <option value="all">Tutti i tipi</option>
+              {presentDocTypes.map(t => (
+                <option key={t} value={t}>{DOC_TYPE_LABELS[t]}</option>
+              ))}
+            </select>
+            <ChevronDown
+              className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-text-secondary"
+              strokeWidth={1.8}
+            />
+          </div>
+        )}
+
         {isFiltered && (
           <button
-            onClick={() => { setSearch(''); setCatFilter('all'); setReviewOnly(false); setDocTypeFilter('all') }}
-            className="border border-border rounded-xl px-3 py-2 text-sm text-text-secondary bg-surface"
+            onClick={() => { setSearch(''); setReviewOnly(false); setDocTypeFilter('all') }}
+            className="flex-shrink-0 border border-border rounded-xl px-3 py-2 text-sm text-text-secondary bg-surface hover:bg-background transition-colors"
           >
             ✕
           </button>
         )}
       </div>
-
-      {/* -------- Chip categorie + coda revisione -------- */}
-      <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-1 scrollbar-none">
-        <CategoryChip label="Tutti" active={catFilter === 'all' && !reviewOnly} onClick={() => { setCatFilter('all'); setReviewOnly(false) }} />
-        {CATEGORIES.map(c => (
-          <CategoryChip
-            key={c.value}
-            label={c.label}
-            active={!reviewOnly && catFilter === c.value}
-            onClick={() => { setReviewOnly(false); setCatFilter(prev => prev === c.value ? 'all' : c.value) }}
-          />
-        ))}
-        {reviewCount > 0 && (
-          <CategoryChip
-            label={`Da rivedere (${reviewCount})`}
-            active={reviewOnly}
-            onClick={() => setReviewOnly(v => !v)}
-          />
-        )}
-      </div>
-
-      {/* -------- Chip per tipo documento (asse doc_type, combinabile) -------- */}
-      {presentDocTypes.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-1 scrollbar-none">
-          <CategoryChip label="Tutti i tipi" active={docTypeFilter === 'all'} onClick={() => setDocTypeFilter('all')} />
-          {presentDocTypes.map(t => (
-            <CategoryChip
-              key={t}
-              label={DOC_TYPE_LABELS[t]}
-              active={docTypeFilter === t}
-              onClick={() => setDocTypeFilter(prev => prev === t ? 'all' : t)}
-            />
-          ))}
-        </div>
-      )}
 
       {/* -------- Contatore -------- */}
       {!isEmpty && (
@@ -572,23 +583,6 @@ export function DocumentiClient({ residenceId, docs, units }: Props) {
         </div>
       )}
     </div>
-  )
-}
-
-function CategoryChip({
-  label, active, onClick,
-}: { label: string; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-        active
-          ? 'bg-brand-dark text-white'
-          : 'bg-surface border border-border text-text-secondary hover:bg-background'
-      }`}
-    >
-      {label}
-    </button>
   )
 }
 
