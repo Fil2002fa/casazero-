@@ -489,7 +489,7 @@ export function DocumentiClient({ residenceId, docs, units }: Props) {
           <button
             onClick={() => setReviewOnly(v => !v)}
             aria-pressed={reviewOnly}
-            className={`flex-shrink-0 rounded-xl border px-3 py-2 text-sm font-medium transition-colors ${
+            className={`flex-shrink-0 rounded-xl border px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium ${
               reviewOnly
                 ? 'bg-status-inprogress/10 text-status-inprogress border-status-inprogress/30'
                 : 'bg-surface text-text-secondary border-border hover:bg-background'
@@ -529,7 +529,8 @@ export function DocumentiClient({ residenceId, docs, units }: Props) {
         {isFiltered && (
           <button
             onClick={() => { setSearch(''); setReviewOnly(false); setDocTypeFilter('all') }}
-            className="flex-shrink-0 border border-border rounded-xl px-3 py-2 text-sm text-text-secondary bg-surface hover:bg-background transition-colors"
+            aria-label="Azzera filtri"
+            className="flex-shrink-0 border border-border rounded-xl px-3 py-2 text-sm text-text-secondary bg-surface hover:bg-background transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium"
           >
             ✕
           </button>
