@@ -20,8 +20,13 @@ import { createClient } from '@/lib/supabase/client'
 
 // Sottoinsieme letto di extracted_metadata (jsonb): la proposta AI completa,
 // oppure una nota di skip. Tutti i campi opzionali — si legge in difesa.
+// È il VERBALE della proposta AI (immutabile): doc_type/sistema qui sono
+// ciò che ha detto la macchina, MAI la correzione umana (che vive nelle
+// colonne documents.doc_type / documents.sistema).
 type ClassificationMetadata = {
+  doc_type?: DocType
   sistema?: Sistema | null
+  confidence?: number
   motivazione?: string
   unita_riferimento?: string | null
   skipped_reason?: string
@@ -39,6 +44,7 @@ export type DocRow = {
   created_at: string
   classification_status: ClassificationStatus
   doc_type: DocType | null
+  sistema: Sistema | null
   classification_confidence: number | null
   extracted_metadata: ClassificationMetadata | null
 }
@@ -702,15 +708,22 @@ function DocCard({ doc }: { doc: DocRow }) {
 
 function ReviewPanel({ doc, onDone }: { doc: DocRow; onDone: () => void }) {
   const router = useRouter()
-  const [selected, setSelected] = useState<DocType>(doc.doc_type ?? 'altro')
-  // Precompilato con la proposta AI (extracted_metadata) quando c'è; '' = nessun
-  // impianto specifico (→ null in colonna documents.sistema, verità confermata).
-  const [sistema, setSistema]   = useState<Sistema | ''>(doc.extracted_metadata?.sistema ?? '')
+  // REGOLA (non riaprire): il blocco "Proposta AI" legge SEMPRE E SOLO
+  // extracted_metadata (il verbale di cosa ha detto la macchina, mai la
+  // colonna). I select di MODIFICA fanno l'opposto: verità confermata dalla
+  // colonna (documents.doc_type / documents.sistema) prima, verbale come
+  // fallback solo quando la colonna è null. Precompilare i select dal verbale
+  // sovrascriverebbe una correzione umana con la proposta AI al submit (B4 C2).
+  const [selected, setSelected] = useState<DocType>(doc.doc_type ?? doc.extracted_metadata?.doc_type ?? 'altro')
+  const [sistema, setSistema]   = useState<Sistema | ''>(doc.sistema ?? doc.extracted_metadata?.sistema ?? '')
   const [saving, setSaving]     = useState(false)
   const [error, setError]       = useState<string | null>(null)
 
-  const confidencePct = doc.classification_confidence != null
-    ? Math.round(doc.classification_confidence * 100)
+  // Confidenza del VERBALE (extracted_metadata), non della colonna: il blocco
+  // "Proposta AI" deve restare fedele a cosa ha detto la macchina.
+  const verbaleConfidence = doc.extracted_metadata?.confidence
+  const confidencePct = verbaleConfidence != null
+    ? Math.round(verbaleConfidence * 100)
     : null
 
   async function handleConfirm() {
@@ -732,11 +745,11 @@ function ReviewPanel({ doc, onDone }: { doc: DocRow; onDone: () => void }) {
 
   return (
     <div className="mt-2 space-y-2">
-      {/* Proposta AI (sola lettura) */}
+      {/* Proposta AI (sola lettura): SEMPRE E SOLO extracted_metadata, mai la colonna */}
       <div className="text-xs text-text-secondary space-y-0.5">
-        {doc.doc_type ? (
+        {doc.extracted_metadata?.doc_type ? (
           <p>
-            Proposta AI: <span className="text-text-primary font-medium">{DOC_TYPE_LABELS[doc.doc_type]}</span>
+            Proposta AI: <span className="text-text-primary font-medium">{DOC_TYPE_LABELS[doc.extracted_metadata.doc_type]}</span>
             {doc.extracted_metadata?.sistema && ` · ${SISTEMA_LABELS[doc.extracted_metadata.sistema]}`}
             {confidencePct != null && ` · ${confidencePct}% di confidenza`}
           </p>
