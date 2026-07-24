@@ -16,6 +16,7 @@ import {
   type Sistema,
   type ClassificationStatus,
 } from '@/lib/document-classification'
+import type { ChecklistResult, ChecklistExpectation } from '@/lib/document-checklist'
 import { createClient } from '@/lib/supabase/client'
 
 // Sottoinsieme letto di extracted_metadata (jsonb): la proposta AI completa,
@@ -154,9 +155,10 @@ interface Props {
   residenceId: string
   docs: DocRow[]
   units: UnitRow[]
+  checklist: ChecklistResult
 }
 
-export function DocumentiClient({ residenceId, docs, units }: Props) {
+export function DocumentiClient({ residenceId, docs, units, checklist }: Props) {
   // --- filter state ---
   const [search, setSearch]       = useState('')
 
@@ -177,9 +179,12 @@ export function DocumentiClient({ residenceId, docs, units }: Props) {
   const reviewCount = docs.filter(d => d.classification_status === 'da_revisionare').length
   // Solo i doc_type davvero presenti tra i documenti, ordinati alfabeticamente
   // per etichetta: in una tendina si cerca per nome, non per l'ordine tecnico
-  // della costante.
+  // della costante. Include sempre il tipo attualmente selezionato anche se
+  // zero documenti: un click "Vedi documenti di questo tipo" dalla checklist
+  // su una voce mancante deve poter selezionare un tipo senza risultati
+  // (lista vuota è un esito legittimo, non un select fuori dalle sue option).
   const presentDocTypes = DOC_TYPES
-    .filter(t => docs.some(d => d.doc_type === t))
+    .filter(t => t === docTypeFilter || docs.some(d => d.doc_type === t))
     .sort((a, b) => DOC_TYPE_LABELS[a].localeCompare(DOC_TYPE_LABELS[b], 'it'))
 
   // --- computed ---
@@ -473,6 +478,13 @@ export function DocumentiClient({ residenceId, docs, units }: Props) {
         )}
       </div>
 
+      {/* -------- Checklist di consegna (B4 C5a, read-only) -------- */}
+      <ChecklistSection
+        checklist={checklist}
+        unclassifiedCount={pendingClassification.length}
+        onFilterDocType={t => setDocTypeFilter(t)}
+      />
+
       {/* -------- Ricerca + filtri (tipo a tendina · coda revisione) -------- */}
       <div className="flex flex-wrap items-center gap-2">
         <input
@@ -581,6 +593,181 @@ export function DocumentiClient({ residenceId, docs, units }: Props) {
               ))}
             </section>
           )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// I 3 scope contati (CountedScope in document-checklist.ts, non esportato:
+// 'unit' non è mai popolato in v1). Ordine e label coerenti con SCOPE_RANK
+// dell'helper (condominium, dossier_admin, residence).
+type CountedScopeKey = 'condominium' | 'dossier_admin' | 'residence'
+const SCOPE_ORDER: CountedScopeKey[] = ['condominium', 'dossier_admin', 'residence']
+const SCOPE_LABELS: Record<CountedScopeKey, string> = {
+  condominium: 'Parti comuni',
+  dossier_admin: 'Dossier amministratore',
+  residence: 'Residenza',
+}
+
+// Checklist di consegna — read-only in questo commit (B4 C5a). I numeri dei
+// contatori vengono SEMPRE da checklist.counts (reduce già fatta nell'helper,
+// bug class contatore/lista chiusa a monte): nessun ricalcolo qui.
+function ChecklistSection({
+  checklist,
+  unclassifiedCount,
+  onFilterDocType,
+}: {
+  checklist: ChecklistResult
+  unclassifiedCount: number
+  onFilterDocType: (docType: DocType) => void
+}) {
+  const [missingOnly, setMissingOnly] = useState(false)
+
+  const totalMissing = SCOPE_ORDER.reduce((sum, s) => sum + checklist.counts[s].missing, 0)
+
+  return (
+    <section className="bg-surface rounded-xl border border-border p-4 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm font-medium text-text-primary">Checklist di consegna</h2>
+        <button
+          onClick={() => setMissingOnly(v => !v)}
+          aria-pressed={missingOnly}
+          className={`flex-shrink-0 rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium ${
+            missingOnly
+              ? 'bg-status-inprogress/10 text-status-inprogress border-status-inprogress/30'
+              : 'bg-background text-text-secondary border-border hover:bg-border/40'
+          }`}
+        >
+          {missingOnly ? 'Mostra tutte' : 'Solo mancanti'}
+        </button>
+      </div>
+
+      {/* Avviso documenti non classificati: contati dallo stesso array docs
+          già in prop, nessuna query né contatore paralleli (B4 C5a punto 3). */}
+      {unclassifiedCount > 0 && (
+        <p className="text-xs text-text-secondary bg-background rounded-lg px-3 py-2">
+          {pluralize(unclassifiedCount, 'documento non ancora classificato', 'documenti non ancora classificati')}
+          {' '}— i conteggi potrebbero cambiare.
+        </p>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        {SCOPE_ORDER.map(scope => (
+          <div key={scope} className="flex-1 min-w-[9rem] bg-background rounded-lg px-3 py-2">
+            <p className="text-[11px] text-text-secondary">{SCOPE_LABELS[scope]}</p>
+            <p className="text-sm font-medium text-text-primary mt-0.5 flex items-center gap-1.5">
+              {checklist.counts[scope].satisfied}/{checklist.counts[scope].total}
+              {checklist.counts[scope].missing > 0 && (
+                <span className="w-1.5 h-1.5 rounded-full bg-status-inprogress" aria-hidden="true" />
+              )}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* Buchi di configurazione (es. template derivato uscito dal catalogo):
+          discreti, mai linguaggio di errore — sono avvisi tecnici, non colpe
+          dell'utente. */}
+      {checklist.warnings.length > 0 && (
+        <div className="text-[11px] text-neutral-600 bg-background rounded-lg px-3 py-2 space-y-0.5">
+          {checklist.warnings.map((w, i) => <p key={i}>{w}</p>)}
+        </div>
+      )}
+
+      <div>
+        {SCOPE_ORDER.map(scope => {
+          const items = checklist.expectations.filter(
+            e => e.scope === scope && (!missingOnly || (!e.satisfied && !e.notApplicable))
+          )
+          if (items.length === 0) return null
+          return (
+            <div key={scope} className="pt-2 first:pt-0">
+              <h3 className="text-[11px] font-medium text-text-secondary uppercase tracking-wide mb-1">
+                {SCOPE_LABELS[scope]}
+              </h3>
+              {items.map(exp => (
+                <ChecklistItemRow key={exp.expectationKey} exp={exp} onFilterDocType={onFilterDocType} />
+              ))}
+            </div>
+          )
+        })}
+        {missingOnly && totalMissing === 0 && (
+          <p className="text-sm text-text-secondary py-2">Tutti i documenti richiesti sono presenti.</p>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function ChecklistItemRow({
+  exp,
+  onFilterDocType,
+}: {
+  exp: ChecklistExpectation
+  onFilterDocType: (docType: DocType) => void
+}) {
+  const [open, setOpen] = useState(false)
+
+  const status = exp.notApplicable
+    ? { label: 'Non applicabile', className: 'bg-neutral-600/7 text-neutral-600' }
+    : exp.satisfied
+    ? { label: 'Presente', className: 'bg-brand-dark/8 text-brand-dark' }
+    : { label: 'Mancante', className: 'bg-status-inprogress/8 text-status-inprogress' }
+
+  return (
+    <div className="border-b border-border last:border-b-0">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center gap-2 py-2.5 text-left"
+      >
+        <ChevronDown
+          className={`w-3.5 h-3.5 flex-shrink-0 text-text-secondary transition-transform ${open ? 'rotate-180' : ''}`}
+          strokeWidth={1.8}
+        />
+        <span className="flex-1 text-sm text-text-primary min-w-0 truncate">{exp.label}</span>
+        <span className={`flex-shrink-0 text-[10px] px-2 py-0.5 rounded-full font-medium ${status.className}`}>
+          {status.label}
+        </span>
+      </button>
+
+      {/* Pannello SOLO INFORMATIVO in questo commit — nessuna azione di
+          scrittura (segna non applicabile / carica documento arrivano in
+          C5b/C5c). */}
+      {open && (
+        <div className="pb-3 pl-6 space-y-2 text-xs text-text-secondary">
+          <p>Tipo documento: <span className="text-text-primary">{DOC_TYPE_LABELS[exp.docType]}</span></p>
+          {exp.sistema && (
+            <p>Impianto: <span className="text-text-primary">{SISTEMA_LABELS[exp.sistema]}</span></p>
+          )}
+          <p>Ambito: <span className="text-text-primary">{SCOPE_LABELS[exp.scope as CountedScopeKey] ?? exp.scope}</span></p>
+
+          {exp.notApplicable && (
+            <p className="italic">
+              Segnata non applicabile
+              {exp.expectedFrom ? ` · atteso da: ${exp.expectedFrom}` : ''}
+              {exp.note ? ` — ${exp.note}` : ''}
+            </p>
+          )}
+
+          {exp.satisfied && exp.matchingDocuments.length > 0 && (
+            <div className="space-y-1">
+              {exp.matchingDocuments.map(doc => (
+                <p key={doc.id} className="flex items-center justify-between gap-2">
+                  <span className="text-text-primary truncate">{doc.label}</span>
+                  <span className="flex-shrink-0">{doc.reviewedBy ? 'Confermato da te' : "Classificato dall'AI"}</span>
+                </p>
+              ))}
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={() => onFilterDocType(exp.docType)}
+            className="text-brand-medium font-medium hover:underline"
+          >
+            Vedi documenti di questo tipo
+          </button>
         </div>
       )}
     </div>

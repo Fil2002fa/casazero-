@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
+import { computeResidenceChecklist } from '@/lib/document-checklist'
 import { DocumentiClient } from './DocumentiClient'
 import type { DocRow, UnitRow } from './DocumentiClient'
 
@@ -32,7 +33,7 @@ export default async function ResidenceDocumentiPage({
 
   if (!residence) notFound()
 
-  const [{ data: rawDocs }, { data: rawUnits }] = await Promise.all([
+  const [{ data: rawDocs }, { data: rawUnits }, checklist] = await Promise.all([
     supabase
       .from('documents')
       .select('id, title, category, file_name, storage_path, file_date, unit_id, created_at, classification_status, doc_type, sistema, classification_confidence, extracted_metadata')
@@ -43,6 +44,7 @@ export default async function ResidenceDocumentiPage({
       .select('id, label')
       .eq('residence_id', residenceId)
       .order('label'),
+    computeResidenceChecklist(supabase, residenceId),
   ])
 
   return (
@@ -80,6 +82,7 @@ export default async function ResidenceDocumentiPage({
         residenceId={residenceId}
         docs={(rawDocs ?? []) as DocRow[]}
         units={(rawUnits ?? []) as UnitRow[]}
+        checklist={checklist}
       />
     </>
   )
