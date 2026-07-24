@@ -610,9 +610,14 @@ const SCOPE_LABELS: Record<CountedScopeKey, string> = {
   residence: 'Residenza',
 }
 
-// Checklist di consegna — read-only in questo commit (B4 C5a). I numeri dei
-// contatori vengono SEMPRE da checklist.counts (reduce già fatta nell'helper,
-// bug class contatore/lista chiusa a monte): nessun ricalcolo qui.
+// Checklist di consegna — read-only (B4 C5a). I numeri dei contatori
+// vengono SEMPRE da checklist.counts (reduce già fatta nell'helper, bug
+// class contatore/lista chiusa a monte): nessun ricalcolo qui.
+//
+// Fisarmonica (B4 C5a-bis): chiusa di default, un solo scope aperto alla
+// volta (stesso useState, mai due). I documenti restano il contenuto
+// principale della pagina; la checklist è supporto e non deve spingerli
+// sotto la piega.
 function ChecklistSection({
   checklist,
   unclassifiedCount,
@@ -622,80 +627,95 @@ function ChecklistSection({
   unclassifiedCount: number
   onFilterDocType: (docType: DocType) => void
 }) {
+  const [openScope, setOpenScope] = useState<CountedScopeKey | null>(null)
   const [missingOnly, setMissingOnly] = useState(false)
 
-  const totalMissing = SCOPE_ORDER.reduce((sum, s) => sum + checklist.counts[s].missing, 0)
+  const openItems = openScope
+    ? checklist.expectations.filter(
+        e => e.scope === openScope && (!missingOnly || (!e.satisfied && !e.notApplicable))
+      )
+    : []
 
   return (
     <section className="bg-surface rounded-xl border border-border p-4 space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-medium text-text-primary">Checklist di consegna</h2>
-        <button
-          onClick={() => setMissingOnly(v => !v)}
-          aria-pressed={missingOnly}
-          className={`flex-shrink-0 rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium ${
-            missingOnly
-              ? 'bg-status-inprogress/10 text-status-inprogress border-status-inprogress/30'
-              : 'bg-background text-text-secondary border-border hover:bg-border/40'
-          }`}
-        >
-          {missingOnly ? 'Mostra tutte' : 'Solo mancanti'}
-        </button>
+      <h2 className="text-sm font-medium text-text-primary">Checklist di consegna</h2>
+
+      <div className="flex flex-wrap gap-2">
+        {SCOPE_ORDER.map(scope => {
+          const isOpen = openScope === scope
+          const c = checklist.counts[scope]
+          return (
+            <button
+              key={scope}
+              type="button"
+              onClick={() => setOpenScope(isOpen ? null : scope)}
+              aria-expanded={isOpen}
+              className={`flex-1 min-w-[9rem] rounded-lg border px-3 py-2 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium ${
+                isOpen
+                  ? 'bg-brand-light/50 border-brand-medium/30'
+                  : 'bg-background border-transparent hover:bg-border/40'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-1">
+                <p className="text-[11px] text-text-secondary">{SCOPE_LABELS[scope]}</p>
+                <ChevronDown
+                  className={`w-3 h-3 flex-shrink-0 text-text-secondary transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                  strokeWidth={1.8}
+                />
+              </div>
+              <p className="text-sm font-medium text-text-primary mt-0.5 flex items-center gap-1.5">
+                {c.satisfied}/{c.total}
+                {c.missing > 0 && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-status-inprogress" aria-hidden="true" />
+                )}
+              </p>
+            </button>
+          )
+        })}
       </div>
 
-      {/* Avviso documenti non classificati: contati dallo stesso array docs
-          già in prop, nessuna query né contatore paralleli (B4 C5a punto 3). */}
+      {/* Qualificano i numeri dei contatori sopra: restano visibili anche a
+          checklist chiusa (B4 C5a-bis punto 5). Avviso non classificati
+          contato dallo stesso array docs già in prop, nessuna query nuova. */}
       {unclassifiedCount > 0 && (
         <p className="text-xs text-text-secondary bg-background rounded-lg px-3 py-2">
           {pluralize(unclassifiedCount, 'documento non ancora classificato', 'documenti non ancora classificati')}
           {' '}— i conteggi potrebbero cambiare.
         </p>
       )}
-
-      <div className="flex flex-wrap gap-2">
-        {SCOPE_ORDER.map(scope => (
-          <div key={scope} className="flex-1 min-w-[9rem] bg-background rounded-lg px-3 py-2">
-            <p className="text-[11px] text-text-secondary">{SCOPE_LABELS[scope]}</p>
-            <p className="text-sm font-medium text-text-primary mt-0.5 flex items-center gap-1.5">
-              {checklist.counts[scope].satisfied}/{checklist.counts[scope].total}
-              {checklist.counts[scope].missing > 0 && (
-                <span className="w-1.5 h-1.5 rounded-full bg-status-inprogress" aria-hidden="true" />
-              )}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      {/* Buchi di configurazione (es. template derivato uscito dal catalogo):
-          discreti, mai linguaggio di errore — sono avvisi tecnici, non colpe
-          dell'utente. */}
       {checklist.warnings.length > 0 && (
         <div className="text-[11px] text-neutral-600 bg-background rounded-lg px-3 py-2 space-y-0.5">
           {checklist.warnings.map((w, i) => <p key={i}>{w}</p>)}
         </div>
       )}
 
-      <div>
-        {SCOPE_ORDER.map(scope => {
-          const items = checklist.expectations.filter(
-            e => e.scope === scope && (!missingOnly || (!e.satisfied && !e.notApplicable))
-          )
-          if (items.length === 0) return null
-          return (
-            <div key={scope} className="pt-2 first:pt-0">
-              <h3 className="text-[11px] font-medium text-text-secondary uppercase tracking-wide mb-1">
-                {SCOPE_LABELS[scope]}
-              </h3>
-              {items.map(exp => (
-                <ChecklistItemRow key={exp.expectationKey} exp={exp} onFilterDocType={onFilterDocType} />
-              ))}
-            </div>
-          )
-        })}
-        {missingOnly && totalMissing === 0 && (
-          <p className="text-sm text-text-secondary py-2">Tutti i documenti richiesti sono presenti.</p>
-        )}
-      </div>
+      {openScope && (
+        <div className="pt-2 border-t border-border">
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <h3 className="text-[11px] font-medium text-text-secondary uppercase tracking-wide">
+              {SCOPE_LABELS[openScope]}
+            </h3>
+            <button
+              onClick={() => setMissingOnly(v => !v)}
+              aria-pressed={missingOnly}
+              className={`flex-shrink-0 rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium ${
+                missingOnly
+                  ? 'bg-status-inprogress/10 text-status-inprogress border-status-inprogress/30'
+                  : 'bg-surface text-text-secondary border-border hover:bg-background'
+              }`}
+            >
+              {missingOnly ? 'Mostra tutte' : 'Solo mancanti'}
+            </button>
+          </div>
+          {openItems.length === 0 ? (
+            <p className="text-sm text-text-secondary py-2">Nessuna voce mancante in questo gruppo.</p>
+          ) : (
+            openItems.map(exp => (
+              <ChecklistItemRow key={exp.expectationKey} exp={exp} onFilterDocType={onFilterDocType} />
+            ))
+          )}
+        </div>
+      )}
     </section>
   )
 }
