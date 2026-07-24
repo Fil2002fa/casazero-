@@ -162,33 +162,66 @@ export async function computeResidenceChecklist(
 ): Promise<ChecklistResult> {
   const warnings: string[] = []
 
-  // (a) BASE — righe di template attive, ordinate per sort_order.
-  const { data: baseRows } = await supabase
-    .from('document_checklist_template')
-    .select('scope, doc_type, sistema, label, sort_order')
-    .eq('is_active', true)
-    .order('sort_order', { ascending: true })
+  // Le 5 query sono indipendenti fra loro: nessuna usa l'output di un'altra
+  // (il merge/match che segue legge solo i risultati già arrivati). In
+  // Promise.all invece che sequenziali — stesso risultato, ~300ms → ~176ms
+  // misurato su Cavaccio (FASE 0 C5-0).
+  const [
+    { data: baseRows },
+    { data: planRows },
+    { data: catalogRows },
+    { data: excRows },
+    { data: docRows },
+  ] = await Promise.all([
+    // (a) BASE — righe di template attive, ordinate per sort_order.
+    supabase
+      .from('document_checklist_template')
+      .select('scope, doc_type, sistema, label, sort_order')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true }),
 
-  // (b) DERIVATO — piano attivo della residenza (forma canonica di
-  // (app)/manutenzioni/page.tsx:47-54 + template_id). Filtro 'inclusa' in SQL,
-  // is_active del template in JS via isCountable (riuso, non reimplemento).
-  const { data: planRows } = await supabase
-    .from('maintenance_items')
-    .select(`template_id, ${LIVE_STATUS_FIELDS}, maintenance_templates!inner(${LIVE_STATUS_TEMPLATE_FIELDS})`)
-    .eq('residence_id', residenceId)
-    .eq('activation_status', 'inclusa')
+    // (b) DERIVATO — piano attivo della residenza (forma canonica di
+    // (app)/manutenzioni/page.tsx:47-54 + template_id). Filtro 'inclusa' in
+    // SQL, is_active del template in JS via isCountable (riuso).
+    supabase
+      .from('maintenance_items')
+      .select(`template_id, ${LIVE_STATUS_FIELDS}, maintenance_templates!inner(${LIVE_STATUS_TEMPLATE_FIELDS})`)
+      .eq('residence_id', residenceId)
+      .eq('activation_status', 'inclusa'),
+
+    // (f) GUARDIA UUID — ogni UUID della mappa deve esistere fra i template
+    // is_active del catalogo; altrimenti warning (le sue attese non nascono).
+    supabase
+      .from('maintenance_templates')
+      .select('id')
+      .eq('is_active', true),
+
+    // (d) ECCEZIONI — per residenza, unit_id IS NULL (v1). Annotano un'attesa
+    // esistente (not_applicable / expected_from / note); una chiave orfana
+    // che non corrisponde a nessuna attesa viene ignorata più sotto.
+    supabase
+      .from('residence_checklist_exception')
+      .select('expectation_key, not_applicable, expected_from, note')
+      .eq('residence_id', residenceId)
+      .is('unit_id', null),
+
+    // (e) MATCH — documenti confermati (PRESENTE = classification_status
+    // 'completata'). Un documento soddisfa un'attesa se doc_type combacia E
+    // (sistema attesa NULL, oppure sistema doc NULL, oppure combaciano:
+    // asimmetria voluta). Scope residence = qualunque documento della
+    // residenza; condominium/dossier_admin = solo documenti con unit_id NULL.
+    supabase
+      .from('documents')
+      .select('id, title, file_name, doc_type, sistema, unit_id, reviewed_by')
+      .eq('residence_id', residenceId)
+      .eq('classification_status', 'completata'),
+  ])
 
   const activeTemplateIds = new Set<string>()
   for (const row of (planRows ?? []) as unknown as PlanRow[]) {
     if (isCountable(row)) activeTemplateIds.add(row.template_id)
   }
 
-  // (f) GUARDIA UUID — ogni UUID della mappa deve esistere fra i template
-  // is_active del catalogo; altrimenti warning (le sue attese non nascono).
-  const { data: catalogRows } = await supabase
-    .from('maintenance_templates')
-    .select('id')
-    .eq('is_active', true)
   const catalogIds = new Set((catalogRows ?? []).map(r => r.id as string))
   for (const uuid of Object.keys(DERIVED_MAP)) {
     if (!catalogIds.has(uuid)) {
@@ -257,14 +290,9 @@ export async function computeResidenceChecklist(
     }
   }
 
-  // (d) ECCEZIONI — per residenza, unit_id IS NULL (v1). Annotano un'attesa
-  // esistente (not_applicable / expected_from / note); una chiave orfana che
-  // non corrisponde a nessuna attesa viene ignorata.
-  const { data: excRows } = await supabase
-    .from('residence_checklist_exception')
-    .select('expectation_key, not_applicable, expected_from, note')
-    .eq('residence_id', residenceId)
-    .is('unit_id', null)
+  // (d) ECCEZIONI — annotano un'attesa esistente (not_applicable /
+  // expected_from / note); una chiave orfana che non corrisponde a nessuna
+  // attesa viene ignorata.
   for (const e of excRows ?? []) {
     const exp = byKey.get(e.expectation_key as string)
     if (!exp) continue
@@ -273,17 +301,7 @@ export async function computeResidenceChecklist(
     exp.note = (e.note as string | null) ?? null
   }
 
-  // (e) MATCH — documenti confermati (PRESENTE = classification_status
-  // 'completata'). Un documento soddisfa un'attesa se doc_type combacia E
-  // (sistema attesa NULL, oppure sistema doc NULL, oppure combaciano:
-  // asimmetria voluta). Scope residence = qualunque documento della residenza;
-  // condominium/dossier_admin = solo documenti con unit_id IS NULL.
-  const { data: docRows } = await supabase
-    .from('documents')
-    .select('id, title, file_name, doc_type, sistema, unit_id, reviewed_by')
-    .eq('residence_id', residenceId)
-    .eq('classification_status', 'completata')
-
+  // (e) MATCH — vedi regola sopra (docRows fetchato in Promise.all).
   const docs = docRows ?? []
   for (const exp of byKey.values()) {
     for (const doc of docs) {
