@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import type { DocumentCategory } from '@/types/database'
 import { ALLOWED_DOCUMENT_MIME } from '@/lib/document-upload'
 import { DOC_TYPES, SISTEMI, type DocType, type Sistema } from '@/lib/document-classification'
+import { computeResidenceChecklist } from '@/lib/document-checklist'
 
 type AuthorizedUser = { user: { id: string } }
 type AuthError = { error: string }
@@ -238,5 +239,110 @@ export async function confirmClassification(input: {
   }
 
   revalidatePath(`/admin/residences/${data[0].residence_id}/documenti`)
+  return { success: true }
+}
+
+export type ChecklistExceptionResult = { success: true } | { error: string }
+
+// Verifica che una expectation_key corrisponda a un'attesa REALE e corrente
+// della residenza (BASE+DERIVATO, ricalcolate ora) — non solo "ben formata".
+// La funzione privata expectationKey di document-checklist.ts non basta e
+// non va esportata per questo: verificare il FORMATO di una chiave non dice
+// nulla su se quell'attesa esiste ancora oggi per questa residenza (B4 C5
+// FASE 0, punto 3 — rischio di chiave orfana su cambi futuri della mappa).
+// Riusata da entrambe le action sotto.
+async function expectationKeyExists(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  residenceId: string,
+  expectationKey: string
+): Promise<boolean> {
+  const checklist = await computeResidenceChecklist(supabase, residenceId)
+  return checklist.expectations.some(e => e.expectationKey === expectationKey)
+}
+
+// Segna una voce della checklist di consegna come non applicabile (B4 C5b).
+// unit_id sempre NULL in v1 (nessuno scope per-unità, decisione B4 C4).
+// Upsert idempotente sul vincolo UNIQUE NULLS NOT DISTINCT (residence_id,
+// expectation_key, unit_id) di residence_checklist_exception (027) — stesso
+// pattern onConflict di admin-actions.ts:26 e welcome/[token]/accept/page.tsx:66.
+export async function setChecklistException(
+  residenceId: string,
+  expectationKey: string,
+  input: { note: string | null; expectedFrom: string | null }
+): Promise<ChecklistExceptionResult> {
+  const supabase = await createClient()
+  const auth = await getAuthorizedSuperAdmin(supabase)
+  if ('error' in auth) return { error: auth.error }
+
+  if (!residenceId || !expectationKey) {
+    return { error: 'Parametri obbligatori mancanti' }
+  }
+
+  if (!(await expectationKeyExists(supabase, residenceId, expectationKey))) {
+    return { error: 'Voce non trovata tra le attese correnti della residenza' }
+  }
+
+  // Stringa vuota → null, mai stringa vuota nel DB.
+  const note = input.note?.trim() || null
+  const expectedFrom = input.expectedFrom?.trim() || null
+
+  const { error } = await supabase
+    .from('residence_checklist_exception')
+    .upsert(
+      {
+        residence_id: residenceId,
+        expectation_key: expectationKey,
+        unit_id: null,
+        not_applicable: true,
+        note,
+        expected_from: expectedFrom,
+        created_by: auth.user.id,
+      },
+      { onConflict: 'residence_id,expectation_key,unit_id' }
+    )
+
+  if (error) return { error: `Errore salvataggio: ${error.message}` }
+
+  revalidatePath(`/admin/residences/${residenceId}/documenti`)
+  return { success: true }
+}
+
+// Annulla il "non applicabile": la voce torna mancante. MAI un DELETE — note
+// ed expected_from si conservano (decisione B4 C5 #6, chiusa), la riga resta
+// come traccia della configurazione. Stesso pattern RLS-filtra-in-silenzio
+// di confirmClassification sopra: .select() dopo l'update, zero righe =
+// eccezione non trovata o non accessibile.
+export async function clearChecklistException(
+  residenceId: string,
+  expectationKey: string
+): Promise<ChecklistExceptionResult> {
+  const supabase = await createClient()
+  const auth = await getAuthorizedSuperAdmin(supabase)
+  if ('error' in auth) return { error: auth.error }
+
+  if (!residenceId || !expectationKey) {
+    return { error: 'Parametri obbligatori mancanti' }
+  }
+
+  // Nessun ricalcolo qui: a differenza di setChecklistException, questa
+  // action non scrive una riga nuova da input del client, agisce solo su
+  // una riga già esistente. L'UPDATE con .select() sotto, zero righe = già
+  // la difesa completa (chiave inesistente, residenza altrui, riga assente
+  // finiscono tutte nello stesso errore, senza bisogno di ricalcolare la
+  // checklist prima).
+  const { data, error } = await supabase
+    .from('residence_checklist_exception')
+    .update({ not_applicable: false })
+    .eq('residence_id', residenceId)
+    .eq('expectation_key', expectationKey)
+    .is('unit_id', null)
+    .select('id')
+
+  if (error) return { error: `Errore salvataggio: ${error.message}` }
+  if (!data || data.length === 0) {
+    return { error: 'Eccezione non trovata o non accessibile' }
+  }
+
+  revalidatePath(`/admin/residences/${residenceId}/documenti`)
   return { success: true }
 }
