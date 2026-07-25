@@ -94,6 +94,11 @@ type UploadContext = {
   fileDate: string | null
 }
 
+// Esito di un singolo file: lo status pilota l'icona di TaskRow, documentId
+// (solo su 'fatto') e' quanto serve all'auto-classificazione per sapere
+// ESATTAMENTE quali righe classificare, senza indovinarle da un refresh.
+type FileTaskResult = { status: TaskStatus; documentId?: string }
+
 // Genera URL → carica direttamente su Supabase (bypassa il bodySizeLimit
 // di Next.js) → conferma. Ogni file è indipendente: il fallimento di uno
 // non blocca né tocca lo stato degli altri, ciascuno aggiorna solo la
@@ -102,23 +107,23 @@ async function runFileTask(
   task: FileTask,
   ctx: UploadContext,
   updateTask: (id: string, patch: Partial<FileTask>) => void
-): Promise<TaskStatus> {
+): Promise<FileTaskResult> {
   const { file } = task
   updateTask(task.id, { status: 'in_caricamento' })
 
   if (!ALLOWED_DOCUMENT_MIME.has(file.type)) {
     updateTask(task.id, { status: 'errore', error: 'Tipo file non supportato (PDF, immagini, Word)' })
-    return 'errore'
+    return { status: 'errore' }
   }
   if (file.size > MAX_DOCUMENT_SIZE) {
     updateTask(task.id, { status: 'errore', error: 'File troppo grande (max 50 MB)' })
-    return 'errore'
+    return { status: 'errore' }
   }
 
   const urlResult = await createUploadUrl(ctx.residenceId, ctx.category, file.name, file.type)
   if ('error' in urlResult) {
     updateTask(task.id, { status: 'errore', error: urlResult.error })
-    return 'errore'
+    return { status: 'errore' }
   }
 
   const browserSupabase = createClient()
@@ -128,7 +133,7 @@ async function runFileTask(
 
   if (uploadError) {
     updateTask(task.id, { status: 'errore', error: `Errore upload: ${uploadError.message}` })
-    return 'errore'
+    return { status: 'errore' }
   }
 
   const title = file.name.replace(/\.[^/.]+$/, '') || file.name
@@ -144,11 +149,11 @@ async function runFileTask(
 
   if ('error' in confirmResult) {
     updateTask(task.id, { status: 'errore', error: confirmResult.error })
-    return 'errore'
+    return { status: 'errore' }
   }
 
   updateTask(task.id, { status: 'fatto' })
-  return 'fatto'
+  return { status: 'fatto', documentId: confirmResult.id }
 }
 
 interface Props {
@@ -173,6 +178,7 @@ export function DocumentiClient({ residenceId, docs, units, checklist }: Props) 
   // --- classificazione AI (batch sequenziale) ---
   const [classifying, setClassifying] = useState(false)
   const [classifyProgress, setClassifyProgress] = useState<{ done: number; total: number } | null>(null)
+  const [classifyFailures, setClassifyFailures] = useState<number | null>(null)
   const [reviewOnly, setReviewOnly] = useState(false)
   const [docTypeFilter, setDocTypeFilter] = useState<DocType | 'all'>('all')
   const pendingClassification = docs.filter(d => d.classification_status === 'non_classificato')
@@ -251,20 +257,42 @@ export function DocumentiClient({ residenceId, docs, units, checklist }: Props) 
     setSubmitted(true)
     setIsUploading(true)
 
-    const results = await Promise.all(tasks.map(task => runFileTask(task, ctx, updateTask)))
+    const uploadedTasks = tasks
+    const results = await Promise.all(uploadedTasks.map(task => runFileTask(task, ctx, updateTask)))
 
     setIsUploading(false)
-    if (results.some(r => r === 'fatto')) router.refresh()
+
+    // Auto-classificazione (B4): parte da sola sui documenti appena caricati,
+    // per id esatto (mai indovinati da un refresh dei props). Nessun click.
+    // Continua in sottofondo anche se la modale viene chiusa — lo stato vive
+    // in questo componente, non nella modale.
+    const justUploaded = uploadedTasks
+      .map((task, i) => ({ file: task.file, result: results[i] }))
+      .filter((x): x is { file: File; result: { status: 'fatto'; documentId: string } } =>
+        x.result.status === 'fatto' && !!x.result.documentId
+      )
+      .map(x => ({ id: x.result.documentId, title: x.file.name }))
+
+    if (justUploaded.length > 0) {
+      void classifyDocuments(justUploaded)
+    }
   }
 
   // Sequenziale di proposito (mai Promise.all): un documento per invocazione,
   // un fallimento non ferma gli altri, progress visibile durante il batch.
-  async function handleClassify() {
-    if (pendingClassification.length === 0 || classifying) return
+  // Stato condiviso (classifying/classifyProgress) fra il bottone manuale
+  // "Classifica documenti" e l'auto-classificazione post-upload: le due non
+  // possono mai correre in parallelo (guardia `classifying` sotto), e il
+  // bottone manuale si disabilita/mostra progresso anche quando è
+  // l'auto-classificazione a girare.
+  async function classifyDocuments(targets: { id: string; title: string }[]) {
+    if (targets.length === 0 || classifying) return
     setClassifying(true)
-    setClassifyProgress({ done: 0, total: pendingClassification.length })
+    setClassifyProgress({ done: 0, total: targets.length })
+    setClassifyFailures(null)
 
-    for (const [i, doc] of pendingClassification.entries()) {
+    let failures = 0
+    for (const [i, doc] of targets.entries()) {
       try {
         const res = await fetch('/api/classify-document', {
           method: 'POST',
@@ -275,17 +303,27 @@ export function DocumentiClient({ residenceId, docs, units, checklist }: Props) 
         if (res.ok) {
           console.log(`[classifica] ${doc.title}:`, result)
         } else {
+          failures++
           console.error(`[classifica] ${doc.title} fallita:`, result?.error ?? res.statusText)
         }
       } catch (err) {
+        failures++
         console.error(`[classifica] ${doc.title} fallita:`, err)
       }
-      setClassifyProgress({ done: i + 1, total: pendingClassification.length })
+      setClassifyProgress({ done: i + 1, total: targets.length })
     }
 
     setClassifying(false)
     setClassifyProgress(null)
+    setClassifyFailures(failures > 0 ? failures : null)
     router.refresh()
+  }
+
+  // Bottone manuale: rete di sicurezza per i file che l'auto-classificazione
+  // non ha processato. Stessa identica lista (pendingClassification) usata
+  // per il contatore nel bottone — mai due calcoli paralleli (bug class).
+  function handleClassify() {
+    void classifyDocuments(pendingClassification.map(d => ({ id: d.id, title: d.title })))
   }
 
   return (
@@ -311,6 +349,16 @@ export function DocumentiClient({ residenceId, docs, units, checklist }: Props) 
             {/* ---- Stato task per-file ---- */}
             {submitted ? (
               <div className="space-y-3">
+                {/* Riga di avanzamento: caricamento poi, senza soluzione di
+                    continuità, classificazione — stesso `classifying`/
+                    classifyProgress` letto dal bottone manuale in testata. */}
+                {(isUploading || (classifying && classifyProgress)) && (
+                  <p className="text-xs text-text-secondary">
+                    {isUploading
+                      ? `Caricamento: ${tasks.filter(t => t.status === 'fatto' || t.status === 'errore').length} di ${tasks.length}`
+                      : `Classificazione: ${classifyProgress!.done} di ${classifyProgress!.total}`}
+                  </p>
+                )}
                 <div className="space-y-1.5">
                   {tasks.map(task => (
                     <TaskRow key={task.id} task={task} />
@@ -477,6 +525,16 @@ export function DocumentiClient({ residenceId, docs, units, checklist }: Props) 
           </button>
         )}
       </div>
+
+      {/* Esito sobrio a fine batch: sopravvive alla chiusura della modale
+          (l'auto-classificazione continua in sottofondo). "Classifica
+          documenti" sopra è la rete di sicurezza a cui rimanda. */}
+      {!classifying && classifyFailures !== null && classifyFailures > 0 && (
+        <p className="text-xs text-status-inprogress">
+          {pluralize(classifyFailures, 'documento non classificato', 'documenti non classificati')}
+          {' '}— riprova con Classifica documenti.
+        </p>
+      )}
 
       {/* -------- Checklist di consegna (B4 C5a, read-only) -------- */}
       <ChecklistSection

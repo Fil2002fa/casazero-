@@ -97,7 +97,10 @@ export async function createUploadUrl(
   return { signedUrl: data.signedUrl, token: data.token, path: data.path }
 }
 
-export type ConfirmDocumentResult = { success: true } | { error: string }
+// L'id torna al client per l'auto-classificazione post-upload (B4): il
+// client deve sapere ESATTAMENTE quali righe ha appena creato, senza
+// indovinarle da un refresh dei props (timing non affidabile).
+export type ConfirmDocumentResult = { success: true; id: string } | { error: string }
 
 export type ConfirmDocumentInput = {
   residenceId: string
@@ -161,25 +164,29 @@ export async function confirmDocument(input: ConfirmDocumentInput): Promise<Conf
     return { error: 'File non trovato in storage: upload non completato' }
   }
 
-  const { error: dbError } = await supabase.from('documents').insert({
-    residence_id: residenceId,
-    unit_id: unitId,
-    category,
-    title,
-    storage_path: storagePath,
-    file_name: fileName,
-    file_date: fileDate || new Date().toISOString().split('T')[0],
-    uploaded_by: auth.user.id,
-  })
+  const { data: inserted, error: dbError } = await supabase
+    .from('documents')
+    .insert({
+      residence_id: residenceId,
+      unit_id: unitId,
+      category,
+      title,
+      storage_path: storagePath,
+      file_name: fileName,
+      file_date: fileDate || new Date().toISOString().split('T')[0],
+      uploaded_by: auth.user.id,
+    })
+    .select('id')
+    .single()
 
-  if (dbError) {
+  if (dbError || !inserted) {
     // Cleanup file orfano se l'insert DB fallisce
     await supabase.storage.from('documents').remove([storagePath])
-    return { error: `Errore salvataggio: ${dbError.message}` }
+    return { error: `Errore salvataggio: ${dbError?.message ?? 'sconosciuto'}` }
   }
 
   revalidatePath(`/admin/residences/${residenceId}/documenti`)
-  return { success: true }
+  return { success: true, id: inserted.id as string }
 }
 
 export type ConfirmClassificationResult = { success: true } | { error: string }
