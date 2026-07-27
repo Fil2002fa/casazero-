@@ -731,11 +731,16 @@ function ChecklistSection({
                 />
               </div>
               <p className="text-sm font-medium text-text-primary mt-0.5 flex items-center gap-1.5">
-                {c.satisfied}/{c.total}
+                {c.satisfied}/{c.total - c.notApplicable}
                 {c.missing > 0 && (
                   <span className="w-1.5 h-1.5 rounded-full bg-status-inprogress" aria-hidden="true" />
                 )}
               </p>
+              {c.notApplicable > 0 && (
+                <p className="text-[11px] text-text-secondary">
+                  {pluralize(c.notApplicable, 'esclusa', 'escluse')}
+                </p>
+              )}
             </button>
           )
         })}
