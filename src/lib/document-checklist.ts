@@ -69,6 +69,12 @@ export type ChecklistExpectation = {
   notApplicable: boolean
   expectedFrom: string | null
   note: string | null
+  // Audit dell'esclusione (028): chi e quando ha marcato non applicabile.
+  // Popolati SOLO da setChecklistException, mai da clearChecklistException
+  // (annullare non è una nuova esclusione). null sulle righe pre-028 —
+  // "attribuzione non disponibile", mai indovinata da created_by.
+  markedBy: string | null
+  markedAt: string | null
   matchingDocuments: MatchingDocument[]
 }
 
@@ -197,11 +203,12 @@ export async function computeResidenceChecklist(
       .eq('is_active', true),
 
     // (d) ECCEZIONI — per residenza, unit_id IS NULL (v1). Annotano un'attesa
-    // esistente (not_applicable / expected_from / note); una chiave orfana
-    // che non corrisponde a nessuna attesa viene ignorata più sotto.
+    // esistente (not_applicable / expected_from / note / marked_by /
+    // updated_at, 028); una chiave orfana che non corrisponde a nessuna
+    // attesa viene ignorata più sotto.
     supabase
       .from('residence_checklist_exception')
-      .select('expectation_key, not_applicable, expected_from, note')
+      .select('expectation_key, not_applicable, expected_from, note, marked_by, updated_at')
       .eq('residence_id', residenceId)
       .is('unit_id', null),
 
@@ -253,6 +260,8 @@ export async function computeResidenceChecklist(
       notApplicable: false,
       expectedFrom: null,
       note: null,
+      markedBy: null,
+      markedAt: null,
       matchingDocuments: [],
     })
     sortByKey.set(key, (b.sort_order as number | null) ?? Number.MAX_SAFE_INTEGER)
@@ -284,6 +293,8 @@ export async function computeResidenceChecklist(
           notApplicable: false,
           expectedFrom: null,
           note: null,
+          markedBy: null,
+          markedAt: null,
           matchingDocuments: [],
         })
       }
@@ -291,14 +302,16 @@ export async function computeResidenceChecklist(
   }
 
   // (d) ECCEZIONI — annotano un'attesa esistente (not_applicable /
-  // expected_from / note); una chiave orfana che non corrisponde a nessuna
-  // attesa viene ignorata.
+  // expected_from / note / markedBy / markedAt, 028); una chiave orfana che
+  // non corrisponde a nessuna attesa viene ignorata.
   for (const e of excRows ?? []) {
     const exp = byKey.get(e.expectation_key as string)
     if (!exp) continue
     exp.notApplicable = (e.not_applicable as boolean) ?? false
     exp.expectedFrom = (e.expected_from as string | null) ?? null
     exp.note = (e.note as string | null) ?? null
+    exp.markedBy = (e.marked_by as string | null) ?? null
+    exp.markedAt = (e.updated_at as string | null) ?? null
   }
 
   // (e) MATCH — vedi regola sopra (docRows fetchato in Promise.all).

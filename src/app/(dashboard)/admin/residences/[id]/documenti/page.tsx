@@ -47,6 +47,24 @@ export default async function ResidenceDocumentiPage({
     computeResidenceChecklist(supabase, residenceId),
   ])
 
+  // Nomi leggibili per "Escluso da {utente}" (028): solo i marked_by
+  // realmente presenti tra le attese di questa residenza, non tutti i
+  // profili del builder. full_name da profiles (mai email, che non c'è
+  // su questa tabella — CLAUDE.md).
+  const markedByIds = [...new Set(
+    checklist.expectations.map(e => e.markedBy).filter((id): id is string => id !== null)
+  )]
+  const markedByNames: Record<string, string | null> = {}
+  if (markedByIds.length > 0) {
+    const { data: markers } = await supabase
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', markedByIds)
+    for (const m of markers ?? []) {
+      markedByNames[m.id as string] = (m.full_name as string | null) ?? null
+    }
+  }
+
   return (
     <>
       <div className="flex items-center gap-3 mb-6">
@@ -83,6 +101,7 @@ export default async function ResidenceDocumentiPage({
         docs={(rawDocs ?? []) as DocRow[]}
         units={(rawUnits ?? []) as UnitRow[]}
         checklist={checklist}
+        markedByNames={markedByNames}
       />
     </>
   )

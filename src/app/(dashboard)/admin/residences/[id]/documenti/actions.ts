@@ -260,15 +260,28 @@ async function expectationKeyExists(
   return checklist.expectations.some(e => e.expectationKey === expectationKey)
 }
 
-// Segna una voce della checklist di consegna come non applicabile (B4 C5b).
-// unit_id sempre NULL in v1 (nessuno scope per-unità, decisione B4 C4).
-// Upsert idempotente sul vincolo UNIQUE NULLS NOT DISTINCT (residence_id,
-// expectation_key, unit_id) di residence_checklist_exception (027) — stesso
+// Segna una voce della checklist di consegna come non applicabile (B4 C5b,
+// motivazione obbligatoria dalla revisione "audit"). unit_id sempre NULL in
+// v1 (nessuno scope per-unità, decisione B4 C4). Upsert idempotente sul
+// vincolo UNIQUE NULLS NOT DISTINCT (residence_id, expectation_key,
+// unit_id) di residence_checklist_exception (027, spiegato in 028) — stesso
 // pattern onConflict di admin-actions.ts:26 e welcome/[token]/accept/page.tsx:66.
+//
+// expected_from NON è nel payload: omesso di proposito, non azzerato. Un
+// upsert Supabase/PostgREST genera il DO UPDATE SET solo per le colonne
+// presenti nell'oggetto — ometterla la lascia intatta su un conflitto
+// (un residuo "atteso da" di un ciclo precedente non applicabile→annulla
+// non va perso solo perché si riesclude la voce). "Atteso da" non ha un
+// campo dedicato in QUESTO flusso: escludere un documento non significa
+// aspettarlo da qualcuno (028, IN SCOPE).
+//
+// marked_by = chi ha eseguito QUESTA esclusione: scritto qui e SOLO qui
+// (clearChecklistException non lo tocca), risponde a "Escluso da... il..."
+// in UI. created_by resta il campo esistente, indipendente.
 export async function setChecklistException(
   residenceId: string,
   expectationKey: string,
-  input: { note: string | null; expectedFrom: string | null }
+  note: string
 ): Promise<ChecklistExceptionResult> {
   const supabase = await createClient()
   const auth = await getAuthorizedSuperAdmin(supabase)
@@ -278,13 +291,14 @@ export async function setChecklistException(
     return { error: 'Parametri obbligatori mancanti' }
   }
 
+  const trimmedNote = note.trim()
+  if (!trimmedNote) {
+    return { error: 'La motivazione è obbligatoria' }
+  }
+
   if (!(await expectationKeyExists(supabase, residenceId, expectationKey))) {
     return { error: 'Voce non trovata tra le attese correnti della residenza' }
   }
-
-  // Stringa vuota → null, mai stringa vuota nel DB.
-  const note = input.note?.trim() || null
-  const expectedFrom = input.expectedFrom?.trim() || null
 
   const { error } = await supabase
     .from('residence_checklist_exception')
@@ -294,9 +308,9 @@ export async function setChecklistException(
         expectation_key: expectationKey,
         unit_id: null,
         not_applicable: true,
-        note,
-        expected_from: expectedFrom,
+        note: trimmedNote,
         created_by: auth.user.id,
+        marked_by: auth.user.id,
       },
       { onConflict: 'residence_id,expectation_key,unit_id' }
     )

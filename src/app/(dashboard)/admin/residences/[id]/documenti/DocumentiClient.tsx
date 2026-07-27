@@ -161,9 +161,12 @@ interface Props {
   docs: DocRow[]
   units: UnitRow[]
   checklist: ChecklistResult
+  // id profilo → full_name (028), solo i marcatori realmente presenti tra
+  // le eccezioni di questa residenza. null = profilo senza full_name.
+  markedByNames: Record<string, string | null>
 }
 
-export function DocumentiClient({ residenceId, docs, units, checklist }: Props) {
+export function DocumentiClient({ residenceId, docs, units, checklist, markedByNames }: Props) {
   // --- filter state ---
   const [search, setSearch]       = useState('')
 
@@ -542,6 +545,7 @@ export function DocumentiClient({ residenceId, docs, units, checklist }: Props) 
         checklist={checklist}
         unclassifiedCount={pendingClassification.length}
         onFilterDocType={t => setDocTypeFilter(t)}
+        markedByNames={markedByNames}
       />
 
       {/* -------- Ricerca + filtri (tipo a tendina · coda revisione) -------- */}
@@ -682,11 +686,13 @@ function ChecklistSection({
   checklist,
   unclassifiedCount,
   onFilterDocType,
+  markedByNames,
 }: {
   residenceId: string
   checklist: ChecklistResult
   unclassifiedCount: number
   onFilterDocType: (docType: DocType) => void
+  markedByNames: Record<string, string | null>
 }) {
   const [openScope, setOpenScope] = useState<CountedScopeKey | null>(null)
   const [missingOnly, setMissingOnly] = useState(false)
@@ -777,6 +783,7 @@ function ChecklistSection({
                 exp={exp}
                 residenceId={residenceId}
                 onFilterDocType={onFilterDocType}
+                markedByNames={markedByNames}
               />
             ))
           )}
@@ -790,24 +797,28 @@ function ChecklistItemRow({
   exp,
   residenceId,
   onFilterDocType,
+  markedByNames,
 }: {
   exp: ChecklistExpectation
   residenceId: string
   onFilterDocType: (docType: DocType) => void
+  markedByNames: Record<string, string | null>
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
 
-  // Eccezione checklist (B4 C5b). showForm apre i due campi opzionali di
-  // "Segna non applicabile"; note/expectedFrom sono precompilati da exp AD
-  // OGNI apertura del form (openForm sotto), non solo al mount — altrimenti
-  // riaprire il form dopo un refresh mostrerebbe valori stantii. Precompilare
-  // è correttezza, non cortesia: setChecklistException fa upsert e
-  // sovrascrive questi campi, un form vuoto su una voce con nota già
-  // presente la cancellerebbe.
+  // Eccezione checklist (B4 C5b, motivazione obbligatoria dalla revisione
+  // "audit" — 028). showForm apre il campo nota di "Segna non applicabile";
+  // precompilato da exp.note AD OGNI apertura del form (openForm sotto),
+  // non solo al mount — altrimenti riaprire il form dopo un refresh
+  // mostrerebbe un valore stantio. Precompilare è correttezza, non
+  // cortesia: setChecklistException fa upsert e sovrascrive la nota, un
+  // form vuoto su una voce con nota già presente la cancellerebbe.
+  // Niente più campo "atteso da": expected_from non è nel payload
+  // dell'action (028, IN SCOPE) — il valore legacy resta leggibile in
+  // sola lettura nel pannello info sopra, mai riscritto da qui.
   const [showForm, setShowForm] = useState(false)
   const [note, setNote] = useState(exp.note ?? '')
-  const [expectedFrom, setExpectedFrom] = useState(exp.expectedFrom ?? '')
   const [pending, setPending] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
@@ -819,7 +830,6 @@ function ChecklistItemRow({
 
   function openForm() {
     setNote(exp.note ?? '')
-    setExpectedFrom(exp.expectedFrom ?? '')
     setActionError(null)
     setShowForm(true)
   }
@@ -829,13 +839,14 @@ function ChecklistItemRow({
     setActionError(null)
   }
 
+  // Disabilitazione client-side per comodità: il vincolo vero è
+  // server-side, in setChecklistException ("La motivazione è obbligatoria").
+  const trimmedNote = note.trim()
+
   async function handleConfirmException() {
     setPending(true)
     setActionError(null)
-    const res = await setChecklistException(residenceId, exp.expectationKey, {
-      note: note || null,
-      expectedFrom: expectedFrom || null,
-    })
+    const res = await setChecklistException(residenceId, exp.expectationKey, trimmedNote)
     setPending(false)
     if ('error' in res) {
       setActionError(res.error)
@@ -916,37 +927,42 @@ function ChecklistItemRow({
               il bottone opposto è subito accanto. */}
           <div className="pt-2 border-t border-border/60 space-y-2">
             {exp.notApplicable ? (
-              <button
-                type="button"
-                onClick={handleClearException}
-                disabled={pending}
-                className="text-brand-medium font-medium hover:underline disabled:opacity-50"
-              >
-                {pending ? 'Attendere…' : 'Annulla non applicabile'}
-              </button>
+              <div className="space-y-1.5">
+                {/* Motivazione prima dell'attribuzione: chi legge vuole sapere
+                    PERCHÉ prima di sapere CHI. Fallback solo quando marcatore
+                    e data sono entrambi assenti (riga pre-028, mai backfillata) —
+                    non basarsi sul solo nome, altrimenti una data presente senza
+                    nome verrebbe scambiata per "non tracciato". */}
+                {exp.note && <p className="text-text-primary">{exp.note}</p>}
+                <p>
+                  {exp.markedBy === null && exp.markedAt === null
+                    ? 'Escluso · dato non tracciato'
+                    : `Escluso da ${exp.markedBy ? (markedByNames[exp.markedBy] ?? 'utente sconosciuto') : '—'} · ${
+                        exp.markedAt
+                          ? new Date(exp.markedAt).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })
+                          : '—'
+                      }`}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleClearException}
+                  disabled={pending}
+                  className="text-brand-medium font-medium hover:underline disabled:opacity-50"
+                >
+                  {pending ? 'Attendere…' : 'Annulla non applicabile'}
+                </button>
+              </div>
             ) : showForm ? (
               <div className="space-y-2">
                 <div className="space-y-1">
                   <label htmlFor={`note-${exp.expectationKey}`} className="block text-text-secondary">
-                    Nota <span className="font-normal">(opzionale)</span>
+                    Motivazione
                   </label>
                   <textarea
                     id={`note-${exp.expectationKey}`}
                     value={note}
                     onChange={e => setNote(e.target.value)}
                     rows={2}
-                    className="w-full border border-border rounded-lg px-2 py-1.5 text-xs bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label htmlFor={`expected-from-${exp.expectationKey}`} className="block text-text-secondary">
-                    Atteso da <span className="font-normal">(opzionale)</span>
-                  </label>
-                  <input
-                    id={`expected-from-${exp.expectationKey}`}
-                    type="text"
-                    value={expectedFrom}
-                    onChange={e => setExpectedFrom(e.target.value)}
                     className="w-full border border-border rounded-lg px-2 py-1.5 text-xs bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
                   />
                 </div>
@@ -962,7 +978,7 @@ function ChecklistItemRow({
                   <button
                     type="button"
                     onClick={handleConfirmException}
-                    disabled={pending}
+                    disabled={pending || trimmedNote.length === 0}
                     className="flex-1 bg-brand-dark text-white rounded-lg py-1.5 font-medium disabled:opacity-50"
                   >
                     {pending ? 'Salvataggio…' : 'Conferma'}
