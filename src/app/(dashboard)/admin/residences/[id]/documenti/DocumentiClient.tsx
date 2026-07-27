@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { FileText, Download, Upload, X, Loader2, CheckCircle2, AlertCircle, Clock, Sparkles, ChevronDown } from 'lucide-react'
 import type { DocumentCategory } from '@/types/database'
-import { createUploadUrl, confirmDocument, confirmClassification } from './actions'
+import { createUploadUrl, confirmDocument, confirmClassification, setChecklistException, clearChecklistException } from './actions'
 import { ALLOWED_DOCUMENT_MIME, MAX_DOCUMENT_SIZE } from '@/lib/document-upload'
 import { pluralize } from '@/lib/pluralize'
 import {
@@ -536,8 +536,9 @@ export function DocumentiClient({ residenceId, docs, units, checklist }: Props) 
         </p>
       )}
 
-      {/* -------- Checklist di consegna (B4 C5a, read-only) -------- */}
+      {/* -------- Checklist di consegna (B4 C5a/C5b) -------- */}
       <ChecklistSection
+        residenceId={residenceId}
         checklist={checklist}
         unclassifiedCount={pendingClassification.length}
         onFilterDocType={t => setDocTypeFilter(t)}
@@ -677,10 +678,12 @@ const SCOPE_LABELS: Record<CountedScopeKey, string> = {
 // principale della pagina; la checklist è supporto e non deve spingerli
 // sotto la piega.
 function ChecklistSection({
+  residenceId,
   checklist,
   unclassifiedCount,
   onFilterDocType,
 }: {
+  residenceId: string
   checklist: ChecklistResult
   unclassifiedCount: number
   onFilterDocType: (docType: DocType) => void
@@ -769,7 +772,12 @@ function ChecklistSection({
             <p className="text-sm text-text-secondary py-2">Nessuna voce mancante in questo gruppo.</p>
           ) : (
             openItems.map(exp => (
-              <ChecklistItemRow key={exp.expectationKey} exp={exp} onFilterDocType={onFilterDocType} />
+              <ChecklistItemRow
+                key={exp.expectationKey}
+                exp={exp}
+                residenceId={residenceId}
+                onFilterDocType={onFilterDocType}
+              />
             ))
           )}
         </div>
@@ -780,18 +788,74 @@ function ChecklistSection({
 
 function ChecklistItemRow({
   exp,
+  residenceId,
   onFilterDocType,
 }: {
   exp: ChecklistExpectation
+  residenceId: string
   onFilterDocType: (docType: DocType) => void
 }) {
+  const router = useRouter()
   const [open, setOpen] = useState(false)
+
+  // Eccezione checklist (B4 C5b). showForm apre i due campi opzionali di
+  // "Segna non applicabile"; note/expectedFrom sono precompilati da exp AD
+  // OGNI apertura del form (openForm sotto), non solo al mount — altrimenti
+  // riaprire il form dopo un refresh mostrerebbe valori stantii. Precompilare
+  // è correttezza, non cortesia: setChecklistException fa upsert e
+  // sovrascrive questi campi, un form vuoto su una voce con nota già
+  // presente la cancellerebbe.
+  const [showForm, setShowForm] = useState(false)
+  const [note, setNote] = useState(exp.note ?? '')
+  const [expectedFrom, setExpectedFrom] = useState(exp.expectedFrom ?? '')
+  const [pending, setPending] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const status = exp.notApplicable
     ? { label: 'Non applicabile', className: 'bg-neutral-600/7 text-neutral-600' }
     : exp.satisfied
     ? { label: 'Presente', className: 'bg-brand-dark/8 text-brand-dark' }
     : { label: 'Mancante', className: 'bg-status-inprogress/8 text-status-inprogress' }
+
+  function openForm() {
+    setNote(exp.note ?? '')
+    setExpectedFrom(exp.expectedFrom ?? '')
+    setActionError(null)
+    setShowForm(true)
+  }
+
+  function cancelForm() {
+    setShowForm(false)
+    setActionError(null)
+  }
+
+  async function handleConfirmException() {
+    setPending(true)
+    setActionError(null)
+    const res = await setChecklistException(residenceId, exp.expectationKey, {
+      note: note || null,
+      expectedFrom: expectedFrom || null,
+    })
+    setPending(false)
+    if ('error' in res) {
+      setActionError(res.error)
+      return
+    }
+    setShowForm(false)
+    router.refresh()
+  }
+
+  async function handleClearException() {
+    setPending(true)
+    setActionError(null)
+    const res = await clearChecklistException(residenceId, exp.expectationKey)
+    setPending(false)
+    if ('error' in res) {
+      setActionError(res.error)
+      return
+    }
+    router.refresh()
+  }
 
   return (
     <div className="border-b border-border last:border-b-0">
@@ -846,6 +910,76 @@ function ChecklistItemRow({
           >
             Vedi documenti di questo tipo
           </button>
+
+          {/* Eccezione checklist (B4 C5b): segna/annulla non applicabile.
+              Due stati, mai insieme. Niente conferma modale — reversibile,
+              il bottone opposto è subito accanto. */}
+          <div className="pt-2 border-t border-border/60 space-y-2">
+            {exp.notApplicable ? (
+              <button
+                type="button"
+                onClick={handleClearException}
+                disabled={pending}
+                className="text-brand-medium font-medium hover:underline disabled:opacity-50"
+              >
+                {pending ? 'Attendere…' : 'Annulla non applicabile'}
+              </button>
+            ) : showForm ? (
+              <div className="space-y-2">
+                <div className="space-y-1">
+                  <label htmlFor={`note-${exp.expectationKey}`} className="block text-text-secondary">
+                    Nota <span className="font-normal">(opzionale)</span>
+                  </label>
+                  <textarea
+                    id={`note-${exp.expectationKey}`}
+                    value={note}
+                    onChange={e => setNote(e.target.value)}
+                    rows={2}
+                    className="w-full border border-border rounded-lg px-2 py-1.5 text-xs bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label htmlFor={`expected-from-${exp.expectationKey}`} className="block text-text-secondary">
+                    Atteso da <span className="font-normal">(opzionale)</span>
+                  </label>
+                  <input
+                    id={`expected-from-${exp.expectationKey}`}
+                    type="text"
+                    value={expectedFrom}
+                    onChange={e => setExpectedFrom(e.target.value)}
+                    className="w-full border border-border rounded-lg px-2 py-1.5 text-xs bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
+                  />
+                </div>
+                <div className="flex gap-2 pt-0.5">
+                  <button
+                    type="button"
+                    onClick={cancelForm}
+                    disabled={pending}
+                    className="flex-1 border border-border rounded-lg py-1.5 text-text-secondary disabled:opacity-50"
+                  >
+                    Annulla
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmException}
+                    disabled={pending}
+                    className="flex-1 bg-brand-dark text-white rounded-lg py-1.5 font-medium disabled:opacity-50"
+                  >
+                    {pending ? 'Salvataggio…' : 'Conferma'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={openForm}
+                className="text-brand-medium font-medium hover:underline"
+              >
+                Segna non applicabile
+              </button>
+            )}
+            {actionError && <p className="text-status-inprogress">{actionError}</p>}
+          </div>
         </div>
       )}
     </div>
