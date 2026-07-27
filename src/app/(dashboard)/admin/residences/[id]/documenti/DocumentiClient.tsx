@@ -895,12 +895,8 @@ function ChecklistItemRow({
           )}
           <p>Ambito: <span className="text-text-primary">{SCOPE_LABELS[exp.scope as CountedScopeKey] ?? exp.scope}</span></p>
 
-          {exp.notApplicable && (
-            <p className="italic">
-              Segnata non applicabile
-              {exp.expectedFrom ? ` · atteso da: ${exp.expectedFrom}` : ''}
-              {exp.note ? ` — ${exp.note}` : ''}
-            </p>
+          {exp.notApplicable && exp.expectedFrom && (
+            <p>Atteso da: <span className="text-text-primary">{exp.expectedFrom}</span></p>
           )}
 
           {exp.satisfied && exp.matchingDocuments.length > 0 && (
