@@ -918,7 +918,7 @@ function ChecklistItemRow({
           <button
             type="button"
             onClick={() => onFilterDocType(exp.docType)}
-            className="text-brand-medium font-medium hover:underline"
+            className="text-brand-medium font-medium hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium rounded"
           >
             Vedi documenti di questo tipo
           </button>
@@ -948,7 +948,7 @@ function ChecklistItemRow({
                   type="button"
                   onClick={handleClearException}
                   disabled={pending}
-                  className="text-brand-medium font-medium hover:underline disabled:opacity-50"
+                  className="text-brand-medium font-medium hover:underline disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium rounded"
                 >
                   {pending ? 'Attendere…' : 'Annulla non applicabile'}
                 </button>
@@ -972,7 +972,7 @@ function ChecklistItemRow({
                     type="button"
                     onClick={cancelForm}
                     disabled={pending}
-                    className="flex-1 border border-border rounded-lg py-1.5 text-text-secondary disabled:opacity-50"
+                    className="flex-1 border border-border rounded-lg py-1.5 text-text-secondary disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium"
                   >
                     Annulla
                   </button>
@@ -980,7 +980,7 @@ function ChecklistItemRow({
                     type="button"
                     onClick={handleConfirmException}
                     disabled={pending || trimmedNote.length === 0}
-                    className="flex-1 bg-brand-dark text-white rounded-lg py-1.5 font-medium disabled:opacity-50"
+                    className="flex-1 bg-brand-dark text-white rounded-lg py-1.5 font-medium disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium"
                   >
                     {pending ? 'Salvataggio…' : 'Conferma'}
                   </button>
@@ -990,12 +990,12 @@ function ChecklistItemRow({
               <button
                 type="button"
                 onClick={openForm}
-                className="text-brand-medium font-medium hover:underline"
+                className="text-brand-medium font-medium hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium rounded"
               >
                 Segna non applicabile
               </button>
             )}
-            {actionError && <p className="text-status-inprogress">{actionError}</p>}
+            {actionError && <p className="text-status-overdue">{actionError}</p>}
           </div>
         </div>
       )}
