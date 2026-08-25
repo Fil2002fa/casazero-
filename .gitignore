@@ -18,8 +18,6 @@ build/
 .env.local
 .env.*.local
 
-# handoff di sessione (documenti locali, non versionati)
-docs/handoffs/
 
 # claude code — settings locali per macchina
 .claude/settings.local.json
