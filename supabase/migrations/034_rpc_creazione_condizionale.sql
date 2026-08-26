@@ -354,11 +354,40 @@ WHERE n.nspname = 'public' AND p.proname = 'czero_create_residence_with_units';
 -- -- atteso: 1 sola riga, con p_features jsonb in coda
 -- ============================================================
 --
--- -- ESITO REALE (da compilare da Filippo dopo l'apply) --
+-- -- ESITO REALE (applicata da Filippo il 2026-08-26) --
+--
 -- 0. Output dell'AUTO-VERIFICA IN CODA:
--- 1. Smoke test A (filtro attivo):
--- 2. Smoke test B (ramo NULL, retrocompatibilita'):
--- 3. Item condizionali per residenza esistente (invariati):
+--    n_overload=1 | firma: p_features jsonb in coda | service_role=true |
+--    authenticated=false | anon=false | secdef=true | proconfig=search_path=public
+--    -> un solo overload, permessi e SECURITY DEFINER intatti: il DROP+CREATE
+--       non ha lasciato la vecchia firma a 7 argomenti ne' alterato i grants.
+--
+-- 1. Smoke test A (filtro attivo, p_features passato):
+--    n_features=3 | cast_stringa (centrale_termica_atteso_true, "true" come
+--    stringa) = 1 (cast riuscito) | fotovoltaico=1 | lucernari=0 | antenna=0 |
+--    incondizionate_condominio=6 su attesi_incondizionati=6
+--    -> tutti gli attesi confermati: dotazione dichiarata presente istanzia
+--       la voce (fotovoltaico), dichiarata assente la esclude (lucernari),
+--       non dichiarata la esclude (antenna), il cast tollerante sulla
+--       stringa "true" funziona (centrale_termica), le incondizionate non
+--       sono toccate dal filtro (6=6).
+--
+-- 2. Smoke test B (ramo NULL, retrocompatibilita', p_features omesso):
+--    n_features_atteso_0=0 | condizionali_istanziate=5 | attesi_condizionali_attivi=5
+--    -> nessuna riga scritta in residence_features (non dichiarato != assente),
+--       tutte e 5 le condizionali oggi attive istanziate: comportamento
+--       identico a prima della 034.
+--
+-- 3. Item condizionali per residenza esistente (invariati) e non-regressione:
+--    conteggi per residenza identici riga per riga rispetto a prima
+--    dell'apply. Nessuna residenza __SMOKE_034__/__SMOKE_034_NULL__ residua
+--    sul DB: il ROLLBACK di chiusura del blocco smoke test ha agito.
+--
+-- CONCLUSIONE: RPC sostituita con la firma a 8 argomenti (unico overload),
+-- permessi service_role-only e SECURITY DEFINER confermati. Ramo A (filtro
+-- condizionale attivo) e ramo B (retrocompatibilita' con p_features NULL)
+-- entrambi verificati dentro la stessa transazione con ROLLBACK: zero
+-- residenze esistenti toccate, zero residuo di test sul DB.
 -- ============================================================
 --
 -- ============================================================
