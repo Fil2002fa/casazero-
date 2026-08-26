@@ -14,6 +14,10 @@ const WIZARD_CATEGORIES = [
   { label: 'Finiture e serramenti',  value: 'Finiture'     },
   { label: 'Sicurezza in copertura', value: 'Sicurezza'    },
   { label: 'Scarichi e spurghi',     value: 'Spurghi'      },
+  { label: 'Ascensore',              value: 'Ascensore'    },
+  { label: 'Antincendio',            value: 'Antincendio'  },
+  { label: 'Idrico e sanitario',     value: 'Idrico'       },
+  { label: 'Accessi ed esterni',     value: 'Accessi'      },
 ]
 
 const MAX_UNITS = 200

@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "verify:features": "node --experimental-strip-types --no-warnings scripts/verify-residence-features.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.4",
