@@ -108,7 +108,7 @@ SELECT
 
 -- ============================================================
 -- VERIFICA POST-APPLY (eseguire dopo l'apply; incollare l'output reale nel
--- footer ESITO REALE, che resta vuoto: Claude non applica DDL).
+-- footer ESITO REALE, compilato il 2026-08-26 con l'output reale).
 -- ============================================================
 -- 1. Nessun residuo di TRUNCATE/TRIGGER/REFERENCES per anon su NESSUNA
 --    tabella public (atteso: 0 righe):
@@ -193,14 +193,50 @@ SELECT
 -- COSA FARE: riaprire il file, NON selezionare nulla (click a vuoto nell'editor
 -- per deselezionare), eseguire tutto, e incollare l'output dell'ultima riga.
 --
--- -- ESITO REALE (da compilare dopo un apply COMPLETO) --
--- Resta VUOTO: al 2026-08-01 la migrazione non e' applicata per intero e
--- l'hardening di anon NON e' chiuso. 16 tabelle su 17 conservano TRUNCATE.
--- 0. Output dell'AUTO-VERIFICA IN CODA (atteso: 0 | 0 | ...anon=arwdm...):
--- 1. ...
--- 2. ...
--- 3. ...
--- 4. ...
+-- TENTATIVO 3 — 2026-08-26: APPLICATA PER INTERO. Eseguita deselezionando
+-- tutto il testo prima del Run, come indicato nel "COSA FARE" del tentativo
+-- 2. L'auto-verifica in coda ha restituito output (nei tentativi 1 e 2 non
+-- compariva), confermando che la coda del file e' stata raggiunta. Causa dei
+-- fallimenti 1 e 2 confermata: selezione parziale nel SQL Editor.
+--
+-- -- ESITO REALE (applicata da Filippo il 2026-08-26, terzo tentativo) --
+--
+-- 0. Output dell'AUTO-VERIFICA IN CODA:
+--    residui_anon_atteso_0=0 | residui_completions_atteso_0=0 |
+--    default_acl_postgres = {postgres=arwdDxtm/postgres, anon=arwdm/postgres,
+--    authenticated=arwdm/postgres, service_role=arwdDxtm/postgres}
+--    -> l'entry anon e' passata da arwdDxtm a arwdm: D (TRUNCATE), x
+--       (REFERENCES), t (TRIGGER) rimossi anche dai default privileges, quindi
+--       le tabelle future non rinascono col buco. postgres e service_role
+--       conservano arwdDxtm correttamente e volutamente (owner e ruolo
+--       server-side, non passano dalla RLS per definizione).
+--
+-- 1. Residui TRUNCATE/TRIGGER/REFERENCES per anon su public: 0 righe.
+--    Erano 51 dopo il tentativo 1, 48 dopo il tentativo 2.
+--
+-- 2. Privilegi residui di anon, tabella per tabella: 17 righe, tutte con
+--    esattamente DELETE, INSERT, SELECT, UPDATE — nessuna con
+--    TRUNCATE/TRIGGER/REFERENCES:
+--      admin_assignments, attachments, builders, comments, completions,
+--      document_checklist_template, documents, invites, maintenance_items,
+--      maintenance_templates, notifications, profiles,
+--      residence_checklist_exception, residences, suppliers, unit_members,
+--      units.
+--    residence_features assente dal report: la 030 le aveva gia' revocato
+--    ALL per anon (grant zero, quindi nessuna riga da elencare).
+--
+-- 3. Campione su completions: anon senza TRUNCATE/TRIGGER/REFERENCES,
+--    coerente col punto 2.
+--
+-- 4. Default privileges: vedi punto 0.
+--
+-- CONCLUSIONE: hardening di anon chiuso su tutte le tabelle public, gemello
+-- della 031 per authenticated. SELECT/INSERT/UPDATE/DELETE di anon restano
+-- concessi su tutte e 17 le tabelle, completions inclusa: fuori scope di
+-- questa migrazione, candidati a un ciclo di sicurezza separato come gia'
+-- argomentato nell'appendice (nessuna policy RLS in public li usa, ma la
+-- conferma va fatta contro i flussi reali con chiave anonima — inviti, reset
+-- password, pagine pubbliche — non solo contro le policy).
 -- ============================================================
 --
 -- ============================================================
