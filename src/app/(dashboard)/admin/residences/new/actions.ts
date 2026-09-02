@@ -25,7 +25,7 @@ export async function createResidence(formData: FormData) {
   const energyClass  = (formData.get('energy_class') as string)?.trim() || null
   const deliveryDate = formData.get('delivery_date') as string
 
-  if (!name || !deliveryDate) return { error: 'Nome e data di consegna obbligatori' }
+  if (!name || !address || !deliveryDate) return { error: 'Nome, indirizzo e data di consegna obbligatori' }
 
   const unitsResult = parseUnits(formData.get('units'))
   if ('error' in unitsResult) return { error: unitsResult.error }

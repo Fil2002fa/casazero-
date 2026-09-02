@@ -300,7 +300,7 @@ export default function NewResidencePage() {
             <h2 className="text-sm font-medium text-text-primary">Dati residenza</h2>
 
             <Field label="Nome *" name="name" placeholder="es. Residenza Cavaccio" required />
-            <Field label="Indirizzo" name="address" placeholder="Via Roma 1, Padova" />
+            <Field label="Indirizzo *" name="address" placeholder="Via Roma 1, Padova" required />
             <Field label="Classe energetica" name="energy_class" placeholder="es. A4" />
             <div>
               <Field label="Data consegna *" name="delivery_date" type="date" required />
