@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useTransition } from 'react'
+import { forwardRef, useEffect, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { ChevronLeft, ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react'
 import { createResidence } from './actions'
@@ -93,6 +93,8 @@ export default function NewResidencePage() {
   const [genPrefix, setGenPrefix] = useState('Unità')
   const [genCount, setGenCount] = useState('')
   const [genPerFloor, setGenPerFloor] = useState('2')
+  const [genError, setGenError] = useState<string | null>(null)
+  const genCountRef = useRef<HTMLInputElement>(null)
   const [showReplaceConfirm, setShowReplaceConfirm] = useState(false)
   const [resetNotice, setResetNotice] = useState(false)
 
@@ -130,6 +132,7 @@ export default function NewResidencePage() {
       setGenPrefix('Unità')
       setGenCount('')
       setGenPerFloor('2')
+      setGenError(null)
       setShowReplaceConfirm(false)
       setResetNotice(true)
     }
@@ -153,14 +156,26 @@ export default function NewResidencePage() {
   }
 
   // Campi del generatore validi? Unica definizione, condivisa da anteprima,
-  // "Genera" e generazione effettiva.
-  const gen = (() => {
-    const count = parseInt(genCount, 10)
-    const perFloor = parseInt(genPerFloor, 10)
-    if (!Number.isInteger(count) || count < 1 || count > MAX_UNITS) return null
-    if (!Number.isInteger(perFloor) || perFloor < 1) return null
-    return { count, perFloor }
-  })()
+  // "Genera" e generazione effettiva. Esplosa in due booleani (invece
+  // dell'IIFE unica) per poter decidere quale campo mettere a fuoco
+  // quando "Genera" fallisce.
+  const genCountNum = parseInt(genCount, 10)
+  const genCountValid = Number.isInteger(genCountNum) && genCountNum >= 1 && genCountNum <= MAX_UNITS
+  const genPerFloorNum = parseInt(genPerFloor, 10)
+  const genPerFloorValid = Number.isInteger(genPerFloorNum) && genPerFloorNum >= 1
+
+  // Con 1 sola unità il piano è sempre 1 qualunque sia "Unità per piano"
+  // (Math.floor(0/n)+1 === 1 per ogni n ≥ 1 in doGenerate sotto): il campo
+  // non ha più alcun effetto e va nascosto, senza toccare il calcolo.
+  const genCountIsOne = genCountValid && genCountNum === 1
+
+  // Campo nascosto quando genCountIsOne: la sua validità non deve poter
+  // bloccare "Genera". perFloor = 1 riproduce lo stesso identico risultato
+  // di doGenerate per qualunque perFloor valido (vedi commento sopra), senza
+  // leggere genPerFloor quando non è a schermo.
+  const gen = genCountIsOne
+    ? { count: 1, perFloor: 1 }
+    : genCountValid && genPerFloorValid ? { count: genCountNum, perFloor: genPerFloorNum } : null
 
   function doGenerate() {
     if (!gen) return
@@ -175,10 +190,11 @@ export default function NewResidencePage() {
 
   function handleGenerate() {
     if (!gen) {
-      setListError(`Controlla i campi del generatore: numero di unità (da 1 a ${MAX_UNITS}) e unità per piano (almeno 1)`)
+      setGenError(`Controlla i campi del generatore: numero di unità (da 1 a ${MAX_UNITS}) e unità per piano (almeno 1)`)
+      if (!genCountValid) genCountRef.current?.focus()
       return
     }
-    setListError(null)
+    setGenError(null)
     // Conferma solo se in lista ci sono già unità con un nome: righe vuote
     // appena aggiunte non sono lavoro da proteggere.
     if (units.some(u => u.label.trim())) {
@@ -214,6 +230,7 @@ export default function NewResidencePage() {
 
     setError(null)
     setListError(null)
+    setGenError(null)
     setResetNotice(false)
 
     // Rete di sicurezza: se un required dello step 1 (ora nascosto) non è più
@@ -446,17 +463,19 @@ export default function NewResidencePage() {
               Scorciatoia per popolare la lista. Ogni riga resta poi modificabile singolarmente.
             </p>
             <div className="grid grid-cols-2 gap-3">
+              <GenField ref={genCountRef} label="Numero di unità *" value={genCount} onChange={setGenCount} type="number" min="1" max={String(MAX_UNITS)} placeholder="es. 14" />
               <GenField label="Nome unità" value={genPrefix} onChange={setGenPrefix} placeholder="es. Unità, Int., A" />
-              <GenField label="Numero di unità" value={genCount} onChange={setGenCount} type="number" min="1" max={String(MAX_UNITS)} placeholder="es. 14" />
             </div>
-            <GenField
-              label="Unità per piano"
-              value={genPerFloor}
-              onChange={setGenPerFloor}
-              type="number"
-              min="1"
-              hint="Per assegnare i piani in automatico: es. 2 = le prime due unità al piano 1, le successive al piano 2, e così via. Modificabile poi riga per riga."
-            />
+            {!genCountIsOne && (
+              <GenField
+                label="Unità per piano"
+                value={genPerFloor}
+                onChange={setGenPerFloor}
+                type="number"
+                min="1"
+                hint="Per assegnare i piani in automatico: es. 2 = le prime due unità al piano 1, le successive al piano 2, e così via. Modificabile poi riga per riga."
+              />
+            )}
             {genPreview && (
               <p className="text-xs text-text-secondary">{genPreview}</p>
             )}
@@ -467,6 +486,9 @@ export default function NewResidencePage() {
             >
               Genera
             </button>
+            {genError && (
+              <p className="text-xs text-semantic-red">{genError}</p>
+            )}
           </section>
 
           {/* Lista editabile — fonte di verità */}
@@ -613,16 +635,18 @@ function Field({
   )
 }
 
-function GenField({
-  label, value, onChange, placeholder, type = 'text', min, max, hint,
-}: {
+const GenField = forwardRef<HTMLInputElement, {
   label: string; value: string; onChange: (v: string) => void
   placeholder?: string; type?: string; min?: string; max?: string; hint?: string
-}) {
+}>(function GenField(
+  { label, value, onChange, placeholder, type = 'text', min, max, hint },
+  ref
+) {
   return (
     <div>
       <label className="text-xs text-text-secondary mb-1 block">{label}</label>
       <input
+        ref={ref}
         type={type}
         value={value}
         onChange={e => onChange(e.target.value)}
@@ -634,4 +658,4 @@ function GenField({
       {hint && <p className="text-xs text-text-secondary mt-1">{hint}</p>}
     </div>
   )
-}
+})
