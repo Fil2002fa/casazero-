@@ -140,6 +140,20 @@ const DERIVED_MAP: Record<string, DerivedSpec[]> = {
   '3fb467a8-157a-4c31-88f5-2d8dd61f7527': [
     { docType: 'dich_conformita_dm37', sistema: 'altro', scope: 'condominium' },
   ],
+  // Manutenzione ordinaria ascensore (condominium, dotazione 'ascensore', 035).
+  // Non la verifica biennale (d582bfad): quella produce un verbale, documento
+  // diverso, fuori scope qui.
+  'a47686ee-3f1d-4721-a3f6-6e4c282fdb0d': [
+    { docType: 'libretto_impianto', sistema: 'ascensore', scope: 'condominium' },
+  ],
+  // Manutenzione caldaia / impianto termico (condominium, dotazione
+  // 'centrale_termica', 035). Chiave distinta da residence:libretto_impianto:
+  // termico (fc529672, pompa di calore/climatizzazione unit, incondizionata):
+  // scope diverso, e semanticamente corretto così — la centrale termica è
+  // parti comuni, la pompa di calore è dell'appartamento. Non toccare fc529672.
+  '08d73253-7cd3-42bf-9676-52267bfeeb90': [
+    { docType: 'libretto_impianto', sistema: 'termico', scope: 'condominium' },
+  ],
 }
 
 // Chiave canonica anti-duplicazione. Placeholder NULL = stringa vuota, allineato
