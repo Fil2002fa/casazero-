@@ -4,6 +4,13 @@ import { useEffect, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { ChevronLeft, ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react'
 import { createResidence } from './actions'
+import {
+  FEATURE_GROUPS,
+  RESIDENCE_FEATURES,
+  featureFieldName,
+  type FeatureKey,
+} from '@/lib/residence-features'
+import { pluralize } from '@/lib/pluralize'
 
 const WIZARD_CATEGORIES = [
   { label: 'Coperture e tetto',      value: 'Coperture'    },
@@ -22,7 +29,23 @@ const WIZARD_CATEGORIES = [
 
 const MAX_UNITS = 200
 
+const STEP_TITLES = {
+  1: 'Passo 1 di 3 — Dati residenza',
+  2: 'Passo 2 di 3 — Dotazioni',
+  3: 'Passo 3 di 3 — Unità',
+} as const
+
 type UnitRow = { label: string; floor: string }
+
+// Tutte e 19 le dotazioni a false. Il wizard dichiara sempre il vocabolario
+// intero, "no" compresi: chi attraversa la schermata ha risposto. Lo stato
+// "non dichiarato" del DB (p_features NULL) resta a chi crea residenze senza
+// passare di qui — vedi il commento in actions.ts.
+function emptyFeatures(): Record<FeatureKey, boolean> {
+  return Object.fromEntries(
+    RESIDENCE_FEATURES.map(f => [f.key, false])
+  ) as Record<FeatureKey, boolean>
+}
 
 // Fonte di verità unica per i nomi generati: usata sia dall'anteprima
 // sia dalla generazione vera, così non possono divergere.
@@ -59,7 +82,8 @@ export default function NewResidencePage() {
   const [existingBuilding, setExistingBuilding] = useState(false)
   const [showDateWizard, setShowDateWizard] = useState(false)
 
-  const [step, setStep] = useState<1 | 2>(1)
+  const [step, setStep] = useState<1 | 2 | 3>(1)
+  const [features, setFeatures] = useState<Record<FeatureKey, boolean>>(emptyFeatures)
   const [units, setUnits] = useState<UnitRow[]>([])
   const [rowErrors, setRowErrors] = useState<Record<number, string>>({})
   const [listError, setListError] = useState<string | null>(null)
@@ -94,6 +118,9 @@ export default function NewResidencePage() {
       submitAttemptedRef.current = false
       formRef.current?.reset()
       setStep(1)
+      // Le checkbox dotazioni sono controllate da React: form.reset() azzera
+      // il DOM ma non lo stato, che tornerebbe subito a ri-spuntarle.
+      setFeatures(emptyFeatures())
       setUnits([])
       setRowErrors({})
       setListError(null)
@@ -111,15 +138,18 @@ export default function NewResidencePage() {
   }, [])
 
   // Il form è noValidate: la validazione nativa non blocca mai il submit da sola
-  // (i required dello step 1 sono nascosti allo step 2 e il browser fallirebbe
-  // in silenzio: "invalid form control is not focusable"). La invochiamo noi
-  // esplicitamente quando lo step 1 è visibile.
+  // (i required dello step 1 sono nascosti negli step successivi e il browser
+  // fallirebbe in silenzio: "invalid form control is not focusable"). La
+  // invochiamo noi esplicitamente, e SOLO quando lo step 1 è visibile: dallo
+  // step 2 quei campi sono già nascosti, e chiamarla lì ricadrebbe nello stesso
+  // fallimento silenzioso. Lo step 2 non ha comunque nulla da validare —
+  // nessuna dotazione è obbligatoria e il passaggio non blocca mai.
   function handleNext() {
     const form = formRef.current
     if (!form) return
     setError(null)
-    if (!form.reportValidity()) return
-    setStep(2)
+    if (step === 1 && !form.reportValidity()) return
+    setStep(s => (s === 1 ? 2 : 3))
   }
 
   // Campi del generatore validi? Unica definizione, condivisa da anteprima,
@@ -175,8 +205,9 @@ export default function NewResidencePage() {
     e.preventDefault()
     const form = e.currentTarget
 
-    // Enter su un campo dello step 1: equivale ad "Avanti", non al submit finale.
-    if (step === 1) {
+    // Enter su un campo di uno step intermedio: equivale ad "Avanti", non al
+    // submit finale. Solo lo step 3 invia davvero.
+    if (step !== 3) {
       handleNext()
       return
     }
@@ -220,6 +251,10 @@ export default function NewResidencePage() {
     })
   }
 
+  // Contato scorrendo la costante, non Object.values(features): l'elenco delle
+  // dotazioni che esistono è uno solo, e il riepilogo deve leggerlo da lì.
+  const featureCount = RESIDENCE_FEATURES.filter(f => features[f.key]).length
+
   // Il riepilogo conta solo le righe con un nome compilato: una riga appena
   // aggiunta e ancora vuota non è un'unità.
   const filledUnits = units.filter(u => u.label.trim())
@@ -242,9 +277,7 @@ export default function NewResidencePage() {
         </Link>
         <div>
           <h1 className="text-base font-medium text-text-primary">Nuova residenza</h1>
-          <p className="text-xs text-text-secondary">
-            {step === 1 ? 'Passo 1 di 2 — Dati residenza' : 'Passo 2 di 2 — Unità'}
-          </p>
+          <p className="text-xs text-text-secondary">{STEP_TITLES[step]}</p>
         </div>
       </div>
 
@@ -257,9 +290,9 @@ export default function NewResidencePage() {
         </div>
       )}
 
-      {/* Entrambi gli step restano montati (lo step non attivo è hidden):
-          i valori non controllati dello step 1 devono restare nel DOM,
-          perché il submit legge new FormData(form). */}
+      {/* Tutti e tre gli step restano montati (quelli non attivi sono hidden):
+          i valori non controllati dello step 1 e le checkbox dello step 2
+          devono restare nel DOM, perché il submit legge new FormData(form). */}
       <form ref={formRef} onSubmit={handleSubmit} noValidate className="space-y-5">
         {/* ============ STEP 1 — Dati residenza ============ */}
         <div className={step === 1 ? 'space-y-5' : 'hidden'}>
@@ -341,8 +374,71 @@ export default function NewResidencePage() {
           </button>
         </div>
 
-        {/* ============ STEP 2 — Unità ============ */}
+        {/* ============ STEP 2 — Dotazioni ============ */}
         <div className={step === 2 ? 'space-y-5' : 'hidden'}>
+          <section className="bg-surface rounded-xl border border-border p-4 space-y-5">
+            <div>
+              <h2 className="text-sm font-medium text-text-primary">Dotazioni dell&apos;edificio</h2>
+              <p className="text-xs text-text-secondary mt-1">
+                Spunta ciò che la residenza ha davvero: il piano di manutenzione nascerà
+                con le sole voci che riguardano queste dotazioni. Puoi proseguire senza
+                spuntare nulla.
+              </p>
+            </div>
+
+            {FEATURE_GROUPS.map(group => (
+              <div key={group} className="space-y-2.5">
+                <h3 className="text-xs font-medium text-text-secondary">{group}</h3>
+                {RESIDENCE_FEATURES.filter(f => f.group === group).map(f => (
+                  <label key={f.key} className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      name={featureFieldName(f.key)}
+                      checked={features[f.key]}
+                      onChange={e =>
+                        setFeatures(prev => ({ ...prev, [f.key]: e.target.checked }))
+                      }
+                      className="w-4 h-4 mt-0.5 flex-shrink-0 rounded accent-brand-dark"
+                    />
+                    <div>
+                      <p className="text-sm text-text-primary">{f.label}</p>
+                      {'help' in f && (
+                        <p className="text-xs text-text-secondary mt-0.5">{f.help}</p>
+                      )}
+                    </div>
+                  </label>
+                ))}
+              </div>
+            ))}
+
+            {/* Riepilogo: chi salta il passaggio deve accorgersene. */}
+            <p className="text-xs text-text-secondary border-t border-border pt-3">
+              {featureCount === 0
+                ? 'Nessuna dotazione dichiarata'
+                : pluralize(featureCount, 'dotazione dichiarata', 'dotazioni dichiarate')}
+            </p>
+          </section>
+
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setStep(1)}
+              className="px-6 py-3 border border-border rounded-xl text-sm text-text-secondary font-medium"
+            >
+              Indietro
+            </button>
+            <button
+              type="button"
+              onClick={handleNext}
+              className="flex-1 py-3 bg-brand-dark text-white rounded-xl font-medium text-sm"
+            >
+              Avanti
+            </button>
+          </div>
+        </div>
+
+        {/* ============ STEP 3 — Unità ============ */}
+        <div className={step === 3 ? 'space-y-5' : 'hidden'}>
           {/* Generatore a pattern */}
           <section className="bg-surface rounded-xl border border-border p-4 space-y-3">
             <h2 className="text-sm font-medium text-text-primary">Genera unità</h2>
@@ -451,7 +547,7 @@ export default function NewResidencePage() {
           <div className="flex gap-3">
             <button
               type="button"
-              onClick={() => setStep(1)}
+              onClick={() => setStep(2)}
               className="px-6 py-3 border border-border rounded-xl text-sm text-text-secondary font-medium"
             >
               Indietro

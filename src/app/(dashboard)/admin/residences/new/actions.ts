@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/admin'
+import { RESIDENCE_FEATURES, featureFieldName } from '@/lib/residence-features'
 
 export async function createResidence(formData: FormData) {
   const supabase = await createClient()
@@ -40,6 +41,23 @@ export async function createResidence(formData: FormData) {
     }
   }
 
+  // Dotazioni dichiarate nel wizard.
+  //
+  // Si itera la COSTANTE, mai le chiavi che arrivano dal FormData: derivare
+  // l'oggetto dall'input significa che un campo mancante o rinominato passa in
+  // silenzio, e la dotazione sparisce dal piano senza che nulla lo segnali —
+  // esattamente la classe di bug per cui RESIDENCE_FEATURES esiste.
+  //
+  // Si inviano tutte e 19 le risposte, anche i "no": una checkbox non spuntata
+  // non compare affatto nel FormData, quindi l'assenza qui vale false, ed è un
+  // false DICHIARATO. Il terzo stato della RPC (p_features NULL = "dotazioni
+  // non dichiarate", 034 righe 33-44) resta riservato a chi crea residenze
+  // senza passare dal wizard: chi ha attraversato quella schermata ha risposto,
+  // e un "no" dichiarato è un dato che vale.
+  const features = Object.fromEntries(
+    RESIDENCE_FEATURES.map(f => [f.key, formData.get(featureFieldName(f.key)) !== null])
+  )
+
   // Residenza + unità + maintenance_items in un'unica transazione:
   // qualsiasi errore → ROLLBACK totale, nessuna residenza parziale.
   const { data: residenceId, error: rpcErr } = await admin.rpc('czero_create_residence_with_units', {
@@ -50,6 +68,7 @@ export async function createResidence(formData: FormData) {
     p_delivery_date: deliveryDate,
     p_units: units,
     p_category_dates: categoryDates,
+    p_features: features,
   })
 
   if (rpcErr || !residenceId) return { error: rpcErr?.message ?? 'Errore creazione residenza' }

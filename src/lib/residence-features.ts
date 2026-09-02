@@ -176,3 +176,12 @@ export type FeatureGroup = (typeof RESIDENCE_FEATURES)[number]['group']
 export const FEATURE_GROUPS: readonly FeatureGroup[] = [
   ...new Set(RESIDENCE_FEATURES.map(f => f.group)),
 ]
+
+// Nome del campo form di una dotazione. Vive qui perché il prefisso è un
+// contratto fra due superfici — il wizard che rende le checkbox e la server
+// action che le rilegge — e un prefisso scritto a mano in due file può
+// divergere senza che niente lo segnali: le caselle continuerebbero a
+// spuntarsi e il server leggerebbe sempre e solo "no".
+export function featureFieldName(key: FeatureKey): string {
+  return `feature_${key}`
+}
