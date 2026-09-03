@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { takeChargeN3, completeN3 } from '@/app/(dashboard)/admin/manutenzioni/actions'
+import { DateField } from '@/components/DateField'
 import type { MaintenanceStatus } from '@/types/database'
 
 interface Props {
@@ -58,13 +59,11 @@ export function N3AdminActions({ itemId, residenceId, status }: Props) {
             <label className="block text-sm font-medium text-text-primary mb-1">
               Data completamento <span className="text-semantic-red">*</span>
             </label>
-            <input
-              type="date"
+            <DateField
               name="completedAt"
               required
               defaultValue={new Date().toISOString().split('T')[0]}
               max={new Date().toISOString().split('T')[0]}
-              className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
             />
           </div>
 

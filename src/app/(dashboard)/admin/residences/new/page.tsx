@@ -11,6 +11,7 @@ import {
   type FeatureKey,
 } from '@/lib/residence-features'
 import { pluralize } from '@/lib/pluralize'
+import { DateField } from '@/components/DateField'
 
 const WIZARD_CATEGORIES = [
   { label: 'Coperture e tetto',      value: 'Coperture'    },
@@ -369,8 +370,7 @@ export default function NewResidencePage() {
                     {WIZARD_CATEGORIES.map(({ label, value }) => (
                       <div key={value} className="flex items-center gap-3">
                         <label className="text-xs text-text-secondary w-40 flex-shrink-0">{label}</label>
-                        <input
-                          type="date"
+                        <DateField
                           name={`date_${value}`}
                           className="flex-1 border border-border rounded-lg px-3 py-1.5 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
                         />
@@ -624,13 +624,17 @@ function Field({
   return (
     <div>
       <label className="text-xs text-text-secondary mb-1 block">{label}</label>
-      <input
-        type={type}
-        name={name}
-        placeholder={placeholder}
-        required={required}
-        className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
-      />
+      {type === 'date' ? (
+        <DateField name={name} required={required} />
+      ) : (
+        <input
+          type={type}
+          name={name}
+          placeholder={placeholder}
+          required={required}
+          className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
+        />
+      )}
     </div>
   )
 }

@@ -7,6 +7,7 @@ import type { DocumentCategory } from '@/types/database'
 import { createUploadUrl, confirmDocument, confirmClassification, setChecklistException, clearChecklistException } from './actions'
 import { ALLOWED_DOCUMENT_MIME, MAX_DOCUMENT_SIZE } from '@/lib/document-upload'
 import { pluralize } from '@/lib/pluralize'
+import { DateField } from '@/components/DateField'
 import {
   DOC_TYPES,
   DOC_TYPE_LABELS,
@@ -454,11 +455,7 @@ export function DocumentiClient({ residenceId, docs, units, checklist, markedByN
                   <label className="text-xs font-medium text-text-secondary block">
                     Data documento <span className="font-normal">(opzionale)</span>
                   </label>
-                  <input
-                    type="date"
-                    name="fileDate"
-                    className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
-                  />
+                  <DateField name="fileDate" />
                 </div>
 
                 {/* File */}
