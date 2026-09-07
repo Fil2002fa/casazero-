@@ -91,6 +91,10 @@ interface Props {
   unitPrimaryNames: Record<string, string>
   initialFilter?: FilterState
   initialModeFilter?: AttentionModeFilter
+  // Composizione del piano (Escludi/Includi) riservata al costruttore: obbligatoria,
+  // senza default, così un chiamante che dimentica di passarla fallisce in build
+  // invece di nascondere in silenzio i bottoni al super_admin.
+  canManagePlan: boolean
 }
 
 // Azione di composizione piano in transito verso il modale di conferma (preview-before-apply).
@@ -102,7 +106,7 @@ type PendingAction = {
   freqMonths: number | null
 }
 
-export function ManutenzioniClient({ residenceId, residenceName, items, completions, suppliers, unitPrimaryNames, initialFilter = null, initialModeFilter = null }: Props) {
+export function ManutenzioniClient({ residenceId, residenceName, items, completions, suppliers, unitPrimaryNames, initialFilter = null, initialModeFilter = null, canManagePlan }: Props) {
   const { showToast } = useToast()
   const [activeFilter, setActiveFilter] = useState<FilterState>(initialFilter)
   const modeFilter = initialModeFilter
@@ -551,20 +555,22 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
 
                       {isExpanded && (
                         <div className="border-t border-border">
-                          <div className="px-3 py-2 bg-background flex justify-end">
-                            <button
-                              onClick={() => setPendingAction({
-                                templateId: rep.template_id,
-                                title,
-                                targetStatus: 'archiviata',
-                                count: typeItems.length,
-                                freqMonths: freq ?? null,
-                              })}
-                              className="text-xs text-semantic-red font-medium px-2 py-1 rounded-md hover:bg-semantic-red-bg transition-colors"
-                            >
-                              Escludi dal piano
-                            </button>
-                          </div>
+                          {canManagePlan && (
+                            <div className="px-3 py-2 bg-background flex justify-end">
+                              <button
+                                onClick={() => setPendingAction({
+                                  templateId: rep.template_id,
+                                  title,
+                                  targetStatus: 'archiviata',
+                                  count: typeItems.length,
+                                  freqMonths: freq ?? null,
+                                })}
+                                className="text-xs text-semantic-red font-medium px-2 py-1 rounded-md hover:bg-semantic-red-bg transition-colors"
+                              >
+                                Escludi dal piano
+                              </button>
+                            </div>
+                          )}
                           {isCondominio ? (
                             <UnitRow
                               item={rep}
@@ -618,18 +624,20 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
                     </span>
                   </div>
                 </div>
-                <button
-                  onClick={() => setPendingAction({
-                    templateId: t.templateId,
-                    title: t.title,
-                    targetStatus: 'inclusa',
-                    count: t.count,
-                    freqMonths: t.freq,
-                  })}
-                  className="text-xs text-brand-dark font-medium px-3 py-1.5 rounded-md bg-brand-light hover:brightness-95 transition-all flex-shrink-0"
-                >
-                  Includi nel piano
-                </button>
+                {canManagePlan && (
+                  <button
+                    onClick={() => setPendingAction({
+                      templateId: t.templateId,
+                      title: t.title,
+                      targetStatus: 'inclusa',
+                      count: t.count,
+                      freqMonths: t.freq,
+                    })}
+                    className="text-xs text-brand-dark font-medium px-3 py-1.5 rounded-md bg-brand-light hover:brightness-95 transition-all flex-shrink-0"
+                  >
+                    Includi nel piano
+                  </button>
+                )}
               </div>
             ))
           )}

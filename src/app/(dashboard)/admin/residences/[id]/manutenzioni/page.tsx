@@ -24,7 +24,7 @@ export default async function ResidenceManutenzioniPage({ params, searchParams }
   const initialModeFilter: AttentionModeFilter = VALID_MODE_FILTERS.includes(modalita as typeof VALID_MODE_FILTERS[number])
     ? (modalita as AttentionModeFilter)
     : null
-  await requireRole(['super_admin'], '/admin/manutenzioni')
+  const profile = await requireRole(['admin', 'super_admin'], '/admin/manutenzioni')
   const supabase = await createClient()
 
   const { data: residence } = await supabase
@@ -100,6 +100,7 @@ export default async function ResidenceManutenzioniPage({ params, searchParams }
         unitPrimaryNames={unitPrimaryNames}
         initialFilter={initialFilter}
         initialModeFilter={initialModeFilter}
+        canManagePlan={profile.role === 'super_admin'}
       />
     </>
   )
