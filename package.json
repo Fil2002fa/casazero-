@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "verify": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1",
     "verify:features": "node --experimental-strip-types --no-warnings scripts/verify-residence-features.mjs"
   },
   "dependencies": {
