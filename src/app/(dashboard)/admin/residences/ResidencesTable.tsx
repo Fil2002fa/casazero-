@@ -8,10 +8,18 @@ export type ResidenceRow = {
   name: string
   address: string | null
   unitCount: number
-  adminName: string | null
+  // Solo per la vista costruttore: la vista amministratore non mostra la
+  // colonna (sarebbe il suo stesso nome su ogni riga) e non interroga
+  // affatto admin_assignments.
+  adminName?: string | null
 }
 
-export function ResidencesTable({ rows }: { rows: ResidenceRow[] }) {
+export function ResidencesTable({ rows, showAdminColumn }: {
+  rows: ResidenceRow[]
+  // Obbligatoria, senza default: un chiamante che la dimentica fallisce in
+  // build invece di far sparire in silenzio la colonna al costruttore.
+  showAdminColumn: boolean
+}) {
   const router = useRouter()
 
   return (
@@ -20,7 +28,7 @@ export function ResidencesTable({ rows }: { rows: ResidenceRow[] }) {
         <TableHead>Nome</TableHead>
         <TableHead>Indirizzo</TableHead>
         <TableHead className="text-right">Unità</TableHead>
-        <TableHead>Amministratore</TableHead>
+        {showAdminColumn && <TableHead>Amministratore</TableHead>}
       </TableHeader>
       <TableBody>
         {rows.map((r) => (
@@ -28,9 +36,11 @@ export function ResidencesTable({ rows }: { rows: ResidenceRow[] }) {
             <TableCell emphasis>{r.name}</TableCell>
             <TableCell>{r.address ?? '—'}</TableCell>
             <TableCell numeric>{r.unitCount}</TableCell>
-            <TableCell>
-              {r.adminName ?? <span className="text-neutral-500">Non assegnato</span>}
-            </TableCell>
+            {showAdminColumn && (
+              <TableCell>
+                {r.adminName ?? <span className="text-neutral-500">Non assegnato</span>}
+              </TableCell>
+            )}
           </TableRow>
         ))}
       </TableBody>
