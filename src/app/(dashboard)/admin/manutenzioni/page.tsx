@@ -1,35 +1,16 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { Phone, Mail } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import { ManutenzioniTable, type ManutenzioneRow } from './ManutenzioniTable'
 import type { MaintenanceStatus, CompletionMode, ItemActivation, ObligationType } from '@/types/database'
 import { isOverdueLive, isInCorso, resolveCompletionMode, resolveObligationType } from '@/lib/maintenance-status'
 
-export const metadata: Metadata = { title: 'Manutenzioni — Amministratore' }
+export const metadata: Metadata = { title: 'Attività — Amministratore' }
 
 type SearchParams = Promise<{ filter?: string }>
 
 type StatFilter = 'scadute' | 'in_corso' | 'pianificate'
-
-type FollowedResidence = {
-  id: string
-  name: string
-  address: string | null
-  photo_url: string | null
-  energy_class: string | null
-  builder_id: string
-  unitCount: number
-}
-
-type BuilderContact = {
-  id: string
-  name: string
-  logo_url: string | null
-  contact_email: string | null
-  contact_phone: string | null
-}
 
 type ItemRow = {
   id: string
@@ -73,47 +54,12 @@ export default async function AdminManutenzioniPage({ searchParams }: { searchPa
   const activeFilter: StatFilter | null =
     filter === 'scadute' || filter === 'in_corso' || filter === 'pianificate' ? filter : null
 
-  const profile = await requireRole(['admin'])
+  await requireRole(['admin'])
   const supabase = await createClient()
 
-  // Residenze assegnate all'admin (un admin può averne più di una: niente .single()).
-  // Ordine esplicito per determinismo, stesso pattern del fix su (app)/fascicolo/page.tsx.
-  const { data: assignmentRows } = await supabase
-    .from('admin_assignments')
-    .select('residences(id, name, address, photo_url, energy_class, builder_id)')
-    .eq('profile_id', profile.id)
-    .order('created_at', { ascending: true })
-
-  type AssignmentResidence = Omit<FollowedResidence, 'unitCount'>
-  const assignedResidences = (assignmentRows ?? [])
-    .map(a => a.residences as unknown as AssignmentResidence | null)
-    .filter((r): r is AssignmentResidence => r !== null)
-
-  // Numero unità: stessa query/join usata in admin/residences/page.tsx per lo stesso conteggio.
-  const followedResidences: FollowedResidence[] = await Promise.all(
-    assignedResidences.map(async (r) => {
-      const { count } = await supabase
-        .from('units')
-        .select('id', { count: 'exact', head: true })
-        .eq('residence_id', r.id)
-      return { ...r, unitCount: count ?? 0 }
-    })
-  )
-
-  // Costruttore della residenza primaria (prima per created_at, stesso criterio
-  // di "residenza principale" già usato in (app)/fascicolo/page.tsx). Richiede la
-  // policy SELECT admin su builders via admin_assignments (migrazione 016).
-  const primaryBuilderId = followedResidences[0]?.builder_id ?? null
-  let builder: BuilderContact | null = null
-  if (primaryBuilderId) {
-    const { data } = await supabase
-      .from('builders')
-      .select('id, name, logo_url, contact_email, contact_phone')
-      .eq('id', primaryBuilderId)
-      .maybeSingle()
-    builder = data
-  }
-
+  // Pagina "Attività": lista trasversale delle voci a carico dell'amministratore
+  // su tutte le residenze che segue. L'elenco delle residenze sta in
+  // /admin/residences; il contatto del costruttore non è più qui.
   // Tutti gli item di ambito condominio accessibili (RLS filtra per residenze assegnate)
   const { data: rawItems } = await supabase
     .from('maintenance_items')
@@ -152,70 +98,11 @@ export default async function AdminManutenzioniPage({ searchParams }: { searchPa
   return (
     <div className="space-y-6">
       <header>
-        <p className="text-xs text-text-secondary uppercase tracking-wide">Amministratore</p>
-        <h1 className="text-xl font-medium text-text-primary mt-1">Manutenzioni condominiali</h1>
+        <h1 className="font-serif text-3xl font-semibold text-text-primary">Attività</h1>
+        <p className="text-sm text-text-secondary mt-2">
+          Interventi a tuo carico su tutte le residenze che segui.
+        </p>
       </header>
-
-      {followedResidences.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="text-sm font-medium text-text-primary">
-            {followedResidences.length === 1 ? 'Residenza che segui' : 'Residenze che segui'}
-          </h2>
-          <div className="space-y-3">
-            {followedResidences.map(r => (
-              <Link
-                key={r.id}
-                href={`/admin/residences/${r.id}`}
-                className="block bg-surface rounded-xl border border-border overflow-hidden hover:bg-background transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2"
-              >
-                {r.photo_url && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={r.photo_url} alt={r.name} className="w-full h-32 object-cover" />
-                )}
-                <div className="p-4">
-                  <p className="text-sm font-medium text-text-primary">{r.name}</p>
-                  {r.address && <p className="text-xs text-text-secondary mt-0.5">{r.address}</p>}
-                  <p className="text-xs text-text-secondary mt-2">{r.unitCount} unità</p>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Contatti del costruttore — sezione separata, non una quinta/quarta
-          "residenza che segui": intestazione propria, stesso pattern delle
-          altre sezioni della pagina. */}
-      {builder && (
-        <section className="space-y-2">
-          <h2 className="text-sm font-medium text-text-primary">Il tuo costruttore</h2>
-          <div className="bg-surface rounded-xl border border-border p-4">
-            <div className="flex items-center gap-3">
-              {builder.logo_url && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={builder.logo_url} alt={builder.name} className="w-10 h-10 rounded-lg object-contain flex-shrink-0" />
-              )}
-              <p className="text-sm font-medium text-text-primary">{builder.name}</p>
-            </div>
-            {(builder.contact_phone || builder.contact_email) && (
-              <div className="mt-2 space-y-1">
-                {builder.contact_phone && (
-                  <a href={`tel:${builder.contact_phone}`} className="flex items-center gap-1.5 text-xs text-text-secondary">
-                    <Phone className="w-3 h-3" strokeWidth={1.6} />
-                    {builder.contact_phone}
-                  </a>
-                )}
-                {builder.contact_email && (
-                  <a href={`mailto:${builder.contact_email}`} className="flex items-center gap-1.5 text-xs text-text-secondary">
-                    <Mail className="w-3 h-3" strokeWidth={1.6} />
-                    {builder.contact_email}
-                  </a>
-                )}
-              </div>
-            )}
-          </div>
-        </section>
-      )}
 
       {/* Contatori — cliccabili per filtrare la lista sotto; toggle se già attivi */}
       <div className="grid grid-cols-3 gap-3">
