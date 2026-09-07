@@ -163,7 +163,11 @@ export default async function AdminManutenzioniPage({ searchParams }: { searchPa
           </h2>
           <div className="space-y-3">
             {followedResidences.map(r => (
-              <div key={r.id} className="bg-surface rounded-xl border border-border overflow-hidden">
+              <Link
+                key={r.id}
+                href={`/admin/residences/${r.id}`}
+                className="block bg-surface rounded-xl border border-border overflow-hidden hover:bg-background transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2"
+              >
                 {r.photo_url && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={r.photo_url} alt={r.name} className="w-full h-32 object-cover" />
@@ -173,38 +177,44 @@ export default async function AdminManutenzioniPage({ searchParams }: { searchPa
                   {r.address && <p className="text-xs text-text-secondary mt-0.5">{r.address}</p>}
                   <p className="text-xs text-text-secondary mt-2">{r.unitCount} unità</p>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </section>
       )}
 
+      {/* Contatti del costruttore — sezione separata, non una quinta/quarta
+          "residenza che segui": intestazione propria, stesso pattern delle
+          altre sezioni della pagina. */}
       {builder && (
-        <div className="bg-surface rounded-xl border border-border p-4">
-          <div className="flex items-center gap-3">
-            {builder.logo_url && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={builder.logo_url} alt={builder.name} className="w-10 h-10 rounded-lg object-contain flex-shrink-0" />
-            )}
-            <p className="text-sm font-medium text-text-primary">{builder.name}</p>
-          </div>
-          {(builder.contact_phone || builder.contact_email) && (
-            <div className="mt-2 space-y-1">
-              {builder.contact_phone && (
-                <a href={`tel:${builder.contact_phone}`} className="flex items-center gap-1.5 text-xs text-text-secondary">
-                  <Phone className="w-3 h-3" strokeWidth={1.6} />
-                  {builder.contact_phone}
-                </a>
+        <section className="space-y-2">
+          <h2 className="text-sm font-medium text-text-primary">Il tuo costruttore</h2>
+          <div className="bg-surface rounded-xl border border-border p-4">
+            <div className="flex items-center gap-3">
+              {builder.logo_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={builder.logo_url} alt={builder.name} className="w-10 h-10 rounded-lg object-contain flex-shrink-0" />
               )}
-              {builder.contact_email && (
-                <a href={`mailto:${builder.contact_email}`} className="flex items-center gap-1.5 text-xs text-text-secondary">
-                  <Mail className="w-3 h-3" strokeWidth={1.6} />
-                  {builder.contact_email}
-                </a>
-              )}
+              <p className="text-sm font-medium text-text-primary">{builder.name}</p>
             </div>
-          )}
-        </div>
+            {(builder.contact_phone || builder.contact_email) && (
+              <div className="mt-2 space-y-1">
+                {builder.contact_phone && (
+                  <a href={`tel:${builder.contact_phone}`} className="flex items-center gap-1.5 text-xs text-text-secondary">
+                    <Phone className="w-3 h-3" strokeWidth={1.6} />
+                    {builder.contact_phone}
+                  </a>
+                )}
+                {builder.contact_email && (
+                  <a href={`mailto:${builder.contact_email}`} className="flex items-center gap-1.5 text-xs text-text-secondary">
+                    <Mail className="w-3 h-3" strokeWidth={1.6} />
+                    {builder.contact_email}
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
       )}
 
       {/* Contatori — cliccabili per filtrare la lista sotto; toggle se già attivi */}
