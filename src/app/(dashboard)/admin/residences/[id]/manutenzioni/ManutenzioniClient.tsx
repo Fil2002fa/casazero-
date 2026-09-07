@@ -733,7 +733,16 @@ function UnitRow({ item, label, residenceId, suppliers, primaryName }: {
     ? new Date(item.next_due_date).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })
     : null
   const [solicited, setSolicited] = useState(false)
-  const canSollecitare = effMode !== 'promemoria' && (item.status === 'scaduta' || item.status === 'in_corso')
+  // Stato live, mai il campo status salvato: il cron non gira in locale e in
+  // produzione lascia buchi tra un run e l'altro. isOverdueLive esclude gia'
+  // item archiviati (isCountable), promemoria e presa in carico ('in_corso'):
+  // il sollecito vale solo sul ritardo effettivo.
+  const overdue = isOverdueLive(item)
+  const canSollecitare = effMode !== 'promemoria' && overdue
+  // Stesso predicato del badge in zona attenzione (riga 475): la label sotto
+  // e il badge qui devono concordare, mai uno "Scaduta" rosso accanto a un
+  // badge ancora "Pianificata".
+  const badgeStatus = overdue ? 'scaduta' : item.status
 
   function handleSollecita() {
     if (solicited) return
@@ -748,7 +757,7 @@ function UnitRow({ item, label, residenceId, suppliers, primaryName }: {
           <span className="text-sm text-text-primary">
             {label}{primaryName ? ` · ${primaryName}` : ''}
           </span>
-          <MaintenanceBadge mode={effMode} obligation={effObl} status={item.status} size="xs" />
+          <MaintenanceBadge mode={effMode} obligation={effObl} status={badgeStatus} size="xs" />
         </div>
         <div className="flex gap-3 mt-1 flex-wrap">
           {effMode === 'promemoria' ? (
@@ -756,8 +765,8 @@ function UnitRow({ item, label, residenceId, suppliers, primaryName }: {
               Promemoria · {formatFrequency(item.frequency_months ?? tpl?.frequency_months)}
             </span>
           ) : formattedDue ? (
-            <span className={`text-xs ${item.status === 'scaduta' ? 'text-semantic-red' : 'text-text-secondary'}`}>
-              {item.status === 'scaduta' ? 'Scaduta ' : 'Scade '}{formattedDue}
+            <span className={`text-xs ${overdue ? 'text-semantic-red' : 'text-text-secondary'}`}>
+              {overdue ? 'Scaduta ' : 'Scade '}{formattedDue}
             </span>
           ) : null}
           {item.suppliers && (
