@@ -97,3 +97,40 @@ export function emailN3StatusChanged(title: string, newStatus: string, residence
       Visualizza dettagli →
     </a>`)
 }
+
+/**
+ * Sollecito manuale, nomenclatura v2 (modalità / tipo).
+ *
+ * Template NUOVO, non una variante di emailMaintenanceReminder: quello è il
+ * promemoria automatico del cron ("non ancora completata"), questo è un
+ * sollecito nominativo inviato da una persona. I template N1/N2/N3 qui sopra
+ * restano intoccati: la loro nomenclatura è debito già registrato, non è
+ * questo commit.
+ */
+export function emailSollecito(args: {
+  title: string
+  obligationLabel: string | null
+  residenceName: string
+  unitLabel: string | null
+  dueDate: string
+  actionUrl: string
+}) {
+  const where = args.unitLabel
+    ? `${args.residenceName} · ${args.unitLabel}`
+    : `${args.residenceName} · Condominio`
+  const tipo = args.obligationLabel
+    ? `<span style="color:#6B7A74;"> · ${args.obligationLabel}</span>`
+    : ''
+  return emailWrapper(`
+    <h2 style="margin:0 0 12px;color:#20302A;font-size:16px;">Sollecito: manutenzione da eseguire</h2>
+    <p style="margin:0 0 8px;color:#6B7A74;font-size:14px;line-height:1.5;">
+      <strong style="color:#20302A;">${args.title}</strong>${tipo}
+    </p>
+    <p style="margin:0 0 20px;color:#6B7A74;font-size:14px;line-height:1.5;">
+      ${where} — scadenza del <strong>${args.dueDate}</strong>, non ancora eseguita.
+    </p>
+    <a href="${args.actionUrl}"
+       style="display:inline-block;background:#04342C;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-size:14px;">
+      Apri la manutenzione →
+    </a>`)
+}
