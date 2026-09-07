@@ -86,9 +86,10 @@ function isValidClassificationResult(value: unknown): value is ClassificationRes
   return true
 }
 
-// POST /api/classify-document — { documentId } — solo super_admin del builder
-// proprietario. Un documento per invocazione (il batch è un loop client-side
-// sequenziale, vedi DocumentiClient.tsx).
+// POST /api/classify-document — { documentId } — super_admin del builder
+// proprietario, o admin assegnato alla residenza del documento. Un documento
+// per invocazione (il batch è un loop client-side sequenziale, vedi
+// DocumentiClient.tsx).
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -102,7 +103,7 @@ export async function POST(req: NextRequest) {
     .eq('id', user.id)
     .single()
 
-  if (!profile || profile.role !== 'super_admin') {
+  if (!profile || (profile.role !== 'super_admin' && profile.role !== 'admin')) {
     return NextResponse.json({ error: 'Permessi insufficienti' }, { status: 403 })
   }
 
@@ -122,14 +123,32 @@ export async function POST(req: NextRequest) {
 
   // Scoping builder: service role bypassa RLS, la verifica va fatta qui
   // (stesso pattern di /api/reconcile-documents e /api/fascicolo-pdf).
-  const { data: residence } = await admin
-    .from('residences')
-    .select('id')
-    .eq('id', doc.residence_id)
-    .eq('builder_id', profile.builder_id)
-    .maybeSingle()
+  //
+  // Gemello di src/app/api/report/route.ts:142-149 (autorizzazione admin-su-residenza
+  // dietro service client). Duplicazione consapevole: unificare in un helper condiviso
+  // in un commit dedicato, dopo la demo.
+  //
+  // Entrambi i rami rispondono 404 "Documento non trovato", non 403: è la
+  // convenzione già in uso qui, e tenerla uguale per i due ruoli evita di
+  // rivelare all'admin l'esistenza di documenti fuori dalle sue residenze.
+  if (profile.role === 'super_admin') {
+    const { data: residence } = await admin
+      .from('residences')
+      .select('id')
+      .eq('id', doc.residence_id)
+      .eq('builder_id', profile.builder_id)
+      .maybeSingle()
 
-  if (!residence) return NextResponse.json({ error: 'Documento non trovato' }, { status: 404 })
+    if (!residence) return NextResponse.json({ error: 'Documento non trovato' }, { status: 404 })
+  } else {
+    const { count } = await admin
+      .from('admin_assignments')
+      .select('id', { count: 'exact', head: true })
+      .eq('profile_id', user.id)
+      .eq('residence_id', doc.residence_id)
+
+    if (!count || count === 0) return NextResponse.json({ error: 'Documento non trovato' }, { status: 404 })
+  }
 
   await admin.from('documents').update({ classification_status: 'in_corso' }).eq('id', documentId)
 
