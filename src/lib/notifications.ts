@@ -4,12 +4,21 @@ export interface EmailPayload {
   html: string
 }
 
-export async function sendEmail(payload: EmailPayload): Promise<void> {
+// Esito discriminato: 'simulated' è distinto da 'sent' — senza RESEND_API_KEY
+// l'invio non è mai partito, solo loggato. I chiamanti esistenti (cron/daily,
+// admin/manutenzioni/actions) ignorano il valore di ritorno: retrocompatibile,
+// erano già in await su una Promise.
+export type EmailResult =
+  | { status: 'sent' }
+  | { status: 'simulated' }
+  | { status: 'error'; message: string }
+
+export async function sendEmail(payload: EmailPayload): Promise<EmailResult> {
   const apiKey = process.env.RESEND_API_KEY
 
   if (!apiKey) {
     console.log(`[DEV EMAIL → ${payload.to}] ${payload.subject}`)
-    return
+    return { status: 'simulated' }
   }
 
   try {
@@ -22,8 +31,10 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
       html: payload.html,
     })
     if (error) throw new Error(error.message)
+    return { status: 'sent' }
   } catch (err) {
     console.error('[EMAIL ERROR]', err)
+    return { status: 'error', message: err instanceof Error ? err.message : String(err) }
   }
 }
 
