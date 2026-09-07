@@ -7,7 +7,6 @@ import {
 } from 'lucide-react'
 import { requireRole } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/admin'
-import { SollecitaButton } from '../SollecitaButton'
 import {
   overdueLive, todayISO,
   LIVE_STATUS_FIELDS, LIVE_STATUS_TEMPLATE_FIELDS,
@@ -316,11 +315,6 @@ function ResidenceCard({ residence }: { residence: ResidenceDetail }) {
           Vai alla residenza
           <ChevronRight className="w-3.5 h-3.5" strokeWidth={1.6} />
         </Link>
-        {(isRed || isAmber) && (
-          <div className="ml-auto">
-            <SollecitaButton />
-          </div>
-        )}
       </div>
     </div>
   )
