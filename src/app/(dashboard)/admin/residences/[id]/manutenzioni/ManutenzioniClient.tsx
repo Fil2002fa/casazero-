@@ -115,6 +115,11 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
   const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null)
   const [expandedCompletion, setExpandedCompletion] = useState<string | null>(null)
   const [planView, setPlanView] = useState<'attive' | 'escluse'>('attive')
+  // La vista Escluse è composizione del piano, riservata al costruttore: se lo stato
+  // finisse su 'escluse' per qualunque via (oggi nessuna, ma niente lo garantisce in
+  // futuro — es. un parametro URL), l'admin va forzato su 'attive' invece di atterrare
+  // su una schermata senza selettore per uscirne.
+  const effectivePlanView = canManagePlan ? planView : 'attive'
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -247,29 +252,31 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
 
   return (
     <div className="space-y-5">
-      {/* Segmented control: piano attivo vs tipi esclusi */}
-      <div className="flex rounded-lg border border-border p-0.5 bg-surface">
-        <button
-          onClick={() => setPlanView('attive')}
-          aria-pressed={planView === 'attive'}
-          className={`flex-1 h-11 md:h-9 rounded-md text-sm font-medium text-text-primary transition-colors ${
-            planView === 'attive' ? 'bg-background shadow-sm' : ''
-          }`}
-        >
-          Attive
-        </button>
-        <button
-          onClick={() => setPlanView('escluse')}
-          aria-pressed={planView === 'escluse'}
-          className={`flex-1 h-11 md:h-9 rounded-md text-sm font-medium text-text-primary transition-colors ${
-            planView === 'escluse' ? 'bg-background shadow-sm' : ''
-          }`}
-        >
-          Escluse{excludedTemplates.length > 0 ? ` (${excludedTemplates.length})` : ''}
-        </button>
-      </div>
+      {/* Segmented control: piano attivo vs tipi esclusi — solo per chi può comporre il piano */}
+      {canManagePlan && (
+        <div className="flex rounded-lg border border-border p-0.5 bg-surface">
+          <button
+            onClick={() => setPlanView('attive')}
+            aria-pressed={planView === 'attive'}
+            className={`flex-1 h-11 md:h-9 rounded-md text-sm font-medium text-text-primary transition-colors ${
+              planView === 'attive' ? 'bg-background shadow-sm' : ''
+            }`}
+          >
+            Attive
+          </button>
+          <button
+            onClick={() => setPlanView('escluse')}
+            aria-pressed={planView === 'escluse'}
+            className={`flex-1 h-11 md:h-9 rounded-md text-sm font-medium text-text-primary transition-colors ${
+              planView === 'escluse' ? 'bg-background shadow-sm' : ''
+            }`}
+          >
+            Escluse{excludedTemplates.length > 0 ? ` (${excludedTemplates.length})` : ''}
+          </button>
+        </div>
+      )}
 
-      {planView === 'attive' && (
+      {effectivePlanView === 'attive' && (
       <>
       {/* Card-contatore cliccabili */}
       <div className="grid grid-cols-3 gap-3">
@@ -606,7 +613,7 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
       )}
 
       {/* Vista Escluse — tipi interamente archiviati, sorgente per la reinclusione */}
-      {planView === 'escluse' && (
+      {effectivePlanView === 'escluse' && (
         <section className="space-y-2">
           {excludedTemplates.length === 0 ? (
             <div className="bg-surface rounded-xl border border-border p-6 text-center">
