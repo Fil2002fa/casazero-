@@ -14,7 +14,9 @@ export type UnitSummaryRow = {
   active: boolean
 }
 
-export function UnitsSummaryTable({ residenceId, rows }: { residenceId: string; rows: UnitSummaryRow[] }) {
+// readOnly: vista amministratore (residenza sola lettura, porta Unità
+// esclusa) — niente riga cliccabile verso una pagina che non può aprire.
+export function UnitsSummaryTable({ residenceId, rows, readOnly = false }: { residenceId: string; rows: UnitSummaryRow[]; readOnly?: boolean }) {
   const router = useRouter()
 
   return (
@@ -27,8 +29,8 @@ export function UnitsSummaryTable({ residenceId, rows }: { residenceId: string; 
         {rows.map(r => (
           <TableRow
             key={r.id}
-            clickable
-            onClick={() => router.push(`/admin/residences/${residenceId}/units`)}
+            clickable={!readOnly}
+            onClick={readOnly ? undefined : () => router.push(`/admin/residences/${residenceId}/units`)}
           >
             <TableCell emphasis>{formatUnitLabel(r.label, r.floor)}</TableCell>
             <TableCell>
