@@ -9,8 +9,8 @@ import { StatusBadge, PromemoriaBadge, TypeBadge } from '@/components/ui/Badge'
 import type { MaintenanceStatus, CompletionMode, ItemActivation, ObligationType } from '@/types/database'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import {
-  isOverdueLive, isInCorso, resolveCompletionMode, resolveObligationType, resolveFrequencyMonths,
-  type LiveStatusItem,
+  isOverdueLive, isInCorso, resolveLiveStatus, resolveCompletionMode, resolveObligationType, resolveFrequencyMonths,
+  todayISO, type LiveStatusItem,
 } from '@/lib/maintenance-status'
 
 export const metadata: Metadata = { title: 'Dettaglio manutenzione' }
@@ -65,11 +65,12 @@ export default async function AdminItemDetailPage({ params }: { params: Params }
 
   const tpl = item.maintenance_templates
   const supplier = item.suppliers
-  const status = item.status as MaintenanceStatus
+  const today = todayISO()
 
-  // Stato live: il cron non gira in locale, quindi 'scaduta' va calcolato da
-  // next_due_date (helper condiviso), non letto dal campo status salvato —
-  // altrimenti gli item scaduti da tempo restano "invisibili" all'azione admin.
+  // Stato live: il cron non gira in locale, quindi lo stato va calcolato da
+  // next_due_date con l'helper condiviso, mai letto dal campo status salvato —
+  // altrimenti gli item scaduti da tempo restano "invisibili" all'azione admin,
+  // e uno con status 'scaduta' stantio ma data futura mostrerebbe "Scaduta".
   const liveItem: LiveStatusItem = {
     status: item.status,
     next_due_date: item.next_due_date,
@@ -79,8 +80,8 @@ export default async function AdminItemDetailPage({ params }: { params: Params }
       ? { completion_mode: tpl.completion_mode, is_active: tpl.is_active }
       : null,
   }
-  const overdueNow = isOverdueLive(liveItem)
-  const effectiveStatus: MaintenanceStatus = overdueNow ? 'scaduta' : status
+  const overdueNow = isOverdueLive(liveItem, today)
+  const effectiveStatus: MaintenanceStatus = resolveLiveStatus(liveItem, today)
   const isReminder = resolveCompletionMode(liveItem) === 'promemoria'
   const obligationType = resolveObligationType({
     obligation_type: item.obligation_type,
@@ -153,7 +154,14 @@ export default async function AdminItemDetailPage({ params }: { params: Params }
         {/* Residenza / ambito */}
         <div className="bg-surface rounded-xl border border-border p-6">
           <p className="text-[13px] font-medium text-neutral-500 mb-1">Residenza</p>
-          <p className="text-sm text-neutral-900">{item.residences?.name ?? '—'}</p>
+          {/* Dalla lista Attività trasversale si arriva qui: il link riporta
+              dentro la residenza, che è il contesto della voce. */}
+          <Link
+            href={`/admin/residences/${item.residence_id}`}
+            className="text-sm text-brand-dark font-medium hover:underline rounded focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2"
+          >
+            {item.residences?.name ?? '—'}
+          </Link>
           <p className="text-[13px] font-medium text-neutral-500 mt-3 mb-1">Ambito</p>
           <p className="text-sm text-neutral-900">
             {item.units?.label ? `Unità ${formatUnitLabel(item.units.label)}` : 'Condominiale'}
