@@ -13,7 +13,7 @@ import type { CompletionMode } from '@/types/database'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-// GET /api/fascicolo-pdf?residenceId=UUID — solo super_admin del builder proprietario
+// GET /api/fascicolo-pdf?residenceId=UUID — super_admin del builder proprietario, o admin assegnato alla residenza
 export async function GET(req: NextRequest) {
   const residenceId = req.nextUrl.searchParams.get('residenceId')
   if (!residenceId) {
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
     .eq('id', user.id)
     .single()
 
-  if (!profile || profile.role !== 'super_admin') {
+  if (!profile || (profile.role !== 'super_admin' && profile.role !== 'admin')) {
     return NextResponse.json({ error: 'Accesso negato' }, { status: 403 })
   }
 
@@ -43,8 +43,21 @@ export async function GET(req: NextRequest) {
     .single()
 
   if (!residence) return NextResponse.json({ error: 'Residenza non trovata' }, { status: 404 })
-  if (residence.builder_id !== profile.builder_id) {
-    return NextResponse.json({ error: 'Accesso negato' }, { status: 403 })
+
+  // Gemello di src/app/api/report/route.ts:142-149 (autorizzazione admin-su-residenza
+  // dietro service client). Duplicazione consapevole: unificare in un helper condiviso
+  // in un commit dedicato, dopo la demo.
+  if (profile.role === 'super_admin') {
+    if (residence.builder_id !== profile.builder_id) {
+      return NextResponse.json({ error: 'Accesso negato' }, { status: 403 })
+    }
+  } else {
+    const { count } = await admin
+      .from('admin_assignments')
+      .select('id', { count: 'exact', head: true })
+      .eq('profile_id', user.id)
+      .eq('residence_id', residenceId)
+    if (!count || count === 0) return NextResponse.json({ error: 'Accesso negato' }, { status: 403 })
   }
 
   // Fascicolo = fonte legale, non il piano: nessun filtro su activation_status.
