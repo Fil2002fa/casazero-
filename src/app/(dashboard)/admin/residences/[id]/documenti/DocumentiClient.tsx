@@ -165,9 +165,15 @@ interface Props {
   // id profilo → full_name (028), solo i marcatori realmente presenti tra
   // le eccezioni di questa residenza. null = profilo senza full_name.
   markedByNames: Record<string, string | null>
+  // Eccezioni checklist (segna/annulla non applicabile) riservate al
+  // costruttore: obbligatoria, senza default, così un chiamante che
+  // dimentica di passarla fallisce in build invece di togliere in silenzio
+  // i controlli al super_admin. Upload e conferma classificazione non
+  // dipendono da questa prop: l'admin li ha entrambi.
+  canManageChecklist: boolean
 }
 
-export function DocumentiClient({ residenceId, docs, units, checklist, markedByNames }: Props) {
+export function DocumentiClient({ residenceId, docs, units, checklist, markedByNames, canManageChecklist }: Props) {
   // --- filter state ---
   const [search, setSearch]       = useState('')
 
@@ -543,6 +549,7 @@ export function DocumentiClient({ residenceId, docs, units, checklist, markedByN
         unclassifiedCount={pendingClassification.length}
         onFilterDocType={t => setDocTypeFilter(t)}
         markedByNames={markedByNames}
+        canManageChecklist={canManageChecklist}
       />
 
       {/* -------- Ricerca + filtri (tipo a tendina · coda revisione) -------- */}
@@ -684,12 +691,14 @@ function ChecklistSection({
   unclassifiedCount,
   onFilterDocType,
   markedByNames,
+  canManageChecklist,
 }: {
   residenceId: string
   checklist: ChecklistResult
   unclassifiedCount: number
   onFilterDocType: (docType: DocType) => void
   markedByNames: Record<string, string | null>
+  canManageChecklist: boolean
 }) {
   const [openScope, setOpenScope] = useState<CountedScopeKey | null>(null)
   const [missingOnly, setMissingOnly] = useState(false)
@@ -786,6 +795,7 @@ function ChecklistSection({
                 residenceId={residenceId}
                 onFilterDocType={onFilterDocType}
                 markedByNames={markedByNames}
+                canManageChecklist={canManageChecklist}
               />
             ))
           )}
@@ -800,11 +810,13 @@ function ChecklistItemRow({
   residenceId,
   onFilterDocType,
   markedByNames,
+  canManageChecklist,
 }: {
   exp: ChecklistExpectation
   residenceId: string
   onFilterDocType: (docType: DocType) => void
   markedByNames: Record<string, string | null>
+  canManageChecklist: boolean
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -922,7 +934,14 @@ function ChecklistItemRow({
 
           {/* Eccezione checklist (B4 C5b): segna/annulla non applicabile.
               Due stati, mai insieme. Niente conferma modale — reversibile,
-              il bottone opposto è subito accanto. */}
+              il bottone opposto è subito accanto.
+              Le AZIONI sono riservate al costruttore (RLS 027, super_admin-only);
+              la motivazione e l'attribuzione di un'esclusione già decisa restano
+              invece leggibili anche all'admin, perché spiegano un numero che
+              vede comunque nei contatori ("N escluse"). Il blocco intero non si
+              renderizza quando non c'è né azione né informazione da mostrare,
+              per non lasciare un separatore vuoto. */}
+          {(exp.notApplicable || canManageChecklist) && (
           <div className="pt-2 border-t border-border/60 space-y-2">
             {exp.notApplicable ? (
               <div className="space-y-1.5">
@@ -941,14 +960,16 @@ function ChecklistItemRow({
                           : '—'
                       }`}
                 </p>
-                <button
-                  type="button"
-                  onClick={handleClearException}
-                  disabled={pending}
-                  className="text-brand-medium font-medium hover:underline disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium rounded"
-                >
-                  {pending ? 'Attendere…' : 'Annulla non applicabile'}
-                </button>
+                {canManageChecklist && (
+                  <button
+                    type="button"
+                    onClick={handleClearException}
+                    disabled={pending}
+                    className="text-brand-medium font-medium hover:underline disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium rounded"
+                  >
+                    {pending ? 'Attendere…' : 'Annulla non applicabile'}
+                  </button>
+                )}
               </div>
             ) : showForm ? (
               <div className="space-y-2">
@@ -994,6 +1015,7 @@ function ChecklistItemRow({
             )}
             {actionError && <p className="text-status-overdue">{actionError}</p>}
           </div>
+          )}
         </div>
       )}
     </div>

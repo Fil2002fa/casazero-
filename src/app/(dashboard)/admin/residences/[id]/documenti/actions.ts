@@ -10,10 +10,45 @@ import { computeResidenceChecklist } from '@/lib/document-checklist'
 type AuthorizedUser = { user: { id: string } }
 type AuthError = { error: string }
 
-// Unica fonte di verità per il controllo ruolo di questa superficie
-// (upload documenti da dashboard, oggi solo super_admin): riusata da
-// tutte le server action del file invece di ricalcolare il check.
-async function getAuthorizedSuperAdmin(
+// Le action di questo file si dividono in due gruppi con autorizzazioni
+// diverse, e i due helper sotto sono la sola fonte di verità di ciascuno.
+// Lo split non è cosmetico: rispecchia due RLS diverse, quindi allargare
+// un solo helper è anche la garanzia che il gate applicativo non prometta
+// più di quanto il DB conceda.
+
+// Gestione documenti (upload + conferma classificazione): super_admin del
+// builder e admin assegnato alla residenza. Lo scope per residenza NON si
+// verifica qui — lo fanno le RLS che ricevono questo client scoped-utente:
+// storage "documents bucket: upload scoped residenza" (022) e
+// "documents: admin e super_admin gestiscono" (002_rls.sql), entrambe con
+// un ramo admin via czero_can_access_residence.
+async function getAuthorizedDocumentUser(
+  supabase: Awaited<ReturnType<typeof createClient>>
+): Promise<AuthorizedUser | AuthError> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non autenticato' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile || (profile.role !== 'super_admin' && profile.role !== 'admin')) {
+    return { error: 'Permessi insufficienti' }
+  }
+
+  return { user }
+}
+
+// Eccezioni checklist: solo super_admin. Decidere che una voce attesa non
+// si applica a questa residenza è composizione del fascicolo di consegna,
+// non manutenzione ordinaria. La policy "checklist_exception: super_admin
+// gestisce tutto" (027) non ha un ramo admin: allargare questo helper senza
+// una migrazione darebbe all'admin un errore RLS grezzo sull'upsert, o lo
+// zero-righe fuorviante di clearChecklistException, invece di un rifiuto
+// pulito.
+async function getAuthorizedChecklistManager(
   supabase: Awaited<ReturnType<typeof createClient>>
 ): Promise<AuthorizedUser | AuthError> {
   const { data: { user } } = await supabase.auth.getUser()
@@ -75,7 +110,7 @@ export async function createUploadUrl(
   contentType: string
 ): Promise<SignedUploadUrlResult> {
   const supabase = await createClient()
-  const auth = await getAuthorizedSuperAdmin(supabase)
+  const auth = await getAuthorizedDocumentUser(supabase)
   if ('error' in auth) return { error: auth.error }
 
   if (!residenceId || !category || !fileName) {
@@ -135,7 +170,7 @@ function residenceIdFromStoragePath(storagePath: string): string | null {
 // è uno script a mano (commit successivo del piano B1), non un cron.
 export async function confirmDocument(input: ConfirmDocumentInput): Promise<ConfirmDocumentResult> {
   const supabase = await createClient()
-  const auth = await getAuthorizedSuperAdmin(supabase)
+  const auth = await getAuthorizedDocumentUser(supabase)
   if ('error' in auth) return { error: auth.error }
 
   const { residenceId, unitId, category, title, storagePath, fileName, fileDate } = input
@@ -196,8 +231,9 @@ export type ConfirmClassificationResult = { success: true } | { error: string }
 // decide). È l'UNICO punto che scrive reviewed_by/reviewed_at, e li scrive
 // SERVER-SIDE (auth.user.id + now()), mai da valori passati dal client. Usa il
 // client scoped-utente: la policy RLS "documents: admin e super_admin
-// gestiscono" (002_rls.sql) autorizza l'UPDATE solo al super_admin del builder
-// proprietario — il residente non ha alcuna policy di scrittura su documents.
+// gestiscono" (002_rls.sql) autorizza l'UPDATE al super_admin del builder
+// proprietario e all'admin assegnato alla residenza — il residente non ha
+// alcuna policy di scrittura su documents.
 //
 // sistema = verità confermata dell'impianto (OPZIONE B, B4): scritta nella
 // colonna dedicata, mai in extracted_metadata (che resta il verbale immutabile
@@ -208,7 +244,7 @@ export async function confirmClassification(input: {
   sistema: Sistema | null
 }): Promise<ConfirmClassificationResult> {
   const supabase = await createClient()
-  const auth = await getAuthorizedSuperAdmin(supabase)
+  const auth = await getAuthorizedDocumentUser(supabase)
   if ('error' in auth) return { error: auth.error }
 
   const { documentId, docType, sistema } = input
@@ -284,7 +320,7 @@ export async function setChecklistException(
   note: string
 ): Promise<ChecklistExceptionResult> {
   const supabase = await createClient()
-  const auth = await getAuthorizedSuperAdmin(supabase)
+  const auth = await getAuthorizedChecklistManager(supabase)
   if ('error' in auth) return { error: auth.error }
 
   if (!residenceId || !expectationKey) {
@@ -331,7 +367,7 @@ export async function clearChecklistException(
   expectationKey: string
 ): Promise<ChecklistExceptionResult> {
   const supabase = await createClient()
-  const auth = await getAuthorizedSuperAdmin(supabase)
+  const auth = await getAuthorizedChecklistManager(supabase)
   if ('error' in auth) return { error: auth.error }
 
   if (!residenceId || !expectationKey) {

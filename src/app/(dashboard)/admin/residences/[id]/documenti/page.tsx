@@ -22,7 +22,7 @@ export default async function ResidenceDocumentiPage({
   const { id: residenceId } = await params
   const { onboarding } = await searchParams
   const isOnboarding = onboarding === '1'
-  await requireRole(['super_admin'], '/admin/manutenzioni')
+  const profile = await requireRole(['admin', 'super_admin'], '/admin/manutenzioni')
   const supabase = await createClient()
 
   const { data: residence } = await supabase
@@ -102,6 +102,7 @@ export default async function ResidenceDocumentiPage({
         units={(rawUnits ?? []) as UnitRow[]}
         checklist={checklist}
         markedByNames={markedByNames}
+        canManageChecklist={profile.role === 'super_admin'}
       />
     </>
   )
