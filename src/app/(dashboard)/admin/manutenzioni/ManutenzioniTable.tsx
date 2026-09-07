@@ -6,47 +6,61 @@ import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@
 import { StatusBadge, TypeBadge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import type { MaintenanceStatus, ObligationType } from '@/types/database'
+import type { ActivityBucket } from '@/lib/maintenance-status'
 import { takeChargeN3 } from './actions'
 
-export type ManutenzioneRow = {
+/**
+ * Riga della lista Attività. L'unico stato è il bucket di urgenza, calcolato
+ * dal server con activityBucket: nessun campo `status` libero, quindi una
+ * promemoria "scaduta" è irrappresentabile qui per tipo, non per filtro.
+ */
+export type ActivityRow = {
   id: string
-  title: string
   residenceName: string
+  title: string
   obligationType: ObligationType | null
-  status: MaintenanceStatus
-  nextDueDate: string | null
-  canTakeCharge: boolean
+  bucket: ActivityBucket
+  /** Testo già formattato dal server ("scaduta il …", "tra 6 giorni · …"); null se senza data. */
+  dueLabel: string | null
 }
 
-function formatDate(iso: string): string {
-  return new Date(`${iso}T00:00:00`).toLocaleDateString('it-IT', {
-    day: 'numeric', month: 'short', year: 'numeric',
-  })
+const BUCKET_BADGE: Record<ActivityBucket, MaintenanceStatus> = {
+  in_ritardo: 'scaduta',
+  in_corso:   'in_corso',
+  in_arrivo:  'in_attesa',
 }
 
-export function ManutenzioniTable({ rows }: { rows: ManutenzioneRow[] }) {
+const BUCKET_DUE_CLASS: Record<ActivityBucket, string> = {
+  in_ritardo: 'text-status-overdue',
+  in_corso:   'text-status-inprogress',
+  in_arrivo:  'text-text-secondary',
+}
+
+export function ManutenzioniTable({ rows }: { rows: ActivityRow[] }) {
   const router = useRouter()
 
   return (
     <Table>
       <TableHeader>
-        <TableHead>Voce</TableHead>
         <TableHead>Residenza</TableHead>
+        <TableHead>Voce</TableHead>
         <TableHead>Tipo</TableHead>
         <TableHead>Stato</TableHead>
-        <TableHead className="text-right">Prossima scadenza</TableHead>
+        <TableHead className="text-right">Scadenza</TableHead>
         <TableHead className="text-right">Azione</TableHead>
       </TableHeader>
       <TableBody>
         {rows.map(r => (
           <TableRow key={r.id} clickable onClick={() => router.push(`/admin/manutenzioni/${r.id}`)}>
-            <TableCell emphasis>{r.title}</TableCell>
-            <TableCell>{r.residenceName}</TableCell>
+            <TableCell emphasis>{r.residenceName}</TableCell>
+            <TableCell>{r.title}</TableCell>
             <TableCell>{r.obligationType ? <TypeBadge obligationType={r.obligationType} /> : '—'}</TableCell>
-            <TableCell><StatusBadge status={r.status} /></TableCell>
-            <TableCell numeric>{r.nextDueDate ? formatDate(r.nextDueDate) : '—'}</TableCell>
+            <TableCell><StatusBadge status={BUCKET_BADGE[r.bucket]} /></TableCell>
+            <TableCell numeric className={`text-xs ${BUCKET_DUE_CLASS[r.bucket]}`}>
+              {r.dueLabel ?? '—'}
+            </TableCell>
             <TableCell className="text-right">
-              {r.canTakeCharge && <TakeChargeAction itemId={r.id} />}
+              {r.bucket === 'in_ritardo' && <TakeChargeAction itemId={r.id} />}
             </TableCell>
           </TableRow>
         ))}

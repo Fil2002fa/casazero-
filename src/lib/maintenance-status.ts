@@ -132,6 +132,66 @@ export function countLive(items: LiveStatusItem[], today: string = todayISO()): 
   }
 }
 
+// ---------------------------------------------------------------------------
+// Attività dell'amministratore (/admin/manutenzioni): fonte unica per contatori
+// e lista. Una voce è "attività" se è conteggiabile, a modalità amministratore
+// e non completata; il suo bucket di urgenza è uno e uno solo. Contatore e
+// lista partizionano lo STESSO array con activityBucket, mai con predicati
+// riscritti inline (bug class contatore/lista divergenti, CLAUDE.md).
+//
+// Le promemoria non possono entrare qui per costruzione: isAdminActivity
+// richiede modalità 'amministratore'. Quindi nessun bucket "in ritardo" può
+// mai contenere una promemoria, qualunque cosa dica il campo status salvato.
+// ---------------------------------------------------------------------------
+
+export type ActivityBucket = 'in_ritardo' | 'in_corso' | 'in_arrivo'
+
+/** Ordine di urgenza dei bucket: prima i ritardi, poi le prese in carico, poi il futuro. */
+const ACTIVITY_BUCKET_RANK: Record<ActivityBucket, number> = {
+  in_ritardo: 0,
+  in_corso: 1,
+  in_arrivo: 2,
+}
+
+/** Voce a carico dell'amministratore, ancora aperta. */
+export function isAdminActivity(i: LiveStatusItem): boolean {
+  return (
+    isCountable(i) &&
+    resolveCompletionMode(i) === 'amministratore' &&
+    i.status !== 'completata'
+  )
+}
+
+/**
+ * Bucket di urgenza di una voce già filtrata con isAdminActivity. Scaduta
+ * calcolata live da next_due_date (isOverdueLive), mai dal campo status.
+ * 'in_arrivo' è tutto il resto, voci senza data comprese: nessuna finestra
+ * temporale, così il contatore coincide sempre con la lista.
+ */
+export function activityBucket(i: LiveStatusItem, today: string = todayISO()): ActivityBucket {
+  if (isOverdueLive(i, today)) return 'in_ritardo'
+  if (isInCorso(i)) return 'in_corso'
+  return 'in_arrivo'
+}
+
+/**
+ * Comparatore per la lista unica ordinata per urgenza: bucket (ritardo → in
+ * corso → in arrivo), poi next_due_date crescente (la più vecchia, cioè la più
+ * in ritardo o la più vicina, prima), voci senza data in coda al loro bucket.
+ */
+export function compareActivityUrgency(
+  a: LiveStatusItem,
+  b: LiveStatusItem,
+  today: string = todayISO()
+): number {
+  const rankDiff = ACTIVITY_BUCKET_RANK[activityBucket(a, today)] - ACTIVITY_BUCKET_RANK[activityBucket(b, today)]
+  if (rankDiff !== 0) return rankDiff
+  if (a.next_due_date === b.next_due_date) return 0
+  if (a.next_due_date === null) return 1
+  if (b.next_due_date === null) return -1
+  return a.next_due_date < b.next_due_date ? -1 : 1
+}
+
 /**
  * Data relativa per una scadenza FUTURA (informativa): "tra 6 giorni · 10 lug 2026",
  * "tra 3 mesi · 10 ott 2026". Da usare solo su item non-promemoria e non scaduti
