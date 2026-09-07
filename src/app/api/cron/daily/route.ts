@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
             .update({ next_due_date: newDue.toISOString().split('T')[0] })
             .eq('id', item.id)
 
-          const shouldNotify = await checkDedup(supabase, item.id, 0)
+          const shouldNotify = await checkDedup(supabase, item.id, 0, 'n1_due')
           if (shouldNotify && item.unit_id) {
             await notifyUnitMembers(supabase, item.unit_id, item.id, 'n1_due',
               tpl.title, dueDate, 'N1')
@@ -108,7 +108,8 @@ export async function GET(req: NextRequest) {
       if (item.status === 'scaduta') {
         // Promemoria: N2 ogni 14 giorni, N3 ogni 30 giorni
         const intervalDays = effectivePriority === 'N2' ? 14 : 30
-        const shouldRemind = await checkDedup(supabase, item.id, intervalDays)
+        const reminderType = effectivePriority === 'N2' ? 'n2_reminder' : 'n3_reminder'
+        const shouldRemind = await checkDedup(supabase, item.id, intervalDays, reminderType)
         if (!shouldRemind) continue
 
         if (effectivePriority === 'N2' && item.unit_id) {
@@ -142,13 +143,15 @@ async function checkDedup(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
   itemId: string,
-  intervalDays: number
+  intervalDays: number,
+  type: string
 ): Promise<boolean> {
   if (intervalDays === 0) return true
   const cutoff = new Date(Date.now() - intervalDays * 86400000).toISOString()
   const { count } = await supabase
     .from('notifications')
     .select('id', { count: 'exact', head: true })
+    .eq('type', type)
     .filter('payload->>item_id', 'eq', itemId)
     .gte('created_at', cutoff)
   return (count ?? 0) === 0
