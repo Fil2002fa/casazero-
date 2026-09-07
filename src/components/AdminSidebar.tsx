@@ -21,8 +21,13 @@ const SUPER_ADMIN_ITEMS: NavItem[] = [
   { href: '/admin/settings', icon: Settings, label: 'Impostazioni', dividerBefore: true },
 ]
 
+// "Attività" per l'admin punta a /admin/manutenzioni (vista trasversale reale),
+// non a /admin/attivita che è la pagina demo del super_admin. Stessa etichetta,
+// due rotte, voluto. Impostazioni assente: la pagina settings è identità del
+// costruttore, all'admin serve una vista sua, non ancora disegnata.
 const ADMIN_ITEMS: NavItem[] = [
-  { href: '/admin/manutenzioni', icon: Wrench, label: 'Manutenzioni' },
+  { href: '/admin/residences', icon: Building2, label: 'Residenze' },
+  { href: '/admin/manutenzioni', icon: Wrench, label: 'Attività' },
 ]
 
 interface Props {
