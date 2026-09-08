@@ -174,10 +174,11 @@ function PlanSummarySection({ residenceId, overdueItems, upcomingItems, today }:
         )}
       </div>
       {overdueCount > 0 ? (
-        <div className="bg-surface rounded-xl border border-border divide-y divide-border">
+        <div className="bg-surface rounded-xl border border-border divide-y divide-border overflow-hidden">
           {overdueItems.slice(0, 5).map(item => (
             <PlanSummaryRow
               key={item.id}
+              href={`/admin/residences/${residenceId}/manutenzioni?filtro=scaduta`}
               title={item.maintenance_templates?.title ?? '—'}
               unitLabel={item.unit_id === null ? 'Condominio' : item.units ? formatUnitLabel(item.units.label) : '—'}
               dateLabel={item.next_due_date ? `scaduta il ${formatDate(item.next_due_date)}` : null}
@@ -203,10 +204,11 @@ function PlanSummarySection({ residenceId, overdueItems, upcomingItems, today }:
       {upcomingItems.length > 0 && (
         <div className="mt-6">
           <h3 className="text-sm font-medium text-text-primary mb-3">Prossime scadenze</h3>
-          <div className="bg-surface rounded-xl border border-border divide-y divide-border">
+          <div className="bg-surface rounded-xl border border-border divide-y divide-border overflow-hidden">
             {upcomingItems.map(item => (
               <PlanSummaryRow
                 key={item.id}
+                href={`/admin/residences/${residenceId}/manutenzioni`}
                 title={item.maintenance_templates?.title ?? '—'}
                 unitLabel={item.unit_id === null ? 'Condominio' : item.units ? formatUnitLabel(item.units.label) : '—'}
                 dateLabel={formatRelativeDue(item.next_due_date!, today)}
@@ -484,14 +486,22 @@ function formatDate(iso: string): string {
   })
 }
 
-function PlanSummaryRow({ title, unitLabel, dateLabel, dateClassName }: {
+// Riga del riepilogo piano. È un Link, non un div: la voce si apre dove la si
+// gestisce (lamentela cliente: la riga non si poteva cliccare). Nessun elemento
+// interattivo al suo interno e nessun Link antenato — il bottone "Vedi tutte le
+// manutenzioni" è fratello dei contenitori di riga: niente annidamento.
+function PlanSummaryRow({ href, title, unitLabel, dateLabel, dateClassName }: {
+  href: string
   title: string
   unitLabel: string
   dateLabel: string | null
   dateClassName: string
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 p-4">
+    <Link
+      href={href}
+      className="flex items-center justify-between gap-3 p-4 hover:bg-background transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-inset"
+    >
       <div className="min-w-0">
         <p className="text-sm font-medium text-text-primary truncate">{title}</p>
         <p className="text-xs text-text-secondary mt-0.5">{unitLabel}</p>
@@ -499,6 +509,6 @@ function PlanSummaryRow({ title, unitLabel, dateLabel, dateClassName }: {
       {dateLabel && (
         <p className={`text-xs flex-shrink-0 tabular-nums ${dateClassName}`}>{dateLabel}</p>
       )}
-    </div>
+    </Link>
   )
 }
