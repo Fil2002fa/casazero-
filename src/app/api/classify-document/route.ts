@@ -75,6 +75,22 @@ type ClassificationResult = {
   motivazione: string
 }
 
+// Discriminante servizio-vs-documento (vedi catch sotto): chiave assente/vuota
+// a monte, o queste classi di errore dell'SDK durante la chiamata, sono un
+// problema del servizio di classificazione, mai del documento — non vanno mai
+// scritte come 'fallita'. instanceof Anthropic.APIError con status >= 500 è
+// una rete di sicurezza per errori non passati da APIError.generate() (che
+// mappa già ogni 5xx a InternalServerError).
+function isServiceUnavailableError(err: unknown): boolean {
+  return (
+    err instanceof Anthropic.APIConnectionError ||
+    err instanceof Anthropic.AuthenticationError ||
+    err instanceof Anthropic.RateLimitError ||
+    err instanceof Anthropic.InternalServerError ||
+    (err instanceof Anthropic.APIError && typeof err.status === 'number' && err.status >= 500)
+  )
+}
+
 function isValidClassificationResult(value: unknown): value is ClassificationResult {
   if (!value || typeof value !== 'object') return false
   const v = value as Record<string, unknown>
@@ -148,6 +164,15 @@ export async function POST(req: NextRequest) {
       .eq('residence_id', doc.residence_id)
 
     if (!count || count === 0) return NextResponse.json({ error: 'Documento non trovato' }, { status: 404 })
+  }
+
+  // Corto circuito, non unico discriminante: chiave assente e chiave vuota
+  // (es. riga duplicata in .env.local) vanno trattate come lo stesso caso,
+  // PRIMA di toccare 'in_corso' — mai un documento appeso su 'in_corso' per
+  // un problema di configurazione mai partito.
+  if (!process.env.ANTHROPIC_API_KEY?.trim()) {
+    console.error('[classify-document] ANTHROPIC_API_KEY assente o vuota — servizio di classificazione non disponibile')
+    return NextResponse.json({ error: 'Servizio di classificazione non disponibile', cause: 'service_unavailable' }, { status: 503 })
   }
 
   await admin.from('documents').update({ classification_status: 'in_corso' }).eq('id', documentId)
@@ -259,11 +284,22 @@ export async function POST(req: NextRequest) {
       usage: response.usage,
     })
   } catch (err) {
-    // Nessuno stato zombie: qualunque errore da qui in poi (download, chiamata
-    // AI, parsing, schema non conforme) risolve sempre in 'fallita' — mai
-    // output non validato scritto in doc_type.
-    await admin.from('documents').update({ classification_status: 'fallita' }).eq('id', documentId)
     const message = err instanceof Error ? err.message : 'Errore sconosciuto'
-    return NextResponse.json({ error: message }, { status: 502 })
+
+    if (isServiceUnavailableError(err)) {
+      // Il servizio è il problema, non il documento: nessuno stato zombie su
+      // 'in_corso', ma nemmeno 'fallita' (che significherebbe "documento non
+      // classificabile"). Rollback a 'non_classificato' per farlo rientrare
+      // nella coda normale non appena il servizio torna disponibile.
+      console.error(`[classify-document] servizio non disponibile (documentId=${documentId}):`, message)
+      await admin.from('documents').update({ classification_status: 'non_classificato' }).eq('id', documentId)
+      return NextResponse.json({ error: message, cause: 'service_unavailable' }, { status: 503 })
+    }
+
+    // Nessuno stato zombie: qualunque errore sul documento (download, parsing,
+    // schema non conforme, refusal) risolve sempre in 'fallita' — mai output
+    // non validato scritto in doc_type.
+    await admin.from('documents').update({ classification_status: 'fallita' }).eq('id', documentId)
+    return NextResponse.json({ error: message, cause: 'document_error' }, { status: 502 })
   }
 }
