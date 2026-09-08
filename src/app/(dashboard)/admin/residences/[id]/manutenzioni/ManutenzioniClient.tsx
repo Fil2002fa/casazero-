@@ -6,6 +6,7 @@ import { MaintenanceBadge } from '@/components/MaintenanceBadge'
 import { Select } from '@/components/ui/Input'
 import { ItemConfigForm } from './ItemConfigForm'
 import { setTemplateActivationForResidence } from '../fornitori/actions'
+import { sollecitaItem, type SollecitoResult } from './actions'
 import { isOverdueLive, isInCorso } from '@/lib/maintenance-status'
 import type { MaintenancePriority, MaintenanceStatus, CompletionMode, ObligationType, ItemActivation } from '@/types/database'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
@@ -106,8 +107,70 @@ type PendingAction = {
   freqMonths: number | null
 }
 
+// Gate di visibilità del pulsante Sollecita, unica fonte per zona attenzione e
+// UnitRow. isOverdueLive resta il gate di ritardo (commit 1, non si tocca):
+// qui si aggiunge solo il gating di ruolo. Sugli item completion_mode
+// 'amministratore' la action rifiuta con forbidden per il ruolo admin (il
+// destinatario sarebbe l'admin stesso) — corretto lato server, ma in UI
+// sarebbe un pulsante che fallisce sempre: va nascosto. canManagePlan
+// (page.tsx:103) è esattamente `profile.role === 'super_admin'`: qui è il
+// ruolo per cui la action non pone quel vincolo.
+function sollecitaVisible(mode: CompletionMode, overdue: boolean, canManagePlan: boolean) {
+  return overdue && mode !== 'promemoria' && (mode !== 'amministratore' || canManagePlan)
+}
+
+// Traduce l'esito di sollecitaItem in un messaggio toast. Unica fonte per zona
+// attenzione e UnitRow: mai un assunto ottimistico, ogni esito il suo
+// messaggio. Toast.tsx:8 ha solo kind 'success'/'error' — qui il colore segna
+// se l'operazione ha raggiunto lo scopo, il testo distingue simulato da reale
+// da già-sollecitato. Un esito parziale (alcuni destinatari raggiunti, altri
+// no) resta 'success': non è un fallimento.
+function sollecitoToast(result: SollecitoResult): { kind: 'success' | 'error'; message: string } {
+  switch (result.status) {
+    case 'ok': {
+      const { sent, simulated, failed, withoutEmail, skipped } = result.outcome
+      if (sent > 0) {
+        return {
+          kind: 'success',
+          message: (failed > 0 || withoutEmail > 0)
+            ? 'Sollecito inviato ad alcuni destinatari (altri non raggiunti).'
+            : 'Sollecito inviato.',
+        }
+      }
+      if (simulated > 0) {
+        return {
+          kind: 'success',
+          message: 'Sollecito simulato: nessuna email è partita davvero (ambiente locale senza RESEND_API_KEY).',
+        }
+      }
+      if (skipped > 0) {
+        return { kind: 'success', message: 'Già sollecitato nelle ultime 24 ore.' }
+      }
+      // sent=simulated=skipped=0: destinatari c'erano, ma nessun invio è arrivato
+      // (tutti falliti e/o senza email registrata).
+      return { kind: 'error', message: 'Sollecito non riuscito: nessun destinatario raggiunto.' }
+    }
+    case 'no_recipients':
+      return { kind: 'success', message: 'Nessun destinatario configurato per questa voce.' }
+    case 'not_solicitable':
+    case 'not_overdue':
+      // Il gate sollecitaVisible tiene il pulsante nascosto in condizioni normali:
+      // qui solo se lo stato è cambiato tra render e click (race).
+      return { kind: 'error', message: 'Non è più possibile sollecitare questa voce: aggiorna la pagina.' }
+    case 'forbidden':
+      return { kind: 'error', message: 'Non hai i permessi per sollecitare questa voce.' }
+    case 'error':
+      // result.message è il testo grezzo del provider: resta in console, mai nel toast.
+      console.error('[sollecitaItem]', result.message)
+      return { kind: 'error', message: 'Si è verificato un errore. Riprova più tardi.' }
+  }
+}
+
 export function ManutenzioniClient({ residenceId, residenceName, items, completions, suppliers, unitPrimaryNames, initialFilter = null, initialModeFilter = null, canManagePlan }: Props) {
   const { showToast } = useToast()
+  // Un item per volta: Set di id in corso, cosi' il disabled riguarda solo il
+  // pulsante cliccato e non l'intera zona attenzione.
+  const [pendingSollecitoIds, setPendingSollecitoIds] = useState<Set<string>>(new Set())
   const [activeFilter, setActiveFilter] = useState<FilterState>(initialFilter)
   const modeFilter = initialModeFilter
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
@@ -132,6 +195,22 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
       const res = await setTemplateActivationForResidence(templateId, residenceId, targetStatus)
       if (!res.error) setPendingAction(null)
     })
+  }
+
+  async function handleSollecita(itemId: string) {
+    if (pendingSollecitoIds.has(itemId)) return
+    setPendingSollecitoIds(prev => new Set(prev).add(itemId))
+    try {
+      const result = await sollecitaItem(itemId)
+      const { kind, message } = sollecitoToast(result)
+      showToast(kind, message)
+    } finally {
+      setPendingSollecitoIds(prev => {
+        const next = new Set(prev)
+        next.delete(itemId)
+        return next
+      })
+    }
   }
 
   // Gli item archiviati spariscono dal piano attivo; le loro completion restano nel fascicolo
@@ -490,15 +569,16 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
                       ) : (
                         <span className="text-xs text-semantic-amber">in corso</span>
                       )}
-                      {overdueNow && (
+                      {sollecitaVisible(effMode, overdueNow, canManagePlan) && (
                         <Button
                           variant="secondary"
                           size="table"
                           className="ml-auto gap-1.5 px-2.5 text-xs"
-                          onClick={() => showToast('success', 'Sollecito inviato all’amministratore')}
+                          disabled={pendingSollecitoIds.has(item.id)}
+                          onClick={() => handleSollecita(item.id)}
                         >
                           <Bell className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={1.6} />
-                          Sollecita
+                          {pendingSollecitoIds.has(item.id) ? 'Invio…' : 'Sollecita'}
                         </Button>
                       )}
                     </div>
@@ -585,6 +665,7 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
                               residenceId={residenceId}
                               suppliers={suppliers}
                               primaryName={null}
+                              canManagePlan={canManagePlan}
                             />
                           ) : (
                             typeItems.map(item => (
@@ -595,6 +676,7 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
                                 residenceId={residenceId}
                                 suppliers={suppliers}
                                 primaryName={item.unit_id ? unitPrimaryNames[item.unit_id] ?? null : null}
+                                canManagePlan={canManagePlan}
                               />
                             ))
                           )}
@@ -720,34 +802,42 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
 }
 
 // Riga-unità nel drill-down: dettaglio per-istanza + Configura (ItemConfigForm) invariata.
-function UnitRow({ item, label, residenceId, suppliers, primaryName }: {
+function UnitRow({ item, label, residenceId, suppliers, primaryName, canManagePlan }: {
   item: ItemRow
   label: string
   residenceId: string
   suppliers: { id: string; name: string }[]
   primaryName: string | null
+  canManagePlan: boolean
 }) {
+  const { showToast } = useToast()
   const tpl = item.maintenance_templates
   const { mode: effMode, obligation: effObl } = resolveAxes(item)
   const formattedDue = item.next_due_date
     ? new Date(item.next_due_date).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })
     : null
-  const [solicited, setSolicited] = useState(false)
+  const [isPending, setIsPending] = useState(false)
   // Stato live, mai il campo status salvato: il cron non gira in locale e in
   // produzione lascia buchi tra un run e l'altro. isOverdueLive esclude gia'
   // item archiviati (isCountable), promemoria e presa in carico ('in_corso'):
   // il sollecito vale solo sul ritardo effettivo.
   const overdue = isOverdueLive(item)
-  const canSollecitare = effMode !== 'promemoria' && overdue
+  const canSollecitare = sollecitaVisible(effMode, overdue, canManagePlan)
   // Stesso predicato del badge in zona attenzione (riga 475): la label sotto
   // e il badge qui devono concordare, mai uno "Scaduta" rosso accanto a un
   // badge ancora "Pianificata".
   const badgeStatus = overdue ? 'scaduta' : item.status
 
-  function handleSollecita() {
-    if (solicited) return
-    setSolicited(true)
-    setTimeout(() => setSolicited(false), 2500)
+  async function handleSollecita() {
+    if (isPending) return
+    setIsPending(true)
+    try {
+      const result = await sollecitaItem(item.id)
+      const { kind, message } = sollecitoToast(result)
+      showToast(kind, message)
+    } finally {
+      setIsPending(false)
+    }
   }
 
   return (
@@ -775,13 +865,13 @@ function UnitRow({ item, label, residenceId, suppliers, primaryName }: {
           {canSollecitare && (
             <button
               onClick={handleSollecita}
-              disabled={solicited}
+              disabled={isPending}
               className="flex items-center gap-1 text-xs text-brand-dark font-medium px-2 py-1 rounded-md hover:bg-brand-light transition-colors disabled:opacity-70"
             >
-              {solicited
+              {isPending
                 ? <Clock className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={1.6} />
                 : <Bell className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={1.6} />}
-              {solicited ? 'Sollecito inviato' : 'Sollecita'}
+              {isPending ? 'Invio…' : 'Sollecita'}
             </button>
           )}
         </div>
