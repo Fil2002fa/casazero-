@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { ChevronDown, ChevronUp, Bell, Clock } from 'lucide-react'
+import { ChevronDown, ChevronUp, Bell } from 'lucide-react'
 import { MaintenanceBadge } from '@/components/MaintenanceBadge'
 import { Select } from '@/components/ui/Input'
 import { ItemConfigForm } from './ItemConfigForm'
@@ -11,7 +11,9 @@ import { isOverdueLive, isInCorso } from '@/lib/maintenance-status'
 import type { MaintenancePriority, MaintenanceStatus, CompletionMode, ObligationType, ItemActivation } from '@/types/database'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import { formatFrequency } from '@/lib/formatFrequency'
+import { pluralize } from '@/lib/pluralize'
 import { Button } from '@/components/ui/Button'
+import { Modal } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 
 export type ItemRow = {
@@ -107,6 +109,16 @@ type PendingAction = {
   freqMonths: number | null
 }
 
+// Sollecito in transito verso il modale di conferma — unico per superficie
+// (zona attenzione: un item alla volta; UnitRow: un solo item per istanza).
+type SollecitaConfirmState = {
+  itemId: string
+  title: string
+  mode: CompletionMode
+  unitLabel: string
+  days: number
+}
+
 // Gate di visibilità del pulsante Sollecita, unica fonte per zona attenzione e
 // UnitRow. isOverdueLive resta il gate di ritardo (commit 1, non si tocca):
 // qui si aggiunge solo il gating di ruolo. Sugli item completion_mode
@@ -166,6 +178,18 @@ function sollecitoToast(result: SollecitoResult): { kind: 'success' | 'error'; m
   }
 }
 
+// Testo del modale di conferma Sollecita: unica fonte per zona attenzione e
+// UnitRow. Il destinatario si deduce solo dal completion_mode (mai risolto ad
+// account/nome — quello resta nel toast a invio concluso). mode qui non è mai
+// 'promemoria': il gate sollecitaVisible lo esclude a monte.
+function sollecitaConfirmCopy(mode: CompletionMode, unitLabel: string, title: string, days: number): { title: string; body: string } {
+  const recipient = mode === 'residente' ? `il residente di ${unitLabel}` : "l'amministratore della residenza"
+  return {
+    title: 'Invia sollecito',
+    body: `Stai per inviare un sollecito a ${recipient} per "${title}", in ritardo da ${pluralize(days, 'giorno', 'giorni')}.`,
+  }
+}
+
 export function ManutenzioniClient({ residenceId, residenceName, items, completions, suppliers, unitPrimaryNames, initialFilter = null, initialModeFilter = null, canManagePlan }: Props) {
   const { showToast } = useToast()
   // Un item per volta: Set di id in corso, cosi' il disabled riguarda solo il
@@ -185,8 +209,14 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
   const effectivePlanView = canManagePlan ? planView : 'attive'
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [sollecitaConfirm, setSollecitaConfirm] = useState<SollecitaConfirmState | null>(null)
 
   const today = new Date()
+
+  const sollecitaCopy = sollecitaConfirm
+    ? sollecitaConfirmCopy(sollecitaConfirm.mode, sollecitaConfirm.unitLabel, sollecitaConfirm.title, sollecitaConfirm.days)
+    : null
+  const sollecitaBusy = sollecitaConfirm ? pendingSollecitoIds.has(sollecitaConfirm.itemId) : false
 
   function handleConfirm() {
     if (!pendingAction) return
@@ -574,11 +604,10 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
                           variant="secondary"
                           size="table"
                           className="ml-auto gap-1.5 px-2.5 text-xs"
-                          disabled={pendingSollecitoIds.has(item.id)}
-                          onClick={() => handleSollecita(item.id)}
+                          onClick={() => setSollecitaConfirm({ itemId: item.id, title: tpl?.title ?? '', mode: effMode, unitLabel, days: n })}
                         >
                           <Bell className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={1.6} />
-                          {pendingSollecitoIds.has(item.id) ? 'Invio…' : 'Sollecita'}
+                          Sollecita
                         </Button>
                       )}
                     </div>
@@ -797,6 +826,38 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
           </div>
         </div>
       )}
+
+      {/* Modale di conferma Sollecita: il testo dichiara CHI riceve, non "sei sicuro?" */}
+      {sollecitaConfirm && sollecitaCopy && (
+        <Modal
+          open
+          onClose={() => { if (!sollecitaBusy) setSollecitaConfirm(null) }}
+          title={sollecitaCopy.title}
+          footer={
+            <>
+              <Button
+                variant="secondary"
+                disabled={sollecitaBusy}
+                onClick={() => setSollecitaConfirm(null)}
+              >
+                Annulla
+              </Button>
+              <Button
+                variant="primary"
+                disabled={sollecitaBusy}
+                onClick={async () => {
+                  await handleSollecita(sollecitaConfirm.itemId)
+                  setSollecitaConfirm(null)
+                }}
+              >
+                {sollecitaBusy ? 'Invio…' : 'Invia sollecito'}
+              </Button>
+            </>
+          }
+        >
+          <p className="text-sm text-text-primary">{sollecitaCopy.body}</p>
+        </Modal>
+      )}
     </div>
   )
 }
@@ -827,6 +888,10 @@ function UnitRow({ item, label, residenceId, suppliers, primaryName, canManagePl
   // e il badge qui devono concordare, mai uno "Scaduta" rosso accanto a un
   // badge ancora "Pianificata".
   const badgeStatus = overdue ? 'scaduta' : item.status
+  const [sollecitaConfirmOpen, setSollecitaConfirmOpen] = useState(false)
+  const sollecitaCopy = sollecitaConfirmOpen
+    ? sollecitaConfirmCopy(effMode, label, tpl?.title ?? '', daysOverdue(item.next_due_date, new Date()))
+    : null
 
   async function handleSollecita() {
     if (isPending) return
@@ -864,14 +929,11 @@ function UnitRow({ item, label, residenceId, suppliers, primaryName, canManagePl
           )}
           {canSollecitare && (
             <button
-              onClick={handleSollecita}
-              disabled={isPending}
-              className="flex items-center gap-1 text-xs text-brand-dark font-medium px-2 py-1 rounded-md hover:bg-brand-light transition-colors disabled:opacity-70"
+              onClick={() => setSollecitaConfirmOpen(true)}
+              className="flex items-center gap-1 text-xs text-brand-dark font-medium px-2 py-1 rounded-md hover:bg-brand-light transition-colors"
             >
-              {isPending
-                ? <Clock className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={1.6} />
-                : <Bell className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={1.6} />}
-              {isPending ? 'Invio…' : 'Sollecita'}
+              <Bell className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={1.6} />
+              Sollecita
             </button>
           )}
         </div>
@@ -886,6 +948,38 @@ function UnitRow({ item, label, residenceId, suppliers, primaryName, canManagePl
         currentSupplierId={item.supplier_id}
         suppliers={suppliers}
       />
+
+      {/* Modale di conferma Sollecita: il testo dichiara CHI riceve, non "sei sicuro?" */}
+      {sollecitaConfirmOpen && sollecitaCopy && (
+        <Modal
+          open
+          onClose={() => { if (!isPending) setSollecitaConfirmOpen(false) }}
+          title={sollecitaCopy.title}
+          footer={
+            <>
+              <Button
+                variant="secondary"
+                disabled={isPending}
+                onClick={() => setSollecitaConfirmOpen(false)}
+              >
+                Annulla
+              </Button>
+              <Button
+                variant="primary"
+                disabled={isPending}
+                onClick={async () => {
+                  await handleSollecita()
+                  setSollecitaConfirmOpen(false)
+                }}
+              >
+                {isPending ? 'Invio…' : 'Invia sollecito'}
+              </Button>
+            </>
+          }
+        >
+          <p className="text-sm text-text-primary">{sollecitaCopy.body}</p>
+        </Modal>
+      )}
     </div>
   )
 }
