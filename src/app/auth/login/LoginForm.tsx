@@ -36,10 +36,12 @@ export function LoginForm({ invite, error }: { invite: string | null; error: str
   }
 
   const handleGoogle = async () => {
-    await supabase.auth.signInWithOAuth({
+    setMessage(null)
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: callbackUrl },
     })
+    if (error) setMessage({ text: error.message, ok: false })
   }
 
   return (
