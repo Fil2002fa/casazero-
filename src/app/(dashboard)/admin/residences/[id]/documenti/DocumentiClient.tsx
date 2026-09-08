@@ -189,6 +189,11 @@ export function DocumentiClient({ residenceId, docs, units, checklist, markedByN
   const [classifying, setClassifying] = useState(false)
   const [classifyProgress, setClassifyProgress] = useState<{ done: number; total: number } | null>(null)
   const [classifyFailures, setClassifyFailures] = useState<number | null>(null)
+  // Servizio (chiave assente/vuota, 5xx, rate limit) vs documento: un banner
+  // di pagina sostituisce i badge per-documento solo per questa causa — i
+  // documenti restano in stato neutro riprovabile (route.ts rollback a
+  // 'non_classificato', mai 'fallita' per una causa che non è loro).
+  const [serviceUnavailable, setServiceUnavailable] = useState(false)
   const [reviewOnly, setReviewOnly] = useState(false)
   const [docTypeFilter, setDocTypeFilter] = useState<DocType | 'all'>('all')
   const pendingClassification = docs.filter(d => d.classification_status === 'non_classificato')
@@ -300,6 +305,7 @@ export function DocumentiClient({ residenceId, docs, units, checklist, markedByN
     setClassifying(true)
     setClassifyProgress({ done: 0, total: targets.length })
     setClassifyFailures(null)
+    setServiceUnavailable(false)
 
     let failures = 0
     for (const [i, doc] of targets.entries()) {
@@ -312,6 +318,14 @@ export function DocumentiClient({ residenceId, docs, units, checklist, markedByN
         const result = await res.json().catch(() => null)
         if (res.ok) {
           console.log(`[classifica] ${doc.title}:`, result)
+        } else if (result?.cause === 'service_unavailable') {
+          // Il servizio è giù: proseguire il batch chiamerebbe di nuovo un
+          // servizio già noto non disponibile, un errore per documento alla
+          // volta invece di un solo banner. Si ferma qui, non si conta come
+          // fallimento per-documento.
+          console.error(`[classifica] servizio non disponibile, batch interrotto a "${doc.title}":`, result?.error ?? res.statusText)
+          setServiceUnavailable(true)
+          break
         } else {
           failures++
           console.error(`[classifica] ${doc.title} fallita:`, result?.error ?? res.statusText)
@@ -338,6 +352,17 @@ export function DocumentiClient({ residenceId, docs, units, checklist, markedByN
 
   return (
     <div className="space-y-5">
+
+      {/* -------- Banner servizio classificazione -------- */}
+      {/* Pagina intera, non per-documento: quando la causa è il servizio
+          (chiave assente/vuota, 5xx, rate limit — route.ts) i documenti
+          restano neutri e riprovabili, un solo banner sostituisce i badge
+          rossi/di errore per ciascuno. */}
+      {serviceUnavailable && (
+        <div className="bg-neutral-600/7 border border-neutral-600/20 rounded-xl px-4 py-3 text-sm text-neutral-600">
+          Classificazione automatica non disponibile al momento. Riprova più tardi con Classifica documenti.
+        </div>
+      )}
 
       {/* -------- Modale upload -------- */}
       {showModal && (
