@@ -196,7 +196,13 @@ export function DocumentiClient({ residenceId, docs, units, checklist, markedByN
   const [serviceUnavailable, setServiceUnavailable] = useState(false)
   const [reviewOnly, setReviewOnly] = useState(false)
   const [docTypeFilter, setDocTypeFilter] = useState<DocType | 'all'>('all')
-  const pendingClassification = docs.filter(d => d.classification_status === 'non_classificato')
+  // 'fallita' inclusa: dopo il rollback a 'non_classificato' per gli errori di
+  // servizio (route.ts), 'fallita' significa solo "questo documento non è
+  // classificabile" — un errore di contenuto/formato, non di sistema — e va
+  // quindi riproposto dal bottone come qualunque altro documento in coda.
+  const pendingClassification = docs.filter(d =>
+    d.classification_status === 'non_classificato' || d.classification_status === 'fallita'
+  )
   const reviewCount = docs.filter(d => d.classification_status === 'da_revisionare').length
   // Solo i doc_type davvero presenti tra i documenti, ordinati alfabeticamente
   // per etichetta: in una tendina si cerca per nome, non per l'ordine tecnico
@@ -1095,7 +1101,11 @@ function classificationBadgeInfo(
     case 'da_revisionare':
       return { label: 'Da rivedere', className: 'bg-status-inprogress/8 text-status-inprogress' }
     case 'fallita':
-      return { label: 'Errore, riprova', className: 'bg-neutral-600/7 text-neutral-600' }
+      // Non più "Errore, riprova": dopo il rollback a 'non_classificato' per
+      // gli errori di servizio (route.ts), 'fallita' significa solo che
+      // QUESTO documento non è classificabile nel merito — è già incluso in
+      // pendingClassification, quindi "riprova" resta corretto.
+      return { label: 'Non classificabile, riprova', className: 'bg-neutral-600/7 text-neutral-600' }
     case 'in_corso':
       return { label: 'Classificazione…', className: 'bg-neutral-600/7 text-neutral-600', spinner: true }
     case 'non_classificato':
