@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import {
   ChevronLeft, Wrench, Users, Settings, FileText, BookOpen, AlertTriangle,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import {
@@ -100,6 +101,41 @@ function buildUnitSummary(unitsRaw: unknown[] | null) {
   })
 
   return { unitCount, unitsSenzaAccount, unitRows }
+}
+
+type Porta = {
+  href: string
+  icon: LucideIcon
+  label: string
+  sub: string | null
+}
+
+// Navigazione principale della residenza. Scritta UNA volta: i due rami di
+// ruolo differiscono solo per quali porte passano e per le colonne della
+// griglia, entrambe prop. Duplicare il markup per due classi Tailwind e una
+// voce d'array e' la stessa bug class del calcolo duplicato (CLAUDE.md).
+function PorteNav({ porte, className }: { porte: Porta[]; className: string }) {
+  return (
+    <nav aria-label="Sezioni residenza" className={className}>
+      {porte.map(porta => (
+        <Link
+          key={porta.href}
+          href={porta.href}
+          className="flex items-center gap-3 bg-surface rounded-xl border border-border p-4 hover:bg-background transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2"
+        >
+          <div className="w-9 h-9 bg-background rounded-lg flex items-center justify-center text-text-secondary flex-shrink-0">
+            <porta.icon className="w-4 h-4" strokeWidth={1.6} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-text-primary">{porta.label}</p>
+            {porta.sub && (
+              <p className="text-xs text-text-secondary mt-0.5">{porta.sub}</p>
+            )}
+          </div>
+        </Link>
+      ))}
+    </nav>
+  )
 }
 
 // Riepilogo piano manutenzioni — ritardi (max 5) + prossime scadenze, link
@@ -278,25 +314,7 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
       </div>
 
       {/* Gestione — navigazione principale, subito sotto la testata */}
-      <nav aria-label="Sezioni residenza" className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mt-4">
-        {porte.map(porta => (
-          <Link
-            key={porta.href}
-            href={porta.href}
-            className="flex items-center gap-3 bg-surface rounded-xl border border-border p-4 hover:bg-background transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2"
-          >
-            <div className="w-9 h-9 bg-background rounded-lg flex items-center justify-center text-text-secondary flex-shrink-0">
-              <porta.icon className="w-4 h-4" strokeWidth={1.6} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-text-primary">{porta.label}</p>
-              {porta.sub && (
-                <p className="text-xs text-text-secondary mt-0.5">{porta.sub}</p>
-              )}
-            </div>
-          </Link>
-        ))}
-      </nav>
+      <PorteNav porte={porte} className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mt-4" />
 
       {/* Numeri chiave — ogni card porta alla superficie che approfondisce il numero */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
@@ -434,25 +452,7 @@ async function AdminResidenceView({ id, residence }: { id: string; residence: Re
       </div>
 
       {/* Gestione — stesse porte del costruttore, meno Unità */}
-      <nav aria-label="Sezioni residenza" className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
-        {porte.map(porta => (
-          <Link
-            key={porta.href}
-            href={porta.href}
-            className="flex items-center gap-3 bg-surface rounded-xl border border-border p-4 hover:bg-background transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2"
-          >
-            <div className="w-9 h-9 bg-background rounded-lg flex items-center justify-center text-text-secondary flex-shrink-0">
-              <porta.icon className="w-4 h-4" strokeWidth={1.6} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-text-primary">{porta.label}</p>
-              {porta.sub && (
-                <p className="text-xs text-text-secondary mt-0.5">{porta.sub}</p>
-              )}
-            </div>
-          </Link>
-        ))}
-      </nav>
+      <PorteNav porte={porte} className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4" />
 
       {/* Numeri chiave — riepilogo piano/unità in sola lettura */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
