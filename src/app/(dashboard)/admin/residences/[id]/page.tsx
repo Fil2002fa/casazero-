@@ -76,7 +76,7 @@ function summarizePlan(itemsRaw: unknown[] | null, today: string) {
         && item.next_due_date !== null
     })
     .slice(0, 5)
-  return { planItems, overdueItems, upcomingItems }
+  return { overdueItems, upcomingItems }
 }
 
 // Riepilogo unità (conteggio, gap account, righe per la tabella): stessa
@@ -108,12 +108,23 @@ type Porta = {
   icon: LucideIcon
   label: string
   sub: string | null
+  // Tono del sottotitolo: 'overdue' usa lo stesso token di PlanSummarySection.
+  subTone?: 'overdue'
+}
+
+// Sottotitolo della porta Manutenzioni: lo STATO del piano, non un conteggio
+// di righe. Una sola definizione per i due rami di ruolo, come summarizePlan.
+// Le promemoria non entrano: overdueCount viene da isOverdueLive, che le esclude.
+function manutenzioniSub(overdueCount: number): Pick<Porta, 'sub' | 'subTone'> {
+  return overdueCount > 0
+    ? { sub: pluralize(overdueCount, 'scaduta', 'scadute'), subTone: 'overdue' }
+    : { sub: 'Tutto in regola' }
 }
 
 // Navigazione principale della residenza. Scritta UNA volta: i due rami di
 // ruolo differiscono solo per quali porte passano e per le colonne della
 // griglia, entrambe prop. Duplicare il markup per due classi Tailwind e una
-// voce d'array e' la stessa bug class del calcolo duplicato (CLAUDE.md).
+// voce d'array è la stessa bug class del calcolo duplicato (CLAUDE.md).
 function PorteNav({ porte, className }: { porte: Porta[]; className: string }) {
   return (
     <nav aria-label="Sezioni residenza" className={className}>
@@ -129,7 +140,9 @@ function PorteNav({ porte, className }: { porte: Porta[]; className: string }) {
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-text-primary">{porta.label}</p>
             {porta.sub && (
-              <p className="text-xs text-text-secondary mt-0.5">{porta.sub}</p>
+              <p className={`text-xs mt-0.5 ${porta.subTone === 'overdue' ? 'text-status-overdue' : 'text-text-secondary'}`}>
+                {porta.sub}
+              </p>
             )}
           </div>
         </Link>
@@ -282,15 +295,15 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
   const { unitCount, unitsSenzaAccount, unitRows } = buildUnitSummary(unitsRaw)
 
   const today = todayISO()
-  const { planItems, overdueItems, upcomingItems } = summarizePlan(itemsRaw, today)
+  const { overdueItems, upcomingItems } = summarizePlan(itemsRaw, today)
   const overdueCount = overdueItems.length
 
   const adminProfile = (adminRaw as unknown as AdminRow)?.profiles ?? null
   const adminList = (adminListRaw ?? []) as AdminProfile[]
 
-  const porte = [
+  const porte: Porta[] = [
     { href: `/admin/residences/${id}/units`,        icon: Users,     label: 'Unità e inviti', sub: `${unitCount} unità` },
-    { href: `/admin/residences/${id}/manutenzioni`, icon: Wrench,    label: 'Manutenzioni',   sub: null },
+    { href: `/admin/residences/${id}/manutenzioni`, icon: Wrench,    label: 'Manutenzioni',   ...manutenzioniSub(overdueCount) },
     { href: `/admin/residences/${id}/fascicolo`,    icon: BookOpen,  label: 'Fascicolo',      sub: completionCount ? `${completionCount} completamenti` : null },
     { href: `/admin/residences/${id}/documenti`,    icon: FileText,  label: 'Documenti',      sub: docCount ? `${docCount} file` : null },
     { href: `/admin/residences/${id}/fornitori`,    icon: Settings,  label: 'Fornitori',      sub: supplierCount ? `${supplierCount} fornitori` : null },
@@ -315,14 +328,6 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
 
       {/* Gestione — navigazione principale, subito sotto la testata */}
       <PorteNav porte={porte} className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mt-4" />
-
-      {/* Numeri chiave — ogni card porta alla superficie che approfondisce il numero */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
-        <StatCard label="Unità" value={unitCount} />
-        <StatCard label="Voci attive" value={planItems.length} />
-        <StatCard label="Scadute" value={overdueCount} danger={overdueCount > 0} />
-        <StatCard label="Completamenti" value={completionCount ?? 0} />
-      </div>
 
       {/* Amministratore */}
       <div className="bg-surface rounded-xl border border-border overflow-hidden mt-8">
@@ -411,13 +416,13 @@ async function AdminResidenceView({ id, residence }: { id: string; residence: Re
       .eq('residence_id', id),
   ])
 
-  const { unitCount, unitRows } = buildUnitSummary(unitsRaw)
-  const { planItems, overdueItems, upcomingItems } = summarizePlan(itemsRaw, today)
+  const { unitRows } = buildUnitSummary(unitsRaw)
+  const { overdueItems, upcomingItems } = summarizePlan(itemsRaw, today)
   const overdueCount = overdueItems.length
 
   // NON Unità: censimento e inviti restano al costruttore (decisione presa).
-  const porte = [
-    { href: `/admin/residences/${id}/manutenzioni`, icon: Wrench,   label: 'Manutenzioni', sub: null },
+  const porte: Porta[] = [
+    { href: `/admin/residences/${id}/manutenzioni`, icon: Wrench,   label: 'Manutenzioni', ...manutenzioniSub(overdueCount) },
     { href: `/admin/residences/${id}/fascicolo`,    icon: BookOpen, label: 'Fascicolo',    sub: completionCount ? `${completionCount} completamenti` : null },
     { href: `/admin/residences/${id}/documenti`,    icon: FileText, label: 'Documenti',    sub: docCount ? `${docCount} file` : null },
     { href: `/admin/residences/${id}/fornitori`,    icon: Settings, label: 'Fornitori',    sub: supplierCount ? `${supplierCount} fornitori` : null },
@@ -453,14 +458,6 @@ async function AdminResidenceView({ id, residence }: { id: string; residence: Re
 
       {/* Gestione — stesse porte del costruttore, meno Unità */}
       <PorteNav porte={porte} className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4" />
-
-      {/* Numeri chiave — riepilogo piano/unità in sola lettura */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
-        <StatCard label="Unità" value={unitCount} />
-        <StatCard label="Voci attive" value={planItems.length} />
-        <StatCard label="Scadute" value={overdueCount} danger={overdueCount > 0} />
-        <StatCard label="Completamenti" value={completionCount ?? 0} />
-      </div>
 
       {/* Tabella unità — sola lettura: di quante e quali unità è fatta la
           residenza è informazione di base, ma nessuna riga naviga verso
@@ -502,18 +499,6 @@ function PlanSummaryRow({ title, unitLabel, dateLabel, dateClassName }: {
       {dateLabel && (
         <p className={`text-xs flex-shrink-0 tabular-nums ${dateClassName}`}>{dateLabel}</p>
       )}
-    </div>
-  )
-}
-
-function StatCard({ label, value, danger }: { label: string; value: number; danger?: boolean }) {
-  return (
-    <div className="bg-surface rounded-xl border border-border p-4">
-      <p className="text-[13px] font-medium text-neutral-500">{label}</p>
-      <div className="flex items-center gap-2 mt-1">
-        <p className="font-serif text-3xl font-semibold text-brand-dark">{value}</p>
-        {danger && <span className="w-2 h-2 rounded-full bg-status-overdue" />}
-      </div>
     </div>
   )
 }
