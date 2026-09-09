@@ -100,6 +100,18 @@ function buildUnitSummary(unitsRaw: unknown[] | null) {
     }
   })
 
+  // Ordinamento naturale: la query ordina 'label' come TEXT (alfabetico:
+  // "Unità 10" prima di "Unità 9"), qui si ricorregge con localeCompare
+  // numeric, che gestisce anche le etichette libere non numerate.
+  unitRows.sort((a, b) => {
+    if (a.floor !== b.floor) {
+      if (a.floor === null) return 1
+      if (b.floor === null) return -1
+      return a.floor - b.floor
+    }
+    return a.label.localeCompare(b.label, 'it', { numeric: true, sensitivity: 'base' })
+  })
+
   return { unitCount, unitsSenzaAccount, unitRows }
 }
 
