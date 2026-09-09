@@ -9,6 +9,7 @@ import { Input, Label } from '@/components/ui/Input'
 export function LoginForm({ invite, error }: { invite: string | null; error: string | null }) {
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(
     error === 'no_access'
       ? { text: 'Per accedere serve un invito. Contatta il tuo costruttore.', ok: false }
@@ -37,11 +38,15 @@ export function LoginForm({ invite, error }: { invite: string | null; error: str
 
   const handleGoogle = async () => {
     setMessage(null)
+    setGoogleLoading(true)
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: callbackUrl },
     })
-    if (error) setMessage({ text: error.message, ok: false })
+    if (error) {
+      setMessage({ text: error.message, ok: false })
+      setGoogleLoading(false)
+    }
   }
 
   return (
@@ -61,6 +66,7 @@ export function LoginForm({ invite, error }: { invite: string | null; error: str
             type="button"
             variant="secondary"
             className="w-full gap-3"
+            disabled={googleLoading}
           >
             <GoogleIcon />
             Continua con Google
