@@ -8,8 +8,12 @@ export interface EmailPayload {
 // l'invio non è mai partito, solo loggato. I chiamanti esistenti (cron/daily,
 // admin/manutenzioni/actions) ignorano il valore di ritorno: retrocompatibile,
 // erano già in await su una Promise.
+// `id` è il message id di Resend, disponibile solo nel ramo 'sent': gli altri
+// due rami non hanno un messaggio a cui riferirsi. È `string | null`, mai
+// stringa vuota o placeholder — un id finto in un registro immutabile sarebbe
+// indistinguibile da uno vero.
 export type EmailResult =
-  | { status: 'sent' }
+  | { status: 'sent'; id: string | null }
   | { status: 'simulated' }
   | { status: 'error'; message: string }
 
@@ -24,14 +28,14 @@ export async function sendEmail(payload: EmailPayload): Promise<EmailResult> {
   try {
     const { Resend } = await import('resend')
     const resend = new Resend(apiKey)
-    const { error } = await resend.emails.send({
+    const { data, error } = await resend.emails.send({
       from: 'CasaZero <noreply@casazero.app>',
       to: payload.to,
       subject: payload.subject,
       html: payload.html,
     })
     if (error) throw new Error(error.message)
-    return { status: 'sent' }
+    return { status: 'sent', id: data?.id || null }
   } catch (err) {
     console.error('[EMAIL ERROR]', err)
     return { status: 'error', message: err instanceof Error ? err.message : String(err) }
