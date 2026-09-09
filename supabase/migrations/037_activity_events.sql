@@ -238,4 +238,24 @@ NOTIFY pgrst, 'reload schema';
 --   DELETE FROM activity_events WHERE true;
 -- ROLLBACK;
 
--- ── ESITO REALE (da compilare dopo l'apply) ──
+-- ── ESITO REALE (apply 09/09/2026) ──
+--
+-- V1 — 4 righe, nessuna UPDATE/DELETE/ALL:
+--   activity_events: admin registra                        | INSERT | {public}
+--   activity_events: super_admin registra                  | INSERT | {public}
+--   activity_events: admin legge le residenze che segue    | SELECT | {public}
+--   activity_events: super_admin legge le proprie residenze| SELECT | {public}
+--
+-- V2 — authenticated: INSERT, SELECT. anon: nessuna riga (REVOKE efficace).
+--
+-- V3 — activity_events | relrowsecurity=true | relforcerowsecurity=false
+--
+-- V4 — zero righe: nessuna policy nomina unit_members.
+--
+-- V6 — nessun errore, tabella vuota. Prova di immutabilità da ripetere
+--      quando ci saranno eventi, ora non discriminante.
+--
+-- V5 — NON ESEGUITA. Richiede un utente autenticato: il SQL Editor gira come
+--      owner e bypassa RLS, quindi qualunque esito sarebbe fuorviante.
+--      Verifica rimandata a un test dall'app dopo il commit che scrive
+--      il primo evento.
