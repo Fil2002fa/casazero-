@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import type { CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { safeNextPath } from '@/lib/safe-next-path'
 
 type CookieToSet = { name: string; value: string; options: CookieOptions }
 
@@ -42,9 +43,15 @@ export async function middleware(request: NextRequest) {
     pathname === '/offline.html'
 
   if (!user && !isPublicPath) {
+    // Il percorso richiesto va conservato, non buttato: i link delle email
+    // (sollecito, cron) puntano a una voce precisa e chi li apre di norma non
+    // ha una sessione attiva. Senza `next` il login atterra sulla home del
+    // ruolo e il deep link è perso per sempre.
+    const requested = safeNextPath(`${pathname}${request.nextUrl.search}`)
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     url.search = ''
+    if (requested && requested !== '/') url.searchParams.set('next', requested)
     return NextResponse.redirect(url)
   }
 

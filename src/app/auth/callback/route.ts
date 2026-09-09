@@ -3,6 +3,7 @@ import type { CookieMethodsServer } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
 import { homePathForRole } from '@/lib/auth'
+import { safeNextPath } from '@/lib/safe-next-path'
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
@@ -65,6 +66,15 @@ export async function GET(request: NextRequest) {
           await supabase.auth.signOut()
           return NextResponse.redirect(`${origin}/auth/login?error=no_access`)
         }
+      }
+
+      // Il deep link conservato dal middleware vince sulla home del ruolo: chi
+      // ha aperto il link di un'email deve atterrare sulla voce, non sulla
+      // lista. `safeNextPath` è il filtro contro l'open redirect — `next`
+      // arriva dalla query string, quindi dall'esterno.
+      const safeNext = safeNextPath(next)
+      if (safeNext && safeNext !== '/') {
+        return NextResponse.redirect(`${origin}${safeNext}`)
       }
 
       return NextResponse.redirect(`${origin}${homePathForRole(profile?.role)}`)

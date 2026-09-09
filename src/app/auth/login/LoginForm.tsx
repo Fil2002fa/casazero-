@@ -5,8 +5,9 @@ import { createClient } from '@/lib/supabase/client'
 import { BrandMark } from '@/components/BrandMark'
 import { Button } from '@/components/ui/Button'
 import { Input, Label } from '@/components/ui/Input'
+import { safeNextPath } from '@/lib/safe-next-path'
 
-export function LoginForm({ invite, error }: { invite: string | null; error: string | null }) {
+export function LoginForm({ invite, error, next }: { invite: string | null; error: string | null; next: string | null }) {
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
@@ -17,7 +18,10 @@ export function LoginForm({ invite, error }: { invite: string | null; error: str
   )
   const supabase = createClient()
 
-  const nextPath = invite ? `/welcome/${invite}/accept` : '/'
+  // L'invito ha la precedenza: chi arriva con un token sta completando
+  // l'onboarding, e quel flusso non va deviato altrove. Altrimenti si onora il
+  // deep link conservato dal middleware, se supera la validazione.
+  const nextPath = invite ? `/welcome/${invite}/accept` : (safeNextPath(next) ?? '/')
   const callbackUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/callback?next=${encodeURIComponent(nextPath)}`
 
   const handleMagicLink = async (e: React.FormEvent) => {
