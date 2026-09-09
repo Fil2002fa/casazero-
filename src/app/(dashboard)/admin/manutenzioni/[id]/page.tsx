@@ -31,7 +31,18 @@ type CompletionRow = {
 
 export default async function AdminItemDetailPage({ params }: { params: Params }) {
   const { id } = await params
-  const profile = await requireRole(['admin'])
+  // Il super_admin entra in SOLA LETTURA: il riquadro a fondo pagina è scritto
+  // per lui e prima di questo gate era irraggiungibile. Serve perché il link
+  // del sollecito punta qui (residences/[id]/manutenzioni/actions.ts:152) e chi
+  // lo invia deve poter verificare dove porta, invece di essere espulso sul
+  // fallback e finire su /admin/residences dopo tre redirect.
+  // La scrittura resta preclusa su tre livelli indipendenti: canAct (sotto)
+  // richiede role === 'admin', le action takeChargeN3/completeN3 rifiutano
+  // chiunque non sia admin (admin/manutenzioni/actions.ts:19 e :55), e la RLS
+  // di completions ammette l'INSERT al solo ruolo admin.
+  // Lo scoping per builder resta alla RLS su maintenance_items (002_rls.sql:278-284):
+  // nessun controllo applicativo nuovo qui.
+  const profile = await requireRole(['admin', 'super_admin'], '/admin/manutenzioni')
   const supabase = await createClient()
 
   const { data: rawItem } = await supabase
