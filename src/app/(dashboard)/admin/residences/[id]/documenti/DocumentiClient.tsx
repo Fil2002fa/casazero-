@@ -1129,10 +1129,16 @@ function DocCard({ doc }: { doc: DocRow }) {
   const formattedDate = new Date(doc.file_date ?? doc.created_at).toLocaleDateString('it-IT', {
     day: 'numeric', month: 'short', year: 'numeric',
   })
-  // La revisione umana ha senso solo dove c'è (o dovrebbe esserci) un doc_type
-  // da confermare/correggere: 'fallita' è un errore tecnico da riclassificare,
-  // non da rivedere nel merito.
-  const canReview = doc.classification_status === 'da_revisionare' || doc.classification_status === 'completata'
+  // 'fallita' è un errore di merito dell'AI sul documento, non un errore di
+  // servizio (quello rientra in 'non_classificato', vedi route.ts): l'unica
+  // via d'uscita automatica sarebbe ritentare la stessa chiamata, che per
+  // definizione ha già fallito. Stesso ragionamento per 'non_classificato'
+  // quando manca un verbale utilizzabile. La revisione umana è quindi
+  // l'unica uscita reale per questi due stati, non una scorciatoia.
+  const canReview = doc.classification_status === 'da_revisionare'
+    || doc.classification_status === 'completata'
+    || doc.classification_status === 'fallita'
+    || doc.classification_status === 'non_classificato'
   return (
     <div className="bg-surface rounded-xl border border-border">
       <div className="p-4 flex items-center gap-3">
