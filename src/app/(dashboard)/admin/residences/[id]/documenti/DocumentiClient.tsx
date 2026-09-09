@@ -1093,6 +1093,14 @@ function classificationBadgeInfo(
       // proposta AI che l'umano ha rifiutato scegliendo "Nessun impianto".
       const sistema = doc.sistema
       const base = doc.doc_type ? DOC_TYPE_LABELS[doc.doc_type] : 'Classificato'
+      // 'altro' non soddisfa mai una voce di checklist (match per uguaglianza
+      // in document-checklist.ts): 'completata' qui significa solo che la
+      // revisione è chiusa, non che il documento conta per la consegna.
+      // Stesso trattamento neutro di 'Non applicabile' (riga 871), mai il
+      // colore di successo.
+      if (doc.doc_type === 'altro') {
+        return { label: 'Fuori checklist', className: 'bg-neutral-600/7 text-neutral-600' }
+      }
       return {
         label: sistema ? `${base} · ${SISTEMA_LABELS[sistema]}` : base,
         className: 'bg-brand-dark/8 text-brand-dark',
