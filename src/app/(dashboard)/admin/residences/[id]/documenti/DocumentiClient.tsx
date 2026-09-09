@@ -1099,7 +1099,7 @@ function classificationBadgeInfo(
       // Stesso trattamento neutro di 'Non applicabile' (riga 871), mai il
       // colore di successo.
       if (doc.doc_type === 'altro') {
-        return { label: 'Fuori checklist', className: 'bg-neutral-600/7 text-neutral-600' }
+        return { label: 'Nessuna categoria', className: 'bg-neutral-600/7 text-neutral-600' }
       }
       return {
         label: sistema ? `${base} · ${SISTEMA_LABELS[sistema]}` : base,
