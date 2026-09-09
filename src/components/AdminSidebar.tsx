@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Building2, Users, Wrench, Settings, Activity, type LucideIcon } from 'lucide-react'
+import { Building2, Users, Wrench, Settings, type LucideIcon } from 'lucide-react'
 import type { UserRole } from '@/types/database'
 import { BrandMark } from '@/components/BrandMark'
 
@@ -17,7 +17,11 @@ type NavItem = {
 const SUPER_ADMIN_ITEMS: NavItem[] = [
   { href: '/admin/residences', icon: Building2, label: 'Residenze' },
   { href: '/admin/administrators', icon: Users, label: 'Amministratori' },
-  { href: '/admin/attivita', icon: Activity, label: 'Attività', badge: 'test' },
+  // Nascosta per la demo Furlan: /admin/attivita serve dati demo finti (vedi
+  // commento in attivita/page.tsx:33-34), non un feed reale. Riattivare
+  // scommentando questa riga (e reintrodurre `Activity` nell'import sopra)
+  // quando il feed sarà collegato a eventi reali.
+  // { href: '/admin/attivita', icon: Activity, label: 'Attività', badge: 'test' },
   { href: '/admin/settings', icon: Settings, label: 'Impostazioni', dividerBefore: true },
 ]
 
