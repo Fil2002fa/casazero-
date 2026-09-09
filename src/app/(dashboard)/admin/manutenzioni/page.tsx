@@ -124,14 +124,14 @@ export default async function AdminManutenzioniPage({ searchParams }: { searchPa
 
       {/* Contatori — stessa partizione della lista; cliccabili per filtrarla, toggle se già attivi */}
       <div className="grid grid-cols-3 gap-3">
-        <Link href={statHref('in_ritardo', activeFilter)} className="block">
-          <Stat label="In ritardo" value={counts.in_ritardo} color="text-semantic-red" bg="bg-semantic-red-bg" active={activeFilter === 'in_ritardo'} />
+        <Link href={statHref('in_ritardo', activeFilter)} className="block rounded-xl focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2">
+          <Stat label="In ritardo" value={counts.in_ritardo} tone="overdue" active={activeFilter === 'in_ritardo'} />
         </Link>
-        <Link href={statHref('in_corso', activeFilter)} className="block">
-          <Stat label="In corso" value={counts.in_corso} color="text-semantic-amber" bg="bg-semantic-amber-bg" active={activeFilter === 'in_corso'} />
+        <Link href={statHref('in_corso', activeFilter)} className="block rounded-xl focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2">
+          <Stat label="In corso" value={counts.in_corso} tone="inprogress" active={activeFilter === 'in_corso'} />
         </Link>
-        <Link href={statHref('in_arrivo', activeFilter)} className="block">
-          <Stat label="In arrivo" value={counts.in_arrivo} color="text-text-secondary" bg="bg-background" active={activeFilter === 'in_arrivo'} />
+        <Link href={statHref('in_arrivo', activeFilter)} className="block rounded-xl focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2">
+          <Stat label="In arrivo" value={counts.in_arrivo} tone="neutral" active={activeFilter === 'in_arrivo'} />
         </Link>
       </div>
 
@@ -161,15 +161,26 @@ function statHref(bucket: ActivityBucket, activeFilter: ActivityBucket | null): 
   return activeFilter === bucket ? '/admin/manutenzioni' : `/admin/manutenzioni?filter=${bucket}`
 }
 
-function Stat({
-  label, value, color, bg, active,
-}: {
-  label: string; value: number; color: string; bg: string; active: boolean
+type StatTone = 'overdue' | 'inprogress' | 'neutral'
+
+// Stato attivo del contatore: la card passa al colore pieno della sua tinta,
+// testo bianco. Niente contorno: la gerarchia in questo progetto si fa col
+// colore, non con bordi aggiunti. La card neutra usa il verde brand-dark,
+// lo stesso della voce selezionata in sidebar.
+const STAT_TONES: Record<StatTone, { idle: string; idleValue: string; active: string }> = {
+  overdue:    { idle: 'bg-semantic-red-bg',   idleValue: 'text-semantic-red',   active: 'bg-semantic-red' },
+  inprogress: { idle: 'bg-semantic-amber-bg', idleValue: 'text-semantic-amber', active: 'bg-semantic-amber' },
+  neutral:    { idle: 'bg-background',        idleValue: 'text-text-secondary', active: 'bg-brand-dark' },
+}
+
+function Stat({ label, value, tone, active }: {
+  label: string; value: number; tone: StatTone; active: boolean
 }) {
+  const t = STAT_TONES[tone]
   return (
-    <div className={`${bg} rounded-xl p-3 text-center ${active ? 'ring-2 ring-brand-dark' : ''}`}>
-      <p className={`text-2xl font-medium ${color}`}>{value}</p>
-      <p className="text-xs text-text-secondary mt-0.5">{label}</p>
+    <div className={`rounded-xl p-3 text-center transition-colors ${active ? t.active : t.idle}`}>
+      <p className={`text-2xl font-medium ${active ? 'text-white' : t.idleValue}`}>{value}</p>
+      <p className={`text-xs mt-0.5 ${active ? 'text-white/80' : 'text-text-secondary'}`}>{label}</p>
     </div>
   )
 }
