@@ -20,6 +20,20 @@ export type EmailResult =
 export async function sendEmail(payload: EmailPayload): Promise<EmailResult> {
   const apiKey = process.env.RESEND_API_KEY
 
+  // IN PRODUZIONE RESEND_FROM VA IMPOSTATA, su un dominio verificato su Resend
+  // (es. 'CasaZero <noreply@casazero.app>' con casazero.app verificato nel
+  // pannello Resend). Se resta vuota il mittente è la sandbox
+  // onboarding@resend.dev, che consegna SOLO all'indirizzo dell'account Resend:
+  // verso qualsiasi destinatario reale Resend risponde 403 e l'email non parte.
+  // La sandbox è il default perché è l'unico valore che funziona senza dominio
+  // verificato — è il default giusto per lo sviluppo, mai per la produzione.
+  //
+  // `||` e non `??`, deviazione intenzionale dalla convenzione del repo: su
+  // Vercel una variabile creata e lasciata vuota è un caso reale, e `??` non
+  // intercetta la stringa vuota — produrrebbe `from: ''` e un errore Resend a
+  // runtime invece del fallback.
+  const from = process.env.RESEND_FROM || 'CasaZero <onboarding@resend.dev>'
+
   if (!apiKey) {
     console.log(`[DEV EMAIL → ${payload.to}] ${payload.subject}`)
     return { status: 'simulated' }
@@ -29,7 +43,7 @@ export async function sendEmail(payload: EmailPayload): Promise<EmailResult> {
     const { Resend } = await import('resend')
     const resend = new Resend(apiKey)
     const { data, error } = await resend.emails.send({
-      from: 'CasaZero <noreply@casazero.app>',
+      from,
       to: payload.to,
       subject: payload.subject,
       html: payload.html,
