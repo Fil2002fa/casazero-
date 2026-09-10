@@ -18,7 +18,7 @@ const SUPER_ADMIN_ITEMS: NavItem[] = [
   { href: '/admin/residences', icon: Building2, label: 'Residenze' },
   { href: '/admin/administrators', icon: Users, label: 'Amministratori' },
   // Nascosta per la demo Furlan: /admin/attivita serve dati demo finti (vedi
-  // commento in attivita/page.tsx:33-34), non un feed reale. Riattivare
+  // commento in attivita/page.tsx:35-36), non un feed reale. Riattivare
   // scommentando questa riga (e reintrodurre `Activity` nell'import sopra)
   // quando il feed sarà collegato a eventi reali.
   // { href: '/admin/attivita', icon: Activity, label: 'Attività', badge: 'test' },

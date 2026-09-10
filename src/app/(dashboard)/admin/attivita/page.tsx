@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import { CheckCircle2, UserPlus, AlertTriangle, FileText, MessageSquare, Wrench } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { requireRole } from '@/lib/auth'
+import { groupByDay } from '@/lib/activity-feed'
+import { ActivityTimelineRow } from '@/components/ActivityTimelineRow'
 import { PILL_BASE } from '@/components/ui/Badge'
 import { cn } from '@/lib/cn'
 
@@ -44,37 +46,6 @@ function buildDemoEvents(now: Date): ActivityEvent[] {
   ]
 }
 
-function startOfDay(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
-}
-
-function dayLabel(date: Date, now: Date): string {
-  const diffDays = Math.round((startOfDay(now).getTime() - startOfDay(date).getTime()) / 86_400_000)
-  if (diffDays === 0) return 'Oggi'
-  if (diffDays === 1) return 'Ieri'
-  return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })
-}
-
-function formatTime(date: Date): string {
-  return date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
-}
-
-type DayGroup = { label: string; events: ActivityEvent[] }
-
-function groupByDay(events: ActivityEvent[], now: Date): DayGroup[] {
-  const groups: DayGroup[] = []
-  for (const event of events) {
-    const label = dayLabel(event.at, now)
-    const current = groups[groups.length - 1]
-    if (current && current.label === label) {
-      current.events.push(event)
-    } else {
-      groups.push({ label, events: [event] })
-    }
-  }
-  return groups
-}
-
 function TestBadge() {
   return (
     <span className={cn(PILL_BASE, 'border border-border bg-transparent text-neutral-600 flex-shrink-0')}>
@@ -110,30 +81,17 @@ export default async function AttivitaPage() {
               <section key={group.label}>
                 <h2 className="text-[13px] font-medium text-neutral-500">{group.label}</h2>
                 <ul role="list" aria-label={`${group.events.length} eventi — ${group.label}`} className="mt-2">
-                  {group.events.map((event, i) => {
-                    const Icon = EVENT_ICON[event.type]
-                    return (
-                      <li
-                        key={i}
-                        className={cn('flex items-center gap-3 py-3', i > 0 && 'border-t border-border')}
-                      >
-                        <Icon
-                          className={cn('w-4 h-4 flex-shrink-0', event.overdue ? 'text-status-overdue' : 'text-neutral-400')}
-                          strokeWidth={1.8}
-                          aria-hidden="true"
-                        />
-                        <div className="flex-1 min-w-0 flex flex-wrap items-center gap-x-2 gap-y-1">
-                          <p className="text-sm font-medium text-neutral-900">
-                            {event.subject} — {event.action}
-                          </p>
-                          <TestBadge />
-                        </div>
-                        <span className="text-xs text-neutral-500 tabular-nums flex-shrink-0 whitespace-nowrap">
-                          {formatTime(event.at)}
-                        </span>
-                      </li>
-                    )
-                  })}
+                  {group.events.map((event, i) => (
+                    <ActivityTimelineRow
+                      key={i}
+                      icon={EVENT_ICON[event.type]}
+                      text={`${event.subject} — ${event.action}`}
+                      at={event.at}
+                      tone={event.overdue ? 'overdue' : undefined}
+                      divider={i > 0}
+                      trailing={<TestBadge />}
+                    />
+                  ))}
                 </ul>
               </section>
             ))}
