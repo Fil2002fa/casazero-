@@ -131,3 +131,44 @@ export interface Completion {
   notes: string | null
   created_at: string
 }
+
+/**
+ * Gli 8 tipi di evento del registro attività. Allineato uno a uno al CHECK su
+ * `event_type` in 037_activity_events.sql:37-54: aggiungere un valore qui senza
+ * una migrazione che allarghi il CHECK produce un errore a runtime, non a
+ * compilazione. `src/lib/activity-log.ts` lo ri-esporta per i chiamanti di
+ * scrittura, ma la fonte di verità è questa, accanto agli altri union del DB.
+ */
+export type ActivityEventType =
+  | 'sollecito_inviato'
+  | 'invito_inviato'
+  | 'invito_accettato'
+  | 'admin_assegnato'
+  | 'admin_rimosso'
+  | 'documento_caricato'
+  | 'documento_classificato'
+  | 'voce_archiviata'
+
+/**
+ * Riga del registro attività. Append-only: la 037 non ha policy UPDATE né
+ * DELETE per nessun ruolo.
+ *
+ * `payload` è JSONB e resta `unknown` per chiave: la sua forma varia per
+ * `event_type` e non è vincolata dal DB, quindi va letta in modo difensivo
+ * dalla superficie che la rende. `unit_id` NULL significa evento condominiale.
+ *
+ * Il client Supabase non porta i generics del Database, quindi questa
+ * interfaccia non è imposta dal compilatore sulla select: va applicata a mano
+ * al risultato.
+ */
+export interface ActivityEvent {
+  id: string
+  residence_id: string
+  unit_id: string | null
+  event_type: ActivityEventType
+  actor_id: string | null
+  actor_role: UserRole | null
+  actor_name: string | null
+  payload: Record<string, unknown>
+  created_at: string
+}

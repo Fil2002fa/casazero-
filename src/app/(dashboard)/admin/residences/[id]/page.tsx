@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import {
-  ChevronLeft, Wrench, Users, Settings, FileText, BookOpen, AlertTriangle,
+  ChevronLeft, Wrench, Users, Settings, FileText, BookOpen, AlertTriangle, Activity,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
@@ -271,6 +271,7 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
     { count: docCount },
     { count: supplierCount },
     { count: completionCount },
+    { count: eventCount },
     { data: adminRaw },
     { data: adminListRaw },
   ] = await Promise.all([
@@ -297,6 +298,9 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
     supabase.from('completions')
       .select('id', { count: 'exact', head: true })
       .eq('residence_id', id),
+    supabase.from('activity_events')
+      .select('id', { count: 'exact', head: true })
+      .eq('residence_id', id),
     supabase.from('admin_assignments')
       .select('profiles(id, full_name, phone)')
       .eq('residence_id', id)
@@ -321,6 +325,7 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
     { href: `/admin/residences/${id}/fascicolo`,    icon: BookOpen,  label: 'Fascicolo',      sub: completionCount ? `${completionCount} completamenti` : null },
     { href: `/admin/residences/${id}/documenti`,    icon: FileText,  label: 'Documenti',      sub: docCount ? `${docCount} file` : null },
     { href: `/admin/residences/${id}/fornitori`,    icon: Settings,  label: 'Fornitori',      sub: supplierCount ? `${supplierCount} fornitori` : null },
+    { href: `/admin/residences/${id}/attivita`,     icon: Activity,  label: 'Attività',       sub: eventCount ? pluralize(eventCount, 'evento', 'eventi') : null },
   ]
 
   return (
@@ -405,6 +410,7 @@ async function AdminResidenceView({ id, residence }: { id: string; residence: Re
     { count: docCount },
     { count: supplierCount },
     { count: completionCount },
+    { count: eventCount },
   ] = await Promise.all([
     supabase.from('units')
       .select('id, label, floor, unit_members!left(ended_at, is_primary, profiles(full_name))')
@@ -428,6 +434,9 @@ async function AdminResidenceView({ id, residence }: { id: string; residence: Re
     supabase.from('completions')
       .select('id', { count: 'exact', head: true })
       .eq('residence_id', id),
+    supabase.from('activity_events')
+      .select('id', { count: 'exact', head: true })
+      .eq('residence_id', id),
   ])
 
   const { unitRows } = buildUnitSummary(unitsRaw)
@@ -440,6 +449,7 @@ async function AdminResidenceView({ id, residence }: { id: string; residence: Re
     { href: `/admin/residences/${id}/fascicolo`,    icon: BookOpen, label: 'Fascicolo',    sub: completionCount ? `${completionCount} completamenti` : null },
     { href: `/admin/residences/${id}/documenti`,    icon: FileText, label: 'Documenti',    sub: docCount ? `${docCount} file` : null },
     { href: `/admin/residences/${id}/fornitori`,    icon: Settings, label: 'Fornitori',    sub: supplierCount ? `${supplierCount} fornitori` : null },
+    { href: `/admin/residences/${id}/attivita`,     icon: Activity, label: 'Attività',     sub: eventCount ? pluralize(eventCount, 'evento', 'eventi') : null },
   ]
 
   return (

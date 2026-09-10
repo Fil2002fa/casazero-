@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { UserRole } from '@/types/database'
+import type { ActivityEventType, UserRole } from '@/types/database'
 
 // Unico punto di scrittura del registro attività (tabella `activity_events`,
 // migrazione 037). La tabella è append-only: non esistono policy UPDATE o
@@ -14,20 +14,12 @@ import type { UserRole } from '@/types/database'
 // un parametro di input, da formData o da una query string.
 
 /**
- * Gli 8 tipi di evento ammessi. Elenco allineato uno a uno al CHECK su
- * `event_type` in 037_activity_events.sql:37-54: aggiungere un valore qui
- * senza una migrazione che allarghi il CHECK produce un errore a runtime,
- * non a compilazione.
+ * Ri-esportato per i chiamanti di scrittura, che importano tutto da qui. La
+ * dichiarazione vive in `src/types/database.ts` accanto agli altri union
+ * del DB, perché ora la stessa lista serve anche alla superficie di lettura:
+ * due copie sarebbero due fonti di verità sullo stesso CHECK.
  */
-export type ActivityEventType =
-  | 'sollecito_inviato'
-  | 'invito_inviato'
-  | 'invito_accettato'
-  | 'admin_assegnato'
-  | 'admin_rimosso'
-  | 'documento_caricato'
-  | 'documento_classificato'
-  | 'voce_archiviata'
+export type { ActivityEventType }
 
 /**
  * Valori ammessi dentro il payload: solo dati strutturati.
