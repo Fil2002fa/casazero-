@@ -4,10 +4,11 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/admin'
 import { resolveRecipientsForMode } from '@/lib/notification-recipients'
 import { sendEmail, emailSollecito } from '@/lib/notifications'
+import { logActivityEvent } from '@/lib/activity-log'
 import { OBLIGATION_LABELS } from '@/components/MaintenanceBadge'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import {
-  isOverdueLive, resolveCompletionMode, resolveObligationType,
+  isOverdueLive, resolveCompletionMode, resolveObligationType, todayISO,
   LIVE_STATUS_FIELDS, LIVE_STATUS_TEMPLATE_FIELDS,
   type LiveStatusItem,
 } from '@/lib/maintenance-status'
@@ -76,7 +77,7 @@ export async function sollecitaItem(itemId: string): Promise<SollecitoResult> {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, builder_id')
+    .select('role, builder_id, full_name')
     .eq('id', user.id)
     .single()
   if (!profile) return { status: 'forbidden' }
@@ -156,6 +157,11 @@ export async function sollecitaItem(itemId: string): Promise<SollecitoResult> {
   const cutoff = new Date(Date.now() - DEDUP_WINDOW_HOURS * 3600_000).toISOString()
   const outcome: SollecitoOutcome = { sent: 0, simulated: 0, failed: 0, withoutEmail: 0, skipped: 0 }
 
+  // Un id per email accettata dal provider, quindi potenzialmente più di uno:
+  // il sollecito è un atto solo ma i destinatari possono essere N. Raccoglie
+  // SOLO gli invii riusciti — un 'simulated' non ha id e un 'failed' nemmeno.
+  const messageIds: string[] = []
+
   for (const recipient of lookup.recipients) {
     const { count } = await svc
       .from('notifications')
@@ -177,9 +183,17 @@ export async function sollecitaItem(itemId: string): Promise<SollecitoResult> {
     } else {
       const res = await sendEmail({ to: recipient.email, subject, html })
       delivery = res.status === 'sent' ? 'sent' : res.status === 'simulated' ? 'simulated' : 'failed'
-      if (delivery === 'sent') outcome.sent++
-      else if (delivery === 'simulated') outcome.simulated++
-      else outcome.failed++
+      if (res.status === 'sent') {
+        outcome.sent++
+        // Narrowing su res.status e non su delivery: solo il ramo 'sent' di
+        // EmailResult espone l'id. Resta null quando Resend non lo restituisce
+        // (notifications.ts:52), e in quel caso non finisce nell'array.
+        if (res.id) messageIds.push(res.id)
+      } else if (delivery === 'simulated') {
+        outcome.simulated++
+      } else {
+        outcome.failed++
+      }
     }
 
     // Una riga per destinatario, mai un record cumulativo. status e sent_at
@@ -202,6 +216,69 @@ export async function sollecitaItem(itemId: string): Promise<SollecitoResult> {
       channel: 'email',
       status: sent ? 'sent' : 'failed',
       sent_at: sent ? new Date().toISOString() : null,
+    })
+  }
+
+  // Una riga per ATTO, non per destinatario, e per questo fuori dal loop: il
+  // dettaglio di consegna per-destinatario esiste già in `notifications`, che
+  // resta intatta come ledger di consegna. Il registro documenta che il
+  // sollecito è stato fatto, non com'è andata a ciascuno.
+  //
+  // Condizionata a sent > 0: se nessuna email è partita davvero — tutti
+  // skipped dall'anti-spam, tutti senza indirizzo, o tutti simulated in
+  // assenza di RESEND_API_KEY — non c'è nessun atto da registrare. Un registro
+  // che dice "inviato" quando non è partito nulla è peggio di nessun registro,
+  // e la tabella è append-only: la riga sbagliata non si toglie più.
+  if (outcome.sent > 0) {
+    // Giorni di ritardo calcolati qui e non in un helper condiviso: il valore
+    // serve a questa sola superficie, quindi la regola della fonte di verità
+    // unica non si applica. Stessa aritmetica di formatRelativeDue
+    // (maintenance-status.ts:201-206), con le due date normalizzate a
+    // mezzanotte per non contare un giorno di troppo per effetto dell'ora.
+    //
+    // Il ternario non è difensivo per abitudine: senza, un next_due_date null
+    // produrrebbe NaN, e NaN in una tabella immutabile è un dato sbagliato per
+    // sempre. Il ramo null non è raggiungibile qui — isOverdueLive a :129 ha
+    // già preteso next_due_date non null e minore di oggi, quindi il numero è
+    // sempre >= 1 — ma il costo di garantirlo è una riga.
+    const daysLate = item.next_due_date
+      ? Math.round(
+          (new Date(`${todayISO()}T00:00:00`).getTime() -
+            new Date(`${item.next_due_date}T00:00:00`).getTime()) / 86_400_000
+        )
+      : null
+
+    await logActivityEvent(svc, {
+      residenceId: item.residence_id,
+      // Valorizzato per le voci di unità, null per quelle condominiali: la
+      // distinzione è la nullabilità di unit_id, la stessa già usata a :148
+      // per decidere se l'email porta un'etichetta di unità.
+      unitId: item.unit_id,
+      eventType: 'sollecito_inviato',
+      // Attore dalla sessione, mai da input. Il service client bypassa le
+      // policy INSERT della 037, quindi l'antispoofing che quelle policy
+      // esprimono con actor_id = auth.uid() vive solo in questa riga.
+      actorId: user.id,
+      actorRole: profile.role,
+      // Letto lato server al momento dell'atto e congelato qui: il registro
+      // non deve cambiare di senso se la persona cambia nome dopo.
+      actorName: profile.full_name ?? null,
+      payload: {
+        item_id: itemId,
+        title,
+        completion_mode: mode,
+        days_late: daysLate,
+        // I cinque esiti di SollecitoOutcome per intero, non solo i riusciti:
+        // `sent` è anche il numero di destinatari raggiunti, e gli altri
+        // quattro dicono perché gli altri non lo sono stati. Senza di loro la
+        // riga non distingue "unico destinatario raggiunto" da "uno su sei".
+        sent: outcome.sent,
+        simulated: outcome.simulated,
+        failed: outcome.failed,
+        without_email: outcome.withoutEmail,
+        skipped: outcome.skipped,
+        message_ids: messageIds,
+      },
     })
   }
 
