@@ -198,8 +198,8 @@ export default async function AdminItemDetailPage({ params }: { params: Params }
           </div>
         )}
 
-        {/* Fornitore */}
-        {supplier && (
+        {/* Fornitore — dato interno del costruttore, mai all'amministratore */}
+        {supplier && profile.role === 'super_admin' && (
           <div className="bg-surface rounded-xl border border-border p-6 flex gap-3">
             <Wrench className="w-5 h-5 text-text-secondary flex-shrink-0 mt-0.5" strokeWidth={1.6} />
             <div className="flex-1">

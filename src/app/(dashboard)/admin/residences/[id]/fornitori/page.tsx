@@ -12,7 +12,7 @@ type Params = Promise<{ id: string }>
 
 export default async function FornitoriPage({ params }: { params: Params }) {
   const { id: residenceId } = await params
-  await requireRole(['admin', 'super_admin'])
+  await requireRole(['super_admin'], '/admin/manutenzioni')
   const supabase = await createClient()
 
   const { data: residence } = await supabase

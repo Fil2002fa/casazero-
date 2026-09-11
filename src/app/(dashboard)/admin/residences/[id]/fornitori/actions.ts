@@ -38,7 +38,7 @@ export async function createSupplier(
     .eq('id', user.id)
     .single()
 
-  if (!profile || !['admin', 'super_admin'].includes(profile.role)) {
+  if (!profile || profile.role !== 'super_admin') {
     return { error: 'Permessi insufficienti' }
   }
 
@@ -67,6 +67,16 @@ export async function deleteSupplier(
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Non autenticato' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile || profile.role !== 'super_admin') {
+    return { error: 'Permessi insufficienti' }
+  }
 
   const { error } = await supabase
     .from('suppliers')

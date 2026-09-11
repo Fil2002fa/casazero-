@@ -408,7 +408,6 @@ async function AdminResidenceView({ id, residence }: { id: string; residence: Re
     { data: unitsRaw },
     { data: itemsRaw },
     { count: docCount },
-    { count: supplierCount },
     { count: completionCount },
     { count: eventCount },
   ] = await Promise.all([
@@ -428,9 +427,6 @@ async function AdminResidenceView({ id, residence }: { id: string; residence: Re
     supabase.from('documents')
       .select('id', { count: 'exact', head: true })
       .eq('residence_id', id),
-    supabase.from('suppliers')
-      .select('id', { count: 'exact', head: true })
-      .eq('residence_id', id),
     supabase.from('completions')
       .select('id', { count: 'exact', head: true })
       .eq('residence_id', id),
@@ -444,11 +440,11 @@ async function AdminResidenceView({ id, residence }: { id: string; residence: Re
   const overdueCount = overdueItems.length
 
   // NON Unità: censimento e inviti restano al costruttore (decisione presa).
+  // NON Fornitori: dato interno del costruttore, mai all'amministratore.
   const porte: Porta[] = [
     { href: `/admin/residences/${id}/manutenzioni`, icon: Wrench,   label: 'Manutenzioni', ...manutenzioniSub(overdueCount) },
     { href: `/admin/residences/${id}/fascicolo`,    icon: BookOpen, label: 'Fascicolo',    sub: completionCount ? `${completionCount} completamenti` : null },
     { href: `/admin/residences/${id}/documenti`,    icon: FileText, label: 'Documenti',    sub: docCount ? `${docCount} file` : null },
-    { href: `/admin/residences/${id}/fornitori`,    icon: Settings, label: 'Fornitori',    sub: supplierCount ? `${supplierCount} fornitori` : null },
     { href: `/admin/residences/${id}/attivita`,     icon: Activity, label: 'Attività',     sub: eventCount ? pluralize(eventCount, 'evento', 'eventi') : null },
   ]
 

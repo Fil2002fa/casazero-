@@ -59,6 +59,15 @@ export default async function ResidenceManutenzioniPage({ params, searchParams }
       .order('name'),
   ])
 
+  // Fornitore: dato interno del costruttore, mai all'amministratore. La RLS
+  // (038) è la barriera reale; qui si spoglia anche lato applicativo per non
+  // far dipendere la UI dal solo embed silenziosamente vuoto.
+  const isSuperAdmin = profile.role === 'super_admin'
+  const visibleItems = isSuperAdmin
+    ? (rawItems ?? [])
+    : (rawItems ?? []).map(i => ({ ...i, suppliers: null }))
+  const visibleSuppliers = isSuperAdmin ? (suppliers ?? []) : []
+
   // Mappa unit_id → nome residente primary attivo (per colpo d'occhio nelle card)
   const unitIds = [...new Set(
     (rawItems ?? []).filter(i => i.unit_id != null).map(i => i.unit_id as string)
@@ -94,9 +103,9 @@ export default async function ResidenceManutenzioniPage({ params, searchParams }
       <ManutenzioniClient
         residenceId={residenceId}
         residenceName={residence.name}
-        items={(rawItems ?? []) as unknown as ItemRow[]}
+        items={visibleItems as unknown as ItemRow[]}
         completions={(rawCompletions ?? []) as unknown as CompletionRow[]}
-        suppliers={(suppliers ?? []) as { id: string; name: string }[]}
+        suppliers={visibleSuppliers as { id: string; name: string }[]}
         unitPrimaryNames={unitPrimaryNames}
         initialFilter={initialFilter}
         initialModeFilter={initialModeFilter}
