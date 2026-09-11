@@ -98,7 +98,7 @@ export function ItemConfigForm({
 
           {suppliers.length > 0 && (
             <div>
-              <label className="text-[10px] text-text-secondary block mb-0.5">Fornitore</label>
+              <label className="text-[10px] text-text-secondary block mb-0.5">Installato da</label>
               <select
                 value={supplierId}
                 onChange={e => setSupplierId(e.target.value)}

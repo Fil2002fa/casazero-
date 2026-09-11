@@ -203,7 +203,7 @@ export default async function AdminItemDetailPage({ params }: { params: Params }
           <div className="bg-surface rounded-xl border border-border p-6 flex gap-3">
             <Wrench className="w-5 h-5 text-text-secondary flex-shrink-0 mt-0.5" strokeWidth={1.6} />
             <div className="flex-1">
-              <p className="text-[13px] font-medium text-neutral-500 mb-1">Fornitore</p>
+              <p className="text-[13px] font-medium text-neutral-500 mb-1">Installato da</p>
               <p className="text-sm font-medium text-neutral-900">{supplier.name}</p>
               {supplier.phone && (
                 <a href={`tel:${supplier.phone}`} className="text-sm text-brand-medium mt-1 block">

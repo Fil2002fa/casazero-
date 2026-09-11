@@ -134,7 +134,7 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
           <div className="bg-surface rounded-xl border border-border p-4 flex gap-3">
             <Wrench className="w-5 h-5 text-text-secondary flex-shrink-0 mt-0.5" strokeWidth={1.6} />
             <div className="flex-1">
-              <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-1">Fornitore</p>
+              <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-1">Installato da</p>
               <p className="text-sm font-medium text-text-primary">{supplier.name}</p>
               {supplier.phone && (
                 <a href={`tel:${supplier.phone}`} className="flex items-center gap-1 text-sm text-brand-medium mt-1">
