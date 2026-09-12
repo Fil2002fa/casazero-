@@ -269,7 +269,8 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
     { data: unitsRaw },
     { data: itemsRaw },
     { count: docCount },
-    { count: supplierCount },
+    { data: suppliersByResidenceId },
+    { data: supplierInstallations },
     { count: completionCount },
     { count: eventCount },
     { data: adminRaw },
@@ -291,8 +292,15 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
     supabase.from('documents')
       .select('id', { count: 'exact', head: true })
       .eq('residence_id', id),
+    // Due fonti, unite (stesso bug/fix di residences/[id]/fornitori/page.tsx):
+    // residence_id è la residenza di prima creazione, non il collegamento
+    // vero. Non un head-count: serve l'insieme distinto dei due id-set per
+    // non contare due volte un fornitore che ricade in entrambe le fonti.
     supabase.from('suppliers')
-      .select('id', { count: 'exact', head: true })
+      .select('id')
+      .eq('residence_id', id),
+    supabase.from('supplier_installations')
+      .select('supplier_id')
       .eq('residence_id', id),
     // Fascicolo: conteggio senza filtro su activation_status (piano ≠ fascicolo).
     supabase.from('completions')
@@ -311,6 +319,11 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
   ])
 
   const { unitCount, unitsSenzaAccount, unitRows } = buildUnitSummary(unitsRaw)
+
+  const supplierIds = new Set<string>()
+  for (const s of suppliersByResidenceId ?? []) supplierIds.add(s.id)
+  for (const si of supplierInstallations ?? []) supplierIds.add(si.supplier_id)
+  const supplierCount = supplierIds.size
 
   const today = todayISO()
   const { overdueItems, upcomingItems } = summarizePlan(itemsRaw, today)
