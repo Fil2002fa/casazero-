@@ -24,9 +24,14 @@ type Supplier = {
   name: string
   phone: string | null
   email: string | null
-  // Scope 'residence': modello legacy, testo libero. Scope 'builder': asse
-  // sistema/residenza vive in supplier_installations (039), non qui.
+  // Scope 'residence': modello legacy, testo libero — resta in DB, non più
+  // scritto dal form di creazione (che ora scrive sistema).
   categories?: string[]
+  // Scope 'residence': sistemi collegati a QUESTA residenza via
+  // supplier_installations, sola lettura (la gestione dei collegamenti
+  // resta sulla pagina builder). Scope 'builder': vedi `installations`,
+  // che porta anche la residenza per il raggruppamento multi-residenza.
+  installedSystemsHere?: Sistema[]
   vatNumber?: string | null
   installations?: Installation[]
 }
@@ -393,6 +398,12 @@ export function FornitoriManager({
                             </span>
                           ))}
                         </div>
+                      )}
+                      {s.installedSystemsHere && s.installedSystemsHere.length > 0 && (
+                        <p className="flex items-center gap-1.5 text-xs text-text-secondary mt-2">
+                          <Wrench className="w-3 h-3" strokeWidth={1.6} />
+                          Realizzato qui: {s.installedSystemsHere.map(sys => SISTEMA_LABELS[sys]).join(', ')}
+                        </p>
                       )}
                     </>
                   ) : (
