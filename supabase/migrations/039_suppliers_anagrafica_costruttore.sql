@@ -321,23 +321,31 @@ SELECT
 
 -- ============================================================
 --
--- -- ESITO REALE (applicata da Filippo il __/__/2026) --
+-- -- ESITO REALE (applicata da Filippo il 12/09/2026) --
 --
 -- 0. Output della PRE-VERIFICA (valori di categories e mappatura):
+--    Non riportato nel footer da Filippo; l'esito dell'auto-verifica sotto
+--    (collegamenti_in_altro = 0) conferma comunque che nessuna categoria
+--    reale è caduta nel ramo 'altro'.
 --
 -- 1. Riga restituita dall'auto-verifica:
---    fornitori:                        (atteso 4)
---    fornitori_senza_builder:          (atteso 0)
---    fornitori_con_piva:               (atteso 0)
---    collegamenti:                     (atteso 7)
---    collegamenti_in_altro:            (atteso 0)
---    collegamenti_cross_builder:       (atteso 0)
---    policy_su_supplier_installations: (atteso 1)
+--    fornitori:                        5   (atteso 4 — vedi nota sotto)
+--    fornitori_senza_builder:          0   (atteso 0)
+--    fornitori_con_piva:               0   (atteso 0)
+--    collegamenti:                     8   (atteso 7 — vedi nota sotto)
+--    collegamenti_in_altro:            0   (atteso 0)
+--    collegamenti_cross_builder:       0   (atteso 0)
+--    policy_su_supplier_installations: 1   (atteso 1)
+--
+--    NOTA sullo scarto 5/8 invece di 4/7: un fornitore di prova creato da UI
+--    durante la verifica, non dal seed né dalla migrazione. Da cancellare a
+--    mano da Filippo; non è un esito della 039 e non richiede rollback.
 --
 -- 2. Dettaglio dei collegamenti creati (query di controllo, facoltativa):
 --    SELECT s.name, si.sistema, si.source
 --      FROM supplier_installations si JOIN suppliers s ON s.id = si.supplier_id
 --     ORDER BY s.name, si.sistema;
 --
--- CONCLUSIONE:
+-- CONCLUSIONE: applicata con esito conforme alle attese, a meno del
+-- fornitore di prova estraneo alla migrazione (vedi nota al punto 1).
 -- ============================================================
