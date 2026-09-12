@@ -33,6 +33,13 @@ type ClassificationMetadata = {
   unita_riferimento?: string | null
   skipped_reason?: string
   nota?: string
+  // Impresa installatrice, valorizzata da route.ts SOLO per
+  // dich_conformita_dm37 e azzerata per ogni altro doc_type. La P.IVA arriva
+  // qui già normalizzata a sole cifre; la ragione sociale no, e può essere
+  // stringa vuota. Restano parte del verbale: la conferma umana della
+  // proposta fornitore non li riscrive mai.
+  ragione_sociale_installatore?: string | null
+  partita_iva_installatore?: string | null
 }
 
 export type DocRow = {
