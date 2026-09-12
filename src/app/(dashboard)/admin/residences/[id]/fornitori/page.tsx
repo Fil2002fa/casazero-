@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
-import { FornitoriManager } from './FornitoriManager'
+import { FornitoriManager } from '@/components/FornitoriManager'
 
 export const metadata: Metadata = { title: 'Fornitori' }
 
@@ -42,7 +42,7 @@ export default async function FornitoriPage({ params }: { params: Params }) {
       </div>
 
       <FornitoriManager
-        residenceId={residenceId}
+        scope={{ kind: 'residence', residenceId }}
         suppliers={(suppliers ?? []) as { id: string; name: string; phone: string | null; email: string | null; categories: string[] }[]}
       />
     </>
