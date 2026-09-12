@@ -44,14 +44,19 @@ export default async function FornitoriBuilderPage() {
   const { data: installationsRaw } = supplierIds.length > 0
     ? await supabase
         .from('supplier_installations')
-        .select('supplier_id, sistema, residences(name)')
+        .select('id, supplier_id, residence_id, sistema, residences(name)')
         .in('supplier_id', supplierIds)
-    : { data: [] as { supplier_id: string; sistema: string; residences: unknown }[] }
+    : { data: [] as { id: string; supplier_id: string; residence_id: string; sistema: string; residences: unknown }[] }
 
-  const installationsBySupplier = new Map<string, { sistema: Sistema; residenceName: string }[]>()
+  const installationsBySupplier = new Map<string, { id: string; sistema: Sistema; residenceId: string; residenceName: string }[]>()
   for (const row of installationsRaw ?? []) {
     const list = installationsBySupplier.get(row.supplier_id) ?? []
-    list.push({ sistema: row.sistema as Sistema, residenceName: embeddedResidenceName(row.residences) })
+    list.push({
+      id: row.id,
+      sistema: row.sistema as Sistema,
+      residenceId: row.residence_id,
+      residenceName: embeddedResidenceName(row.residences),
+    })
     installationsBySupplier.set(row.supplier_id, list)
   }
 

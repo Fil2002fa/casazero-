@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Trash2, Pencil, Phone, Mail, Tag, Hash, Wrench } from 'lucide-react'
+import { Plus, Trash2, Pencil, Phone, Mail, Tag, Hash, Wrench, X } from 'lucide-react'
 import {
   createSupplier as createResidenceSupplier,
   deleteSupplier as deleteResidenceSupplier,
@@ -10,10 +10,14 @@ import {
 import {
   createSupplierForBuilder,
   updateSupplierAnagrafica,
+  addSupplierInstallation,
+  removeSupplierInstallation,
 } from '@/app/(dashboard)/admin/fornitori/actions'
 import { SISTEMI, SISTEMA_LABELS, type Sistema } from '@/lib/document-classification'
+import { pluralize } from '@/lib/pluralize'
 
-type Installation = { sistema: Sistema; residenceName: string }
+type Installation = { id: string; sistema: Sistema; residenceId: string; residenceName: string }
+type InstallationGroup = { residenceId: string; residenceName: string; installations: Installation[] }
 
 type Supplier = {
   id: string
@@ -52,6 +56,12 @@ export function FornitoriManager({
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editError, setEditError] = useState<string | null>(null)
+  const [installPending, startInstallTransition] = useTransition()
+  const [showInstallFormFor, setShowInstallFormFor] = useState<string | null>(null)
+  const [installError, setInstallError] = useState<string | null>(null)
+  const [removeInstallationPending, startRemoveInstallationTransition] = useTransition()
+  const [confirmRemoveInstallation, setConfirmRemoveInstallation] = useState<{ id: string; label: string } | null>(null)
+  const [removeInstallationError, setRemoveInstallationError] = useState<string | null>(null)
 
   function handleAdd(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -122,8 +132,73 @@ export function FornitoriManager({
     })
   }
 
-  function sortedInstallations(list: Installation[]): Installation[] {
-    return [...list].sort((a, b) => SISTEMI.indexOf(a.sistema) - SISTEMI.indexOf(b.sistema))
+  // Una riga per residenza (requisito: il nome dell'edificio non si ripete
+  // per ogni sistema). Gruppi ordinati per nome residenza, sistemi dentro
+  // ogni gruppo nell'ordine canonico di SISTEMI, non nell'ordine di arrivo.
+  function groupedInstallations(list: Installation[]): InstallationGroup[] {
+    const byResidence = new Map<string, InstallationGroup>()
+    for (const inst of list) {
+      const group = byResidence.get(inst.residenceId)
+        ?? { residenceId: inst.residenceId, residenceName: inst.residenceName, installations: [] }
+      group.installations.push(inst)
+      byResidence.set(inst.residenceId, group)
+    }
+    const groups = [...byResidence.values()]
+    for (const g of groups) {
+      g.installations.sort((a, b) => SISTEMI.indexOf(a.sistema) - SISTEMI.indexOf(b.sistema))
+    }
+    groups.sort((a, b) => a.residenceName.localeCompare(b.residenceName))
+    return groups
+  }
+
+  function openInstallForm(supplierId: string) {
+    setShowInstallFormFor(supplierId)
+    setInstallError(null)
+  }
+
+  function closeInstallForm() {
+    if (installPending) return
+    setShowInstallFormFor(null)
+    setInstallError(null)
+  }
+
+  function handleInstallSubmit(e: React.FormEvent<HTMLFormElement>, supplierId: string) {
+    e.preventDefault()
+    setInstallError(null)
+    const formData = new FormData(e.currentTarget)
+    const residenceId = (formData.get('residence_id') as string) ?? ''
+    const sistema = (formData.get('sistema') as string) ?? ''
+    startInstallTransition(async () => {
+      const res = await addSupplierInstallation(supplierId, residenceId, sistema)
+      if (res.error) setInstallError(res.error)
+      else {
+        setShowInstallFormFor(null)
+        router.refresh()
+      }
+    })
+  }
+
+  function openRemoveInstallation(id: string, label: string) {
+    setConfirmRemoveInstallation({ id, label })
+    setRemoveInstallationError(null)
+  }
+
+  function closeRemoveInstallation() {
+    if (removeInstallationPending) return
+    setConfirmRemoveInstallation(null)
+    setRemoveInstallationError(null)
+  }
+
+  function handleConfirmRemoveInstallation() {
+    if (!confirmRemoveInstallation) return
+    startRemoveInstallationTransition(async () => {
+      const res = await removeSupplierInstallation(confirmRemoveInstallation.id)
+      if (res.error) setRemoveInstallationError(res.error)
+      else {
+        setConfirmRemoveInstallation(null)
+        router.refresh()
+      }
+    })
   }
 
   return (
@@ -162,8 +237,42 @@ export function FornitoriManager({
         </div>
       )}
 
+      {/* Modale conferma rimozione collegamento — solo scope builder. Cancella
+          la riga di supplier_installations, mai il fornitore. */}
+      {scope.kind === 'builder' && confirmRemoveInstallation && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl border border-[#E4E6E2] p-5 max-w-sm w-full shadow-lg space-y-3">
+            <p className="text-sm font-medium text-[#20302A]">Rimuovere questo collegamento?</p>
+            <p className="text-xs text-text-secondary">{confirmRemoveInstallation.label}</p>
+            {removeInstallationError && (
+              <p className="text-xs text-semantic-red bg-semantic-red-bg rounded-lg px-3 py-2">
+                {removeInstallationError}
+              </p>
+            )}
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={closeRemoveInstallation}
+                disabled={removeInstallationPending}
+                className="flex-1 border border-[#E4E6E2] rounded-xl py-2.5 text-sm text-text-secondary disabled:opacity-50"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={handleConfirmRemoveInstallation}
+                disabled={removeInstallationPending}
+                className="flex-1 bg-[#04342C] text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-50"
+              >
+                {removeInstallationPending ? '…' : 'Rimuovi'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-text-primary">{suppliers.length} fornitore/i</p>
+        <p className="text-sm font-medium text-text-primary">
+          {scope.kind === 'builder' ? pluralize(suppliers.length, 'fornitore', 'fornitori') : `${suppliers.length} fornitore/i`}
+        </p>
         <button
           onClick={() => setShowForm(!showForm)}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-dark text-white rounded-lg text-xs font-medium"
@@ -256,29 +365,31 @@ export function FornitoriManager({
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-text-primary">{s.name}</p>
-                  {s.phone && (
-                    <a href={`tel:${s.phone}`} className="flex items-center gap-1.5 text-xs text-text-secondary mt-1.5">
-                      <Phone className="w-3 h-3" strokeWidth={1.6} />
-                      {s.phone}
-                    </a>
-                  )}
-                  {s.email && (
-                    <a href={`mailto:${s.email}`} className="flex items-center gap-1.5 text-xs text-text-secondary mt-1">
-                      <Mail className="w-3 h-3" strokeWidth={1.6} />
-                      {s.email}
-                    </a>
-                  )}
                   {scope.kind === 'residence' ? (
-                    s.categories && s.categories.length > 0 && (
-                      <div className="flex items-center gap-1 flex-wrap mt-2">
-                        <Tag className="w-3 h-3 text-text-secondary" strokeWidth={1.6} />
-                        {s.categories.map(c => (
-                          <span key={c} className="text-[10px] bg-brand-light text-brand-dark px-1.5 py-0.5 rounded-full">
-                            {c}
-                          </span>
-                        ))}
-                      </div>
-                    )
+                    <>
+                      {s.phone && (
+                        <a href={`tel:${s.phone}`} className="flex items-center gap-1.5 text-xs text-text-secondary mt-1.5">
+                          <Phone className="w-3 h-3" strokeWidth={1.6} />
+                          {s.phone}
+                        </a>
+                      )}
+                      {s.email && (
+                        <a href={`mailto:${s.email}`} className="flex items-center gap-1.5 text-xs text-text-secondary mt-1">
+                          <Mail className="w-3 h-3" strokeWidth={1.6} />
+                          {s.email}
+                        </a>
+                      )}
+                      {s.categories && s.categories.length > 0 && (
+                        <div className="flex items-center gap-1 flex-wrap mt-2">
+                          <Tag className="w-3 h-3 text-text-secondary" strokeWidth={1.6} />
+                          {s.categories.map(c => (
+                            <span key={c} className="text-[10px] bg-brand-light text-brand-dark px-1.5 py-0.5 rounded-full">
+                              {c}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </>
                   ) : (
                     <>
                       {s.vatNumber && (
@@ -287,19 +398,119 @@ export function FornitoriManager({
                           P.IVA {s.vatNumber}
                         </p>
                       )}
-                      {s.installations && s.installations.length > 0 && (
-                        <div className="mt-2 space-y-1">
-                          <p className="flex items-center gap-1.5 text-[10px] font-medium text-text-secondary uppercase tracking-wide">
-                            <Wrench className="w-3 h-3" strokeWidth={1.6} />
-                            Ha realizzato
-                          </p>
-                          {sortedInstallations(s.installations).map((inst, i) => (
-                            <p key={i} className="text-xs text-text-secondary pl-[18px]">
-                              {SISTEMA_LABELS[inst.sistema]} · {inst.residenceName}
-                            </p>
-                          ))}
+                      {(s.phone || s.email) && (
+                        <div className="flex items-center gap-3 flex-wrap text-xs text-text-secondary mt-1">
+                          {s.phone && (
+                            <a href={`tel:${s.phone}`} className="flex items-center gap-1.5">
+                              <Phone className="w-3 h-3" strokeWidth={1.6} />
+                              {s.phone}
+                            </a>
+                          )}
+                          {s.email && (
+                            <a href={`mailto:${s.email}`} className="flex items-center gap-1.5">
+                              <Mail className="w-3 h-3" strokeWidth={1.6} />
+                              {s.email}
+                            </a>
+                          )}
                         </div>
                       )}
+
+                      <div className="mt-2.5">
+                        <p className="flex items-center gap-1.5 text-[10px] font-medium text-text-secondary uppercase tracking-wide mb-1">
+                          <Wrench className="w-3 h-3" strokeWidth={1.6} />
+                          Lavori realizzati
+                        </p>
+
+                        {!s.installations || s.installations.length === 0 ? (
+                          <div className="bg-background rounded-lg px-3 py-2.5 space-y-1.5">
+                            <p className="text-xs text-text-secondary">
+                              Nessun lavoro collegato. Serve a sapere a chi girare un difetto.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => openInstallForm(s.id)}
+                              className="text-xs font-medium text-brand-dark"
+                            >
+                              + Collega un lavoro
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {groupedInstallations(s.installations).map(group => (
+                              <div key={group.residenceId} className="flex items-start gap-2 flex-wrap">
+                                <span className="text-xs text-text-primary shrink-0 mt-0.5">{group.residenceName}</span>
+                                <div className="flex items-center gap-1 flex-wrap">
+                                  {group.installations.map(inst => (
+                                    <span
+                                      key={inst.id}
+                                      className="inline-flex items-center gap-1 text-[10px] text-text-secondary bg-background border border-border px-1.5 py-0.5 rounded-full"
+                                    >
+                                      {SISTEMA_LABELS[inst.sistema]}
+                                      <button
+                                        type="button"
+                                        onClick={() => openRemoveInstallation(
+                                          inst.id,
+                                          `${SISTEMA_LABELS[inst.sistema]} · ${group.residenceName}`
+                                        )}
+                                        className="text-text-secondary hover:text-semantic-red"
+                                        title="Rimuovi collegamento"
+                                      >
+                                        <X className="w-2.5 h-2.5" strokeWidth={2} />
+                                      </button>
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => openInstallForm(s.id)}
+                              className="text-xs font-medium text-brand-dark"
+                            >
+                              + Collega un lavoro
+                            </button>
+                          </div>
+                        )}
+
+                        {showInstallFormFor === s.id && (
+                          <form
+                            onSubmit={e => handleInstallSubmit(e, s.id)}
+                            className="mt-2 bg-background border border-border rounded-lg p-3 space-y-2"
+                          >
+                            <select
+                              name="residence_id"
+                              required
+                              defaultValue=""
+                              className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
+                            >
+                              <option value="" disabled>Residenza…</option>
+                              {scope.residences.map(r => (
+                                <option key={r.id} value={r.id}>{r.name}</option>
+                              ))}
+                            </select>
+                            <select
+                              name="sistema"
+                              required
+                              defaultValue=""
+                              className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
+                            >
+                              <option value="" disabled>Sistema…</option>
+                              {SISTEMI.map(sys => (
+                                <option key={sys} value={sys}>{SISTEMA_LABELS[sys]}</option>
+                              ))}
+                            </select>
+                            {installError && <p className="text-xs text-semantic-red">{installError}</p>}
+                            <div className="flex gap-2">
+                              <button type="submit" disabled={installPending} className="flex-1 py-1.5 bg-brand-dark text-white rounded-lg text-xs disabled:opacity-50">
+                                {installPending ? '…' : 'Collega'}
+                              </button>
+                              <button type="button" onClick={closeInstallForm} className="px-3 py-1.5 border border-border rounded-lg text-xs text-text-secondary">
+                                Annulla
+                              </button>
+                            </div>
+                          </form>
+                        )}
+                      </div>
                     </>
                   )}
                 </div>

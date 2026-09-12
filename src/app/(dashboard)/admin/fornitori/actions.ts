@@ -2,17 +2,23 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { SISTEMI, type Sistema } from '@/lib/document-classification'
 
-// Messaggio utente per la violazione dell'indice unico parziale della 039
-// (builder_id, vat_number) WHERE vat_number IS NOT NULL. Non c'è un modo per
-// distinguere questo da un altro unique-violation via error.code (PostgREST
-// restituisce sempre 23505): si individua l'indice per nome dal messaggio,
-// stesso stile del controllo "foreign key" già in uso per deleteSupplier.
+// Messaggi utente per le violazioni di vincolo che il form può innescare
+// davvero (partita IVA duplicata sulla 039, collegamento duplicato sulla
+// 039). Non c'è modo di distinguerle da un altro unique-violation via
+// error.code (PostgREST restituisce sempre 23505 per entrambe): si
+// individua il vincolo per nome dal messaggio, stesso stile del controllo
+// "foreign key" già in uso per deleteSupplier.
 const VAT_UNIQUE_INDEX = 'idx_suppliers_builder_vat'
+const INSTALLATION_UNIQUE_CONSTRAINT = 'supplier_installations_unici'
 
 function friendlyError(message: string): string {
   if (message.includes(VAT_UNIQUE_INDEX)) {
     return 'Partita IVA già usata da un altro fornitore di questo costruttore.'
+  }
+  if (message.includes(INSTALLATION_UNIQUE_CONSTRAINT)) {
+    return 'Questo fornitore ha già un lavoro collegato per questo sistema in questa residenza.'
   }
   return message
 }
@@ -110,6 +116,83 @@ export async function updateSupplierAnagrafica(
     .eq('id', supplierId)
 
   if (error) return { error: friendlyError(error.message) }
+
+  revalidatePath('/admin/fornitori')
+  return { success: true }
+}
+
+// Collegamento manuale fornitore-residenza-sistema. source='manuale' e
+// source_document_id=NULL sono i default di colonna della 039: qui non c'è
+// nessun documento sorgente, un valore esplicito diverso è impossibile da
+// questo form. Il match verso i due membri della RLS (039: "supplier_
+// installations: super_admin gestisce") è delegato interamente al DB —
+// supplier_id e residence_id arrivano dal client (select popolate dalla
+// pagina), ma un valore fuori dal builder del chiamante fa fallire il
+// WITH CHECK, non serve un controllo applicativo aggiuntivo come per
+// suppliers.builder_id (qui non c'è una colonna builder_id da falsificare).
+export async function addSupplierInstallation(
+  supplierId: string,
+  residenceId: string,
+  sistema: string
+): Promise<{ error?: string; success?: boolean }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non autenticato' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile || profile.role !== 'super_admin') {
+    return { error: 'Permessi insufficienti' }
+  }
+
+  if (!supplierId || !residenceId) return { error: 'Residenza e sistema obbligatori' }
+  if (!SISTEMI.includes(sistema as Sistema)) return { error: 'Sistema non valido' }
+
+  const { error } = await supabase
+    .from('supplier_installations')
+    .insert({
+      supplier_id: supplierId,
+      residence_id: residenceId,
+      sistema,
+      source: 'manuale',
+    })
+
+  if (error) return { error: friendlyError(error.message) }
+
+  revalidatePath('/admin/fornitori')
+  return { success: true }
+}
+
+// Cancella solo la riga di collegamento, mai il fornitore: nessuna FK da
+// supplier_installations verso maintenance_items o completions, quindi non
+// serve un messaggio di "collegato altrove" come per deleteSupplier.
+export async function removeSupplierInstallation(
+  installationId: string
+): Promise<{ error?: string; success?: boolean }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non autenticato' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile || profile.role !== 'super_admin') {
+    return { error: 'Permessi insufficienti' }
+  }
+
+  const { error } = await supabase
+    .from('supplier_installations')
+    .delete()
+    .eq('id', installationId)
+
+  if (error) return { error: error.message }
 
   revalidatePath('/admin/fornitori')
   return { success: true }
