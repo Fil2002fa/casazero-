@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import { ManutenzioniClient } from './ManutenzioniClient'
 import type { ItemRow, CompletionRow, FilterState, AttentionModeFilter } from './ManutenzioniClient'
+import { normalizeEmbed } from '@/lib/postgrest-embed'
 
 export const metadata: Metadata = { title: 'Panoramica manutenzioni' }
 
@@ -35,7 +36,7 @@ export default async function ResidenceManutenzioniPage({ params, searchParams }
 
   if (!residence) notFound()
 
-  const [{ data: rawItems }, { data: rawCompletions }, { data: suppliers }] = await Promise.all([
+  const [{ data: rawItems }, { data: rawCompletions }, { data: byResidenceId }, { data: installedRows }] = await Promise.all([
     supabase
       .from('maintenance_items')
       .select(`
@@ -52,12 +53,27 @@ export default async function ResidenceManutenzioniPage({ params, searchParams }
       .select('id, completed_at, item_id, performed_by_name, notes, attachments(id, file_name, storage_path)')
       .eq('residence_id', residenceId)
       .order('completed_at', { ascending: false }),
+    // Due fonti, unite (stesso bug/fix di residences/[id]/fornitori/page.tsx):
+    // suppliers.residence_id è la residenza di prima creazione, non il
+    // collegamento vero. Un fornitore collegato qui da /admin/fornitori senza
+    // essere stato creato qui deve poter comparire in questo dropdown.
     supabase
       .from('suppliers')
       .select('id, name')
-      .eq('residence_id', residenceId)
-      .order('name'),
+      .eq('residence_id', residenceId),
+    supabase
+      .from('supplier_installations')
+      .select('suppliers(id, name)')
+      .eq('residence_id', residenceId),
   ])
+
+  const suppliersById = new Map<string, { id: string; name: string }>()
+  for (const s of byResidenceId ?? []) suppliersById.set(s.id, s)
+  for (const row of installedRows ?? []) {
+    const supplier = normalizeEmbed<{ id: string; name: string }>(row.suppliers)
+    if (supplier) suppliersById.set(supplier.id, supplier)
+  }
+  const suppliers = [...suppliersById.values()].sort((a, b) => a.name.localeCompare(b.name))
 
   // Fornitore: dato interno del costruttore, mai all'amministratore. La RLS
   // (038) è la barriera reale; qui si spoglia anche lato applicativo per non
@@ -66,7 +82,7 @@ export default async function ResidenceManutenzioniPage({ params, searchParams }
   const visibleItems = isSuperAdmin
     ? (rawItems ?? [])
     : (rawItems ?? []).map(i => ({ ...i, suppliers: null }))
-  const visibleSuppliers = isSuperAdmin ? (suppliers ?? []) : []
+  const visibleSuppliers = isSuperAdmin ? suppliers : []
 
   // Mappa unit_id → nome residente primary attivo (per colpo d'occhio nelle card)
   const unitIds = [...new Set(
