@@ -554,36 +554,46 @@ export function FornitoriManager({
               {scope.kind === 'builder' && editingId === s.id && (
                 <form
                   onSubmit={e => handleEditSubmit(e, s.id)}
-                  className="mt-3 pt-3 border-t border-border space-y-2"
+                  className="mt-3 pt-3 border-t border-border space-y-3"
                 >
-                  <input
-                    type="text"
-                    name="name"
-                    defaultValue={s.name}
-                    required
-                    className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
-                  />
-                  <input
-                    type="tel"
-                    name="phone"
-                    defaultValue={s.phone ?? ''}
-                    placeholder="Telefono"
-                    className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
-                  />
-                  <input
-                    type="email"
-                    name="email"
-                    defaultValue={s.email ?? ''}
-                    placeholder="Email"
-                    className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
-                  />
-                  <input
-                    type="text"
-                    name="vat_number"
-                    defaultValue={s.vatNumber ?? ''}
-                    placeholder="Partita IVA (facoltativa)"
-                    className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
-                  />
+                  <p className="text-sm font-medium text-text-primary">Modifica anagrafica</p>
+                  <div>
+                    <label className="text-xs text-text-secondary block mb-1">Nome *</label>
+                    <input
+                      type="text"
+                      name="name"
+                      defaultValue={s.name}
+                      required
+                      className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-text-secondary block mb-1">Telefono</label>
+                    <input
+                      type="tel"
+                      name="phone"
+                      defaultValue={s.phone ?? ''}
+                      className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-text-secondary block mb-1">Email</label>
+                    <input
+                      type="email"
+                      name="email"
+                      defaultValue={s.email ?? ''}
+                      className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-text-secondary block mb-1">Partita IVA — facoltativa</label>
+                    <input
+                      type="text"
+                      name="vat_number"
+                      defaultValue={s.vatNumber ?? ''}
+                      className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
+                    />
+                  </div>
                   {editError && <p className="text-xs text-semantic-red">{editError}</p>}
                   <div className="flex gap-2">
                     <button type="submit" disabled={editPending} className="flex-1 py-2 bg-brand-dark text-white rounded-lg text-sm disabled:opacity-50">
