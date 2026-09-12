@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "verify": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1",
-    "verify:features": "node --experimental-strip-types --no-warnings scripts/verify-residence-features.mjs"
+    "verify:features": "node --experimental-strip-types --no-warnings scripts/verify-residence-features.mjs",
+    "verify:sistemi": "node --experimental-strip-types --no-warnings scripts/verify-sistemi.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.4",

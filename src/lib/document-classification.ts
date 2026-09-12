@@ -101,6 +101,18 @@ export const CLASSIFICATION_CONFIDENCE_THRESHOLD = 0.8
 // tocca doc_type/category/path (nessuna migrazione). null quando il documento
 // non riguarda un impianto specifico o in caso di dubbio: mai indovinare, un
 // valore inventato genererebbe falsi "mancanti" in B4.
+//
+// Fonte unica anche per supplier_installations.sistema (039, blocco fornitori
+// v2): i 5 valori coperture/spurghi/finiture/sicurezza/accessi sono stati
+// aggiunti per quel blocco, non per la classificazione documenti — coprono
+// categorie reali di maintenance_templates.category e di suppliers.categories
+// che altrimenti cadrebbero tutte in 'altro' nel backfill dei fornitori.
+// Estendere questa costante estende automaticamente anche l'enum accettato
+// dal classificatore AI (route.ts:61 lo interpola in prompt), perché è la
+// stessa identica lista: un impianto è un impianto in entrambi i contesti.
+// Ogni modifica va rispecchiata nel CHECK di supplier_installations.sistema
+// (039_suppliers_anagrafica_costruttore.sql) — verificato da
+// scripts/verify-sistemi.mjs (npm run verify:sistemi).
 export type Sistema =
   | 'elettrico'
   | 'termico'
@@ -110,6 +122,11 @@ export type Sistema =
   | 'ascensore'
   | 'fotovoltaico'
   | 'vmc'
+  | 'coperture'
+  | 'spurghi'
+  | 'finiture'
+  | 'sicurezza'
+  | 'accessi'
   | 'altro'
 
 export const SISTEMI: Sistema[] = [
@@ -121,6 +138,11 @@ export const SISTEMI: Sistema[] = [
   'ascensore',
   'fotovoltaico',
   'vmc',
+  'coperture',
+  'spurghi',
+  'finiture',
+  'sicurezza',
+  'accessi',
   'altro',
 ]
 
@@ -133,6 +155,11 @@ export const SISTEMA_LABELS: Record<Sistema, string> = {
   ascensore:        'Ascensore',
   fotovoltaico:     'Impianto fotovoltaico',
   vmc:              'VMC (ventilazione meccanica)',
+  coperture:        'Coperture e tetto',
+  spurghi:          'Scarichi e spurghi',
+  finiture:         'Finiture e serramenti',
+  sicurezza:        'Sicurezza in copertura',
+  accessi:          'Accessi ed esterni',
   altro:            'Altro impianto',
 }
 
