@@ -171,3 +171,21 @@ export type ClassificationStatus =
   | 'completata'
   | 'da_revisionare'
   | 'fallita'
+
+// Normalizza una partita IVA estratta da una dichiarazione di conformità a
+// soli caratteri numerici: nessuno spazio, punto, trattino o prefisso "IT".
+// Fonte unica per due usi che devono vedere lo stesso valore per lo stesso
+// numero — la classificazione (route.ts, questo commit) e il match verso
+// suppliers.vat_number (commit "proposta fornitore"): "IT 01234567891" e
+// "01234567891" sono la stessa partita IVA solo se qualcosa li normalizza
+// allo stesso modo prima del confronto. Presuppone partita IVA italiana
+// (solo cifre): il dominio è documenti DM 37/08 italiani, mai P.IVA estere
+// alfanumeriche.
+// null → null. Stringa che dopo la normalizzazione non contiene cifre
+// (es. l'AI ha scritto "non indicata") → null, non stringa vuota: uno "" in
+// vat_number violerebbe suppliers_vat_number_non_vuota (039) se mai scritto lì.
+export function normalizeVatNumber(raw: string | null): string | null {
+  if (raw === null) return null
+  const digits = raw.replace(/\D/g, '')
+  return digits.length > 0 ? digits : null
+}

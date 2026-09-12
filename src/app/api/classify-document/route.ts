@@ -8,6 +8,7 @@ import {
   CLASSIFICATION_CONFIDENCE_THRESHOLD,
   SISTEMI,
   SISTEMA_LABELS,
+  normalizeVatNumber,
   type DocType,
   type Sistema,
 } from '@/lib/document-classification'
@@ -42,8 +43,22 @@ const CLASSIFICATION_SCHEMA = {
     confidence: { type: 'number' },
     unita_riferimento: { anyOf: [{ type: 'string' }, { type: 'null' }] },
     motivazione: { type: 'string' },
+    // Impresa installatrice — SOLO per doc_type = dich_conformita_dm37 (blocco
+    // fornitori v2, commit "proposta dalle DiCo"). Per ogni altro doc_type il
+    // prompt istruisce il modello a usare null; il codice lo impone comunque
+    // (vedi dopo isValidClassificationResult), perché qui un errore non è
+    // innocuo come per "sistema": un'impresa "agganciata" a un documento che
+    // non è una DiCo alimenterebbe una proposta di fornitore falsa nel
+    // commit (e). additionalProperties:false + required rende questi due
+    // campi obbligatori nella risposta (nullable, non assenti): lo schema
+    // non lascia al modello la scelta di ometterli.
+    ragione_sociale_installatore: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+    partita_iva_installatore: { anyOf: [{ type: 'string' }, { type: 'null' }] },
   },
-  required: ['doc_type', 'sistema', 'confidence', 'unita_riferimento', 'motivazione'],
+  required: [
+    'doc_type', 'sistema', 'confidence', 'unita_riferimento', 'motivazione',
+    'ragione_sociale_installatore', 'partita_iva_installatore',
+  ],
   additionalProperties: false,
 }
 
@@ -63,6 +78,8 @@ Usa un valore specifico solo se l'impianto è chiaramente identificabile dal doc
 
 Se il documento cita esplicitamente un'unità immobiliare specifica (es. numero interno, scala, piano) riportalo in unita_riferimento; se il documento riguarda l'intero condominio o non cita un'unità specifica, usa null.
 
+Se doc_type è "dich_conformita_dm37", estrai anche l'impresa installatrice che ha eseguito i lavori: ragione_sociale_installatore (la denominazione dell'impresa esattamente come riportata nel documento) e partita_iva_installatore (solo cifre o testo così come appare, non serve che tu lo formatti: la normalizzazione avviene dopo). Se il documento cita più imprese senza indicare chiaramente quale ha installato l'impianto, o non riporta l'impresa, usa null per entrambi — non indovinare. Per QUALSIASI doc_type diverso da "dich_conformita_dm37", ragione_sociale_installatore e partita_iva_installatore devono essere sempre null.
+
 Assegna un valore di confidence tra 0 e 1 che rifletta quanto sei sicuro della classificazione: valori bassi per documenti ambigui, di scarsa qualità, o dove il contenuto non corrisponde chiaramente a nessuna categoria specifica.
 
 Rispondi SOLO con l'oggetto JSON richiesto dallo schema, nessun altro testo.`
@@ -73,6 +90,8 @@ type ClassificationResult = {
   confidence: number
   unita_riferimento: string | null
   motivazione: string
+  ragione_sociale_installatore: string | null
+  partita_iva_installatore: string | null
 }
 
 // Discriminante servizio-vs-documento (vedi catch sotto): chiave assente/vuota
@@ -99,6 +118,8 @@ function isValidClassificationResult(value: unknown): value is ClassificationRes
   if (typeof v.confidence !== 'number' || Number.isNaN(v.confidence) || v.confidence < 0 || v.confidence > 1) return false
   if (v.unita_riferimento !== null && typeof v.unita_riferimento !== 'string') return false
   if (typeof v.motivazione !== 'string') return false
+  if (v.ragione_sociale_installatore !== null && typeof v.ragione_sociale_installatore !== 'string') return false
+  if (v.partita_iva_installatore !== null && typeof v.partita_iva_installatore !== 'string') return false
   return true
 }
 
@@ -266,6 +287,24 @@ export async function POST(req: NextRequest) {
 
     const finalStatus = parsed.confidence >= CLASSIFICATION_CONFIDENCE_THRESHOLD ? 'completata' : 'da_revisionare'
 
+    // Impresa installatrice: imposta a null per ogni doc_type diverso da
+    // dich_conformita_dm37, indipendentemente da cosa ha risposto il modello.
+    // Il prompt già lo chiede, ma qui è imposto anche in codice — a differenza
+    // di `sistema`, un valore che sfugge alla regola non resterebbe un'etichetta
+    // sbagliata: alimenterebbe una proposta di fornitore falsa nel commit (e).
+    // Partita IVA normalizzata PRIMA di scrivere extracted_metadata: è la
+    // chiave di match di quel commit, e "IT 01234567891" vs "01234567891"
+    // fallirebbe il match pur essendo lo stesso numero. La normalizzazione
+    // non riscrive extracted_metadata dopo il fatto (il verbale resta
+    // write-once): sostituisce solo cosa entra nel verbale al momento della
+    // prima scrittura.
+    const isDichiarazioneConformita = parsed.doc_type === 'dich_conformita_dm37'
+    const extractedMetadata: ClassificationResult = {
+      ...parsed,
+      ragione_sociale_installatore: isDichiarazioneConformita ? parsed.ragione_sociale_installatore : null,
+      partita_iva_installatore: isDichiarazioneConformita ? normalizeVatNumber(parsed.partita_iva_installatore) : null,
+    }
+
     await admin.from('documents').update({
       classification_status: finalStatus,
       doc_type: parsed.doc_type,
@@ -274,7 +313,7 @@ export async function POST(req: NextRequest) {
       // resta il verbale della proposta. null = nessun impianto specifico.
       sistema: parsed.sistema,
       classification_confidence: parsed.confidence,
-      extracted_metadata: parsed,
+      extracted_metadata: extractedMetadata,
     }).eq('id', documentId)
 
     return NextResponse.json({
