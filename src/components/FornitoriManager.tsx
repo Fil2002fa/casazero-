@@ -306,13 +306,18 @@ export function FornitoriManager({
           />
           {scope.kind === 'residence' ? (
             <div>
-              <label className="text-xs text-text-secondary block mb-1">Categorie (virgola separata)</label>
-              <input
-                type="text"
-                name="categories"
-                placeholder="es. Termico, Elettrico, Fotovoltaico"
+              <label className="text-xs text-text-secondary block mb-1">Sistema *</label>
+              <select
+                name="sistema"
+                required
+                defaultValue=""
                 className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
-              />
+              >
+                <option value="" disabled>Seleziona…</option>
+                {SISTEMI.map(sys => (
+                  <option key={sys} value={sys}>{SISTEMA_LABELS[sys]}</option>
+                ))}
+              </select>
             </div>
           ) : (
             <>

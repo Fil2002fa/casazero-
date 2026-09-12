@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import type { CompletionMode, ObligationType } from '@/types/database'
+import { SISTEMI, type Sistema } from '@/lib/document-classification'
 
 function modeToPriority(mode: CompletionMode | null): string | null {
   if (mode === null) return null
@@ -24,6 +25,24 @@ function priorityToMode(priority: string | null): CompletionMode | null {
   return map[priority] ?? null
 }
 
+// Crea il fornitore E la riga "ha realizzato" nella stessa azione: la select
+// del sistema sostituisce l'input categories, quindi ha già il dato per
+// scrivere subito supplier_installations. Senza questo, un fornitore creato
+// da qui non avrebbe alcun collegamento (il problema diagnosticato per i
+// fornitori pre-esistenti si ripresenterebbe su ogni dato nuovo).
+//
+// builder_id: bug pre-esistente scoperto qui, non introdotto da questo
+// commit — dopo la 039 la colonna è NOT NULL, ma questa INSERT non l'ha mai
+// valorizzata. Da quando la 039 è stata applicata, questa azione falliva
+// sempre con una violazione NOT NULL, mai osservata perché ogni test post-039
+// ha creato fornitori solo dalla pagina builder. Corretto qui perché è la
+// stessa riga di INSERT che si sta comunque toccando per il sistema.
+//
+// Non transazionale: supabase-js su REST non espone una transazione
+// multi-statement. Se il secondo INSERT fallisce, il fornitore resta creato
+// senza collegamento — uno stato incompleto ma mai corrotto (nessun record
+// a metà, nessun dato inconsistente): riappare in "Nessun lavoro collegato"
+// e si può ricollegare a mano dalla pagina builder.
 export async function createSupplier(
   residenceId: string,
   formData: FormData
@@ -34,27 +53,36 @@ export async function createSupplier(
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, builder_id')
     .eq('id', user.id)
     .single()
 
   if (!profile || profile.role !== 'super_admin') {
     return { error: 'Permessi insufficienti' }
   }
+  if (!profile.builder_id) return { error: 'Nessun builder associato al tuo account' }
 
-  const name  = (formData.get('name') as string)?.trim()
-  const phone = (formData.get('phone') as string)?.trim() || null
-  const email = (formData.get('email') as string)?.trim() || null
-  const categoriesRaw = (formData.get('categories') as string)?.trim() || ''
-  const categories = categoriesRaw.split(',').map(c => c.trim()).filter(Boolean)
+  const name    = (formData.get('name') as string)?.trim()
+  const phone   = (formData.get('phone') as string)?.trim() || null
+  const email   = (formData.get('email') as string)?.trim() || null
+  const sistema = (formData.get('sistema') as string) ?? ''
 
   if (!name) return { error: 'Nome fornitore obbligatorio' }
+  if (!SISTEMI.includes(sistema as Sistema)) return { error: 'Sistema non valido' }
 
-  const { error } = await supabase
+  const { data: inserted, error } = await supabase
     .from('suppliers')
-    .insert({ residence_id: residenceId, name, phone, email, categories })
+    .insert({ residence_id: residenceId, builder_id: profile.builder_id, name, phone, email })
+    .select('id')
+    .single()
 
   if (error) return { error: error.message }
+
+  const { error: installError } = await supabase
+    .from('supplier_installations')
+    .insert({ supplier_id: inserted.id, residence_id: residenceId, sistema, source: 'manuale' })
+
+  if (installError) return { error: installError.message }
 
   revalidatePath(`/admin/residences/${residenceId}/fornitori`)
   return { success: true }
