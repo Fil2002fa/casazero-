@@ -27,7 +27,6 @@ type ResidenceDetail = {
   id: string
   name: string
   overdueCount: number
-  supplierCount: number
   unitCount: number
   status: 'red' | 'amber' | 'green'
   overdueItems: OverdueItem[]
@@ -96,16 +95,7 @@ export default async function AdminDetailPage({ params }: { params: Params }) {
     .order('next_due_date', { ascending: true })
   const allOverdue = overdueLive((overdueRaw ?? []) as unknown as OverdueRaw[], today)
 
-  // Fornitori e unità per residenza
-  const { data: suppliers } = await svc
-    .from('suppliers')
-    .select('residence_id')
-    .in('residence_id', residenceIds)
-  const suppliersByRes: Record<string, number> = {}
-  for (const s of suppliers ?? []) {
-    suppliersByRes[s.residence_id] = (suppliersByRes[s.residence_id] ?? 0) + 1
-  }
-
+  // Unità per residenza
   const { data: units } = await svc
     .from('units')
     .select('residence_id')
@@ -120,17 +110,15 @@ export default async function AdminDetailPage({ params }: { params: Params }) {
     const residence = (residences ?? []).find(r => r.id === rid)
     const resOverdue = allOverdue.filter(item => item.residence_id === rid)
     const overdueCount = resOverdue.length
-    const supplierCount = suppliersByRes[rid] ?? 0
     const unitCount = unitsByRes[rid] ?? 0
     const status: ResidenceDetail['status'] =
       overdueCount > 0 ? 'red' :
-      supplierCount === 0 || unitCount === 0 ? 'amber' : 'green'
+      unitCount === 0 ? 'amber' : 'green'
 
     return {
       id: rid,
       name: residence?.name ?? '—',
       overdueCount,
-      supplierCount,
       unitCount,
       status,
       overdueItems: resOverdue.map(item => ({
@@ -295,13 +283,7 @@ function ResidenceCard({ residence }: { residence: ResidenceDetail }) {
         <div className="px-4 pb-3 border-t border-[#E4E6E2]">
           <div className="flex items-start gap-2 mt-2">
             <AlertTriangle className="w-3.5 h-3.5 text-[#854F0B] flex-shrink-0 mt-0.5" strokeWidth={1.6} />
-            <p className="text-xs text-[#854F0B]">
-              {residence.supplierCount === 0 && residence.unitCount === 0
-                ? 'Nessun fornitore · nessuna unità configurata'
-                : residence.supplierCount === 0
-                ? 'Nessun fornitore configurato'
-                : 'Nessuna unità configurata'}
-            </p>
+            <p className="text-xs text-[#854F0B]">Nessuna unità configurata</p>
           </div>
         </div>
       )}

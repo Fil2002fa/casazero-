@@ -17,7 +17,6 @@ export type ResidenceStatus = {
   id: string
   name: string
   overdueCount: number
-  supplierCount: number
   unitCount: number
   status: 'red' | 'amber' | 'green'
 }
@@ -73,15 +72,6 @@ async function loadAdmins(builderId: string): Promise<AdminSummary[]> {
     overdueByResidence[item.residence_id] = (overdueByResidence[item.residence_id] ?? 0) + 1
   }
 
-  const { data: suppliers } = await svc
-    .from('suppliers')
-    .select('residence_id')
-    .in('residence_id', residenceIds)
-  const suppliersByResidence: Record<string, number> = {}
-  for (const s of suppliers ?? []) {
-    suppliersByResidence[s.residence_id] = (suppliersByResidence[s.residence_id] ?? 0) + 1
-  }
-
   const { data: units } = await svc
     .from('units')
     .select('residence_id')
@@ -107,12 +97,11 @@ async function loadAdmins(builderId: string): Promise<AdminSummary[]> {
       .map(a => {
         const residence = (residences ?? []).find(r => r.id === a.residence_id)
         const overdueCount = overdueByResidence[a.residence_id] ?? 0
-        const supplierCount = suppliersByResidence[a.residence_id] ?? 0
         const unitCount = unitsByResidence[a.residence_id] ?? 0
         const status: ResidenceStatus['status'] =
           overdueCount > 0 ? 'red' :
-          supplierCount === 0 || unitCount === 0 ? 'amber' : 'green'
-        return { id: a.residence_id, name: residence?.name ?? '—', overdueCount, supplierCount, unitCount, status }
+          unitCount === 0 ? 'amber' : 'green'
+        return { id: a.residence_id, name: residence?.name ?? '—', overdueCount, unitCount, status }
       })
 
     const worstStatus: AdminSummary['worstStatus'] = residenceStatuses.reduce(
@@ -217,10 +206,7 @@ function AttentionCard({ admin }: { admin: AdminSummary }) {
     if (r.status === 'red') {
       issueLines.push(`${r.overdueCount} scadut${r.overdueCount === 1 ? 'a' : 'e'} · ${r.name}`)
     } else if (r.status === 'amber') {
-      const gaps: string[] = []
-      if (r.supplierCount === 0) gaps.push('nessun fornitore')
-      if (r.unitCount === 0) gaps.push('nessuna unità')
-      issueLines.push(`${gaps.join(', ')} · ${r.name}`)
+      issueLines.push(`nessuna unità · ${r.name}`)
     }
   }
 
