@@ -50,7 +50,7 @@ export default async function FornitoriPage({ params }: { params: Params }) {
       .eq('residence_id', residenceId),
     supabase
       .from('supplier_installations')
-      .select('sistema, suppliers(id, name, phone, email)')
+      .select('sistema, source, suppliers(id, name, phone, email)')
       .eq('residence_id', residenceId),
   ])
 
@@ -58,6 +58,11 @@ export default async function FornitoriPage({ params }: { params: Params }) {
   for (const s of byResidenceId ?? []) suppliersById.set(s.id, s)
 
   const installedSystemsBySupplier = new Map<string, Sistema[]>()
+  // Fornitori con almeno un collegamento QUI nato da una dichiarazione di
+  // conformità confermata (source = 'documento', scritto solo da
+  // confirmSupplierProposal). "Almeno uno", non "tutti": un fornitore può
+  // avere su questa residenza un lavoro inserito a mano e uno da DiCo.
+  const addedFromDocumentHere = new Set<string>()
   for (const row of installationRows ?? []) {
     const supplier = normalizeEmbed<SupplierRow>(row.suppliers)
     if (!supplier) continue
@@ -65,6 +70,7 @@ export default async function FornitoriPage({ params }: { params: Params }) {
     const list = installedSystemsBySupplier.get(supplier.id) ?? []
     list.push(row.sistema as Sistema)
     installedSystemsBySupplier.set(supplier.id, list)
+    if (row.source === 'documento') addedFromDocumentHere.add(supplier.id)
   }
 
   // Un solo array alimenta sia il contatore sia la lista dentro
@@ -78,6 +84,7 @@ export default async function FornitoriPage({ params }: { params: Params }) {
       phone: s.phone,
       email: s.email,
       installedSystemsHere: installedSystemsBySupplier.get(s.id) ?? [],
+      addedFromDocumentHere: addedFromDocumentHere.has(s.id),
     }))
 
   return (

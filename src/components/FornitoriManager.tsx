@@ -29,6 +29,10 @@ type Supplier = {
   // resta sulla pagina builder). Scope 'builder': vedi `installations`,
   // che porta anche la residenza per il raggruppamento multi-residenza.
   installedSystemsHere?: Sistema[]
+  // Scope 'residence': almeno uno dei collegamenti qui ha source =
+  // 'documento'. Sempre sottoinsieme di installedSystemsHere non vuoto: la
+  // riga che lo dichiara sta sotto i lavori e non ha senso senza.
+  addedFromDocumentHere?: boolean
   vatNumber?: string | null
   installations?: Installation[]
 }
@@ -397,6 +401,12 @@ export function FornitoriManager({
                         <p className="flex items-center gap-1.5 text-xs text-text-secondary mt-2">
                           <Wrench className="w-3 h-3" strokeWidth={1.6} />
                           Lavori in questa residenza: {s.installedSystemsHere.map(sys => SISTEMA_LABELS[sys]).join(', ')}
+                        </p>
+                      )}
+                      {/* ml allinea il testo a quello dei lavori, dopo icona (w-3) e gap-1.5. */}
+                      {s.addedFromDocumentHere && (
+                        <p className="text-[10px] text-text-secondary mt-0.5 ml-[18px]">
+                          Aggiunto dalla dichiarazione di conformità.
                         </p>
                       )}
                     </>
