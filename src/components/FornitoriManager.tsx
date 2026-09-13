@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Trash2, Pencil, Phone, Mail, Tag, Hash, Wrench, X } from 'lucide-react'
+import { Plus, Trash2, Pencil, Phone, Mail, Hash, Wrench, X } from 'lucide-react'
 import {
   createSupplier as createResidenceSupplier,
   deleteSupplier as deleteResidenceSupplier,
@@ -24,9 +24,6 @@ type Supplier = {
   name: string
   phone: string | null
   email: string | null
-  // Scope 'residence': modello legacy, testo libero — resta in DB, non più
-  // scritto dal form di creazione (che ora scrive sistema).
-  categories?: string[]
   // Scope 'residence': sistemi collegati a QUESTA residenza via
   // supplier_installations, sola lettura (la gestione dei collegamenti
   // resta sulla pagina builder). Scope 'builder': vedi `installations`,
@@ -388,16 +385,6 @@ export function FornitoriManager({
                           <Mail className="w-3 h-3" strokeWidth={1.6} />
                           {s.email}
                         </a>
-                      )}
-                      {s.categories && s.categories.length > 0 && (
-                        <div className="flex items-center gap-1 flex-wrap mt-2">
-                          <Tag className="w-3 h-3 text-text-secondary" strokeWidth={1.6} />
-                          {s.categories.map(c => (
-                            <span key={c} className="text-[10px] bg-brand-light text-brand-dark px-1.5 py-0.5 rounded-full">
-                              {c}
-                            </span>
-                          ))}
-                        </div>
                       )}
                       {s.installedSystemsHere && s.installedSystemsHere.length > 0 && (
                         <p className="flex items-center gap-1.5 text-xs text-text-secondary mt-2">
