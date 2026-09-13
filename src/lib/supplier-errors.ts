@@ -11,8 +11,15 @@
 const VAT_UNIQUE_INDEX = 'idx_suppliers_builder_vat'
 const INSTALLATION_UNIQUE_CONSTRAINT = 'supplier_installations_unici'
 
+// Esportata a parte perché la conferma della proposta dalle DiCo non si limita
+// a tradurre questa violazione: la usa per decidere di abortire (la P.IVA del
+// documento è di un altro fornitore → il match per nome era sbagliato).
+export function isVatUniqueViolation(message: string): boolean {
+  return message.includes(VAT_UNIQUE_INDEX)
+}
+
 export function friendlySupplierError(message: string): string {
-  if (message.includes(VAT_UNIQUE_INDEX)) {
+  if (isVatUniqueViolation(message)) {
     return 'Partita IVA già usata da un altro fornitore di questo costruttore.'
   }
   if (message.includes(INSTALLATION_UNIQUE_CONSTRAINT)) {

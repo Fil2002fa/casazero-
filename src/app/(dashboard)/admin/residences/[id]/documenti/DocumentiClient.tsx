@@ -15,6 +15,7 @@ import {
   SISTEMI,
   SISTEMA_LABELS,
   buildSupplierProposal,
+  supplierVatNumberToWrite,
   type DocType,
   type Sistema,
   type ClassificationStatus,
@@ -1388,11 +1389,12 @@ function SupplierProposalSection({ doc, context }: { doc: DocRow; context: Suppl
   // L'esito LETTO, spedito solo perché il server possa rifiutare se il suo
   // ricalcolo diverge. null sugli esiti che non si confermano (già collegato,
   // sistema mancante): lì il bottone non esiste.
+  const vatNumber = supplierVatNumberToWrite(proposal)
   const expected: SupplierProposalExpectation | null =
     proposal.kind === 'per_piva' || proposal.kind === 'simile_per_nome'
-      ? { kind: proposal.kind, sistema: proposal.sistema, supplierId: proposal.supplier.id }
+      ? { kind: proposal.kind, sistema: proposal.sistema, supplierId: proposal.supplier.id, vatNumber }
       : proposal.kind === 'nessun_match'
-        ? { kind: proposal.kind, sistema: proposal.sistema, supplierId: null }
+        ? { kind: proposal.kind, sistema: proposal.sistema, supplierId: null, vatNumber }
         : null
 
   async function handleConfirm(exp: SupplierProposalExpectation) {
@@ -1483,6 +1485,20 @@ function SupplierProposalBody({ proposal, residenceName }: {
               ? `Nome simile a «${proposal.ragioneSociale}» indicato nella dichiarazione, ma la partita IVA ${proposal.partitaIva} non è in anagrafica. Verifica che sia la stessa impresa.`
               : `Nome simile a «${proposal.ragioneSociale}» indicato nella dichiarazione, che non riporta una partita IVA leggibile. Verifica che sia la stessa impresa.`}
           </p>
+          {supplierVatNumberToWrite(proposal) !== null && (
+            <p className="text-xs text-text-secondary">
+              Alla conferma la partita IVA {proposal.partitaIva} verrà registrata su {proposal.supplier.name}.
+            </p>
+          )}
+          {/* Mai sovrascrivere: una P.IVA già in anagrafica non coincide per
+              forza con quella del documento (altrimenti l'esito sarebbe "per
+              P.IVA"), ed è un indizio contro il match per nome. */}
+          {proposal.partitaIva !== null && proposal.supplier.vat_number !== null && (
+            <p className="text-xs text-semantic-amber">
+              {proposal.supplier.name} ha già la partita IVA {proposal.supplier.vat_number}, diversa da quella
+              della dichiarazione: non verrà modificata. Verifica che sia la stessa impresa.
+            </p>
+          )}
           {proposal.altriOmonimi > 0 && (
             <p className="text-xs text-semantic-amber">
               Stesso nome anche per {pluralize(proposal.altriOmonimi, 'altro fornitore', 'altri fornitori')} in

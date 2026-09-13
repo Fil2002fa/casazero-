@@ -8,12 +8,13 @@ import {
   DOC_TYPES,
   SISTEMI,
   buildSupplierProposal,
+  supplierVatNumberToWrite,
   type DocType,
   type Sistema,
   type SupplierProposalCandidate,
   type SupplierInstallationRef,
 } from '@/lib/document-classification'
-import { friendlySupplierError } from '@/lib/supplier-errors'
+import { friendlySupplierError, isVatUniqueViolation } from '@/lib/supplier-errors'
 import { computeResidenceChecklist } from '@/lib/document-checklist'
 
 type AuthorizedUser = { user: { id: string } }
@@ -445,9 +446,17 @@ export type SupplierProposalExpectation = {
   kind: 'per_piva' | 'simile_per_nome' | 'nessun_match'
   sistema: Sistema
   supplierId: string | null
+  // P.IVA che la frase ha dichiarato "verrà registrata" in anagrafica, null se
+  // non ne prometteva nessuna. Deve coincidere col ricalcolo come il resto:
+  // l'utente non deve vedersi scrivere — o non scrivere — una P.IVA diversa da
+  // quella che ha letto.
+  vatNumber: string | null
 }
 
 export type ConfirmSupplierProposalResult = { success: true } | { error: string }
+
+const PROPOSAL_CHANGED_ERROR =
+  'La proposta è cambiata da quando hai aperto la pagina. Ricarica e rileggila prima di confermare.'
 
 // I due vincoli della 039 sull'INSERT del collegamento.
 //   • WITH CHECK di "supplier_installations: super_admin gestisce": fornitore
@@ -476,21 +485,40 @@ function installationInsertError(error: { code?: string; message: string }): str
 // riclassificato, collegamento creato nel frattempo) si rifiuta, invece di
 // scrivere un collegamento che l'utente non ha mai letto.
 //
-// La partita IVA NON viene scritta in anagrafica, né sul fornitore creato né
-// su quello esistente: è un concern separato (commit successivo).
+// Partita IVA in anagrafica — supplierVatNumberToWrite, fonte unica col
+// pannello: solo su "simile per nome" confermato e solo se il fornitore non ne
+// ha già una (mai sovrascrivere); sul fornitore creato da "nessun match", che
+// nasce con quella del documento se presente. Su "per P.IVA" il fornitore ce
+// l'ha già per definizione.
 //
 // Due rami:
-//   • per_piva / simile_per_nome → collega il fornitore esistente.
-//   • nessun_match              → crea il fornitore, poi lo collega.
+//   • per_piva / simile_per_nome → P.IVA (se dovuta), poi collega il
+//                                  fornitore esistente.
+//   • nessun_match              → crea il fornitore con la P.IVA, poi lo
+//                                  collega.
+//
+// ORDINE (non invertire): P.IVA prima, collegamento dopo. Se la P.IVA del
+// documento risulta già di un altro fornitore (idx_suppliers_builder_vat), il
+// match per nome era sbagliato e si abortisce TUTTO prima che il collegamento
+// esista. Con il collegamento scritto per primo, lo stesso errore lascerebbe
+// in piedi un collegamento al fornitore sbagliato.
 //
 // Non transazionale, stesso tradeoff di createSupplier
 // (residences/[id]/fornitori/actions.ts): supabase-js su REST non espone una
-// transazione multi-statement. Se nel secondo ramo il collegamento fallisce,
-// il fornitore resta creato senza collegamento — uno stato incompleto ma mai
-// corrotto (nessun record a metà, nessun dato inconsistente). Qui il recupero
-// è anche guidato: ricaricando, la proposta trova quel fornitore per nome ed
-// esce "Collega", non un secondo "Crea", quindi ritentare non produce un
-// doppione.
+// transazione multi-statement. Se il collegamento fallisce dopo la prima
+// scrittura, resta uno stato incompleto ma mai corrotto — il fornitore creato,
+// oppure la P.IVA registrata sul fornitore confermato dall'umano — senza
+// collegamento. Il messaggio d'errore dice quale dei due.
+//
+// Recupero dopo quel fallimento: ricaricando, la proposta si ricalcola. Se il
+// documento porta una P.IVA, ora il fornitore la ha, l'esito è "per P.IVA"
+// sullo stesso fornitore e ritentare non duplica nulla. Senza P.IVA il
+// recupero passa dal nome e NON è garantito in due casi, provati come limiti
+// in scripts/verify-supplier-match.mjs:
+//   • omonimi già in anagrafica: la proposta indica il primo per id, che può
+//     non essere il fornitore appena creato;
+//   • ragione sociale di sole forme societarie ("S.r.l."): la chiave di nome è
+//     null, l'esito resta "nessun match" e ritentare crea un doppione.
 export async function confirmSupplierProposal(input: {
   documentId: string
   expected: SupplierProposalExpectation
@@ -567,37 +595,75 @@ export async function confirmSupplierProposal(input: {
   }
 
   const serverSupplierId = proposal.kind === 'nessun_match' ? null : proposal.supplier.id
+  const vatNumberToWrite = supplierVatNumberToWrite(proposal)
   if (
     proposal.kind !== expected.kind
     || proposal.sistema !== expected.sistema
     || serverSupplierId !== expected.supplierId
+    || vatNumberToWrite !== expected.vatNumber
   ) {
-    return { error: 'La proposta è cambiata da quando hai aperto la pagina. Ricarica e rileggila prima di confermare.' }
+    return { error: PROPOSAL_CHANGED_ERROR }
   }
 
   let supplierId: string
+  // Cosa è già scritto quando si arriva al collegamento: serve solo al
+  // messaggio di un fallimento a metà, che deve dire cosa è rimasto.
   let createdName: string | null = null
+  let vatRegisteredOn: string | null = null
 
   if (proposal.kind === 'nessun_match') {
     // residence_id = residenza di prima creazione (039): quella del documento.
-    // Nessun vat_number: la P.IVA in anagrafica è il commit successivo.
     const { data: created, error: createError } = await supabase
       .from('suppliers')
       .insert({
         residence_id: doc.residence_id,
         builder_id: auth.builderId,
         name: proposal.ragioneSociale,
+        vat_number: vatNumberToWrite,
       })
       .select('id')
       .single()
 
     if (createError || !created) {
+      // Collisione possibile solo per una scrittura concorrente: se il ricalcolo
+      // sopra avesse visto quella P.IVA, l'esito sarebbe stato "per P.IVA".
+      if (createError && isVatUniqueViolation(createError.message)) {
+        return {
+          error: `Nessun fornitore creato: la partita IVA ${vatNumberToWrite} del documento risulta già di un altro fornitore di questo costruttore. Ricarica la pagina: la proposta lo indicherà.`,
+        }
+      }
       return { error: `Errore creazione fornitore: ${createError ? friendlySupplierError(createError.message) : 'sconosciuto'}` }
     }
     supplierId = created.id as string
     createdName = proposal.ragioneSociale
   } else {
     supplierId = proposal.supplier.id
+
+    if (vatNumberToWrite !== null) {
+      // Solo su simile_per_nome (supplierVatNumberToWrite). Il filtro
+      // vat_number IS NULL rende il "mai sovrascrivere" vero anche contro una
+      // scrittura concorrente fra la lettura sopra e questo UPDATE: zero righe
+      // = il fornitore ha ormai una P.IVA, e la frase letta ("verrà registrata")
+      // non è più vera.
+      const { data: updated, error: vatError } = await supabase
+        .from('suppliers')
+        .update({ vat_number: vatNumberToWrite })
+        .eq('id', supplierId)
+        .is('vat_number', null)
+        .select('id')
+
+      if (vatError) {
+        if (isVatUniqueViolation(vatError.message)) {
+          return {
+            error: `Collegamento non creato: la partita IVA ${vatNumberToWrite} del documento risulta di un altro fornitore di questo costruttore, quindi ${proposal.supplier.name} non è l'impresa della dichiarazione — il match per nome era sbagliato.`,
+          }
+        }
+        return { error: `Errore registrazione partita IVA: ${vatError.message}` }
+      }
+      if (!updated || updated.length === 0) return { error: PROPOSAL_CHANGED_ERROR }
+
+      vatRegisteredOn = proposal.supplier.name
+    }
   }
 
   const { error: installError } = await supabase
@@ -613,15 +679,19 @@ export async function confirmSupplierProposal(input: {
   const documentiPath = `/admin/residences/${doc.residence_id}/documenti`
 
   if (installError) {
+    const reason = installationInsertError(installError)
+    // Qualcosa ormai è scritto: la pagina va rinfrescata comunque, o la
+    // proposta continuerebbe a descrivere uno stato che non esiste più.
     if (createdName !== null) {
-      // Il fornitore ormai esiste: la pagina va rinfrescata comunque, o la
-      // proposta continuerebbe a dire "Crea" su un fornitore già creato.
       revalidatePath(documentiPath)
-      return {
-        error: `Fornitore ${createdName} creato, ma collegamento non riuscito. ${installationInsertError(installError)} Ricarica la pagina per riprovare.`,
-      }
+      const conPiva = vatNumberToWrite !== null ? ` con partita IVA ${vatNumberToWrite}` : ''
+      return { error: `Fornitore ${createdName} creato${conPiva}, ma collegamento non riuscito. ${reason} Ricarica la pagina per riprovare.` }
     }
-    return { error: installationInsertError(installError) }
+    if (vatRegisteredOn !== null) {
+      revalidatePath(documentiPath)
+      return { error: `Partita IVA ${vatNumberToWrite} registrata su ${vatRegisteredOn}, ma collegamento non riuscito. ${reason} Ricarica la pagina per riprovare.` }
+    }
+    return { error: reason }
   }
 
   revalidatePath(documentiPath)

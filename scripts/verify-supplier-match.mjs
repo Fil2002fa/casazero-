@@ -4,7 +4,8 @@
 // Uso:  node --experimental-strip-types scripts/verify-supplier-match.mjs
 //       (oppure: npm run verify:match)
 // ------------------------------------------------------------
-// COSA GARANTISCE: che normalizeCompanyName e buildSupplierProposal
+// COSA GARANTISCE: che normalizeCompanyName, buildSupplierProposal e
+// supplierVatNumberToWrite
 // (src/lib/document-classification.ts) diano l'esito atteso su un elenco di
 // casi reali, nelle due direzioni — i casi che DEVONO combaciare e i casi che
 // NON devono combaciare.
@@ -40,9 +41,9 @@
 
 const SOURCE = new URL('../src/lib/document-classification.ts', import.meta.url)
 
-let normalizeCompanyName, normalizeVatNumber, buildSupplierProposal
+let normalizeCompanyName, normalizeVatNumber, buildSupplierProposal, supplierVatNumberToWrite
 try {
-  ;({ normalizeCompanyName, normalizeVatNumber, buildSupplierProposal } = await import(SOURCE.href))
+  ;({ normalizeCompanyName, normalizeVatNumber, buildSupplierProposal, supplierVatNumberToWrite } = await import(SOURCE.href))
 } catch (err) {
   console.error(
     `\n✗ Impossibile importare ${SOURCE.pathname}: ${err.message}\n` +
@@ -185,6 +186,61 @@ check('già collegato trovato per nome',
     installazioni: [{ supplier_id: 'b', sistema: 'elettrico' }],
   })),
   { kind: 'gia_collegato', id: 'b', omonimi: null, piva: null })
+
+// ------------------------------------------------------------
+// 4. supplierVatNumberToWrite — cosa la conferma scrive in anagrafica
+// ------------------------------------------------------------
+// Il caso da non sbagliare è il quarto: una P.IVA esistente sul fornitore non
+// si sovrascrive mai. Il controllo del kind accanto impedisce che quel null
+// passi per il motivo sbagliato (un esito diverso da simile_per_nome).
+console.log('\nsupplierVatNumberToWrite — cosa la conferma scrive in anagrafica')
+const Bconpiva = { ...B, vat_number: '11111111111' }
+check('per P.IVA → niente (ce l\'ha già)',
+  supplierVatNumberToWrite(caso({})), null)
+check('simile per nome, fornitore senza P.IVA → quella del documento',
+  supplierVatNumberToWrite(caso({ partitaIva: '99999999999', ragioneSociale: 'Rossi Impianti S.r.l.' })), '99999999999')
+check('simile per nome, documento senza P.IVA → niente',
+  supplierVatNumberToWrite(caso({ partitaIva: null, ragioneSociale: 'Rossi Impianti' })), null)
+check('simile per nome, fornitore con altra P.IVA: è davvero simile_per_nome',
+  caso({ partitaIva: '99999999999', ragioneSociale: 'Rossi Impianti', fornitori: [A, Bconpiva] }).kind, 'simile_per_nome')
+check('simile per nome, fornitore con altra P.IVA → mai sovrascrivere',
+  supplierVatNumberToWrite(caso({ partitaIva: '99999999999', ragioneSociale: 'Rossi Impianti', fornitori: [A, Bconpiva] })), null)
+check('nessun match con P.IVA → il fornitore nasce con quella del documento',
+  supplierVatNumberToWrite(caso({ partitaIva: '99999999999', ragioneSociale: 'Verdi Termoidraulica' })), '99999999999')
+check('nessun match senza P.IVA → niente',
+  supplierVatNumberToWrite(caso({ partitaIva: null, ragioneSociale: 'Verdi Termoidraulica' })), null)
+check('già collegato → niente',
+  supplierVatNumberToWrite(caso({ installazioni: [{ supplier_id: 'a', sistema: 'elettrico' }] })), null)
+
+// ------------------------------------------------------------
+// 5. Recupero dopo un fallimento a metà (fornitore creato, collegamento no)
+// ------------------------------------------------------------
+// confirmSupplierProposal non è transazionale. Questi casi fissano cosa vede
+// la proposta ricaricata subito dopo quel fallimento. Gli ultimi due sono
+// LIMITI DICHIARATI, non comportamenti desiderati: se un cambiamento li
+// risolve, il caso va aggiornato insieme al commento dell'action e all'handoff.
+console.log('\nRecupero dopo fallimento parziale — con P.IVA garantito, senza P.IVA no')
+check('con P.IVA: il fornitore creato si ritrova per P.IVA, nessun doppione',
+  proj(caso({
+    partitaIva: '99999999999',
+    ragioneSociale: 'Verdi Termoidraulica',
+    fornitori: [A, B, { id: 'n', name: 'Verdi Termoidraulica', vat_number: '99999999999' }],
+  })),
+  { kind: 'per_piva', id: 'n', omonimi: null, piva: '99999999999' })
+check('LIMITE — senza P.IVA, con omonimi preesistenti: si propone il primo per id, non quello creato',
+  proj(caso({
+    partitaIva: null,
+    ragioneSociale: 'Rossi Impianti',
+    fornitori: [A, B, { id: 'z', name: 'Rossi Impianti', vat_number: null }],
+  })),
+  { kind: 'simile_per_nome', id: 'b', omonimi: 1, piva: null })
+check('LIMITE — senza P.IVA, nome di sole forme societarie: resta nessun match, ritentare duplica',
+  proj(caso({
+    partitaIva: null,
+    ragioneSociale: 'S.r.l.',
+    fornitori: [A, B, { id: 'n', name: 'S.r.l.', vat_number: null }],
+  })),
+  { kind: 'nessun_match', id: null, omonimi: null, piva: null })
 
 // ------------------------------------------------------------
 console.log(`\ncasi eseguiti: ${eseguiti} · falliti: ${fallimenti}`)

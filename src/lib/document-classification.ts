@@ -367,3 +367,30 @@ export function buildSupplierProposal(input: {
 
   return { kind: 'nessun_match', sistema, ragioneSociale, partitaIva }
 }
+
+// Partita IVA che la conferma della proposta scrive sull'anagrafica, o null se
+// non ne scrive nessuna. Funzione pura, fonte unica di due superfici: il
+// pannello la dichiara nella frase, la server action la scrive e la confronta
+// con quanto il client ha letto.
+//
+//   • per_piva: mai — il fornitore è stato trovato proprio per quella P.IVA.
+//   • simile_per_nome: solo se il documento ne porta una E il fornitore non ne
+//     ha già una. Mai sovrascrivere: una vat_number esistente, per forza
+//     diversa da quella del documento (se coincidesse l'esito sarebbe
+//     per_piva), è un indizio che il match per nome è sbagliato, non un dato
+//     da correggere.
+//   • nessun_match: quella del documento, se presente — il fornitore nasce
+//     con essa.
+//   • ogni altro esito non scrive nulla.
+export function supplierVatNumberToWrite(proposal: SupplierProposal): string | null {
+  switch (proposal.kind) {
+    case 'simile_per_nome':
+      return proposal.partitaIva !== null && proposal.supplier.vat_number === null
+        ? proposal.partitaIva
+        : null
+    case 'nessun_match':
+      return proposal.partitaIva
+    default:
+      return null
+  }
+}
