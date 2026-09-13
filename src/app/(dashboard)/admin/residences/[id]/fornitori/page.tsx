@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: 'Fornitori' }
 type Params = Promise<{ id: string }>
 
 // Niente categories: il modello legacy non si legge più qui. L'etichetta
-// diceva a schermo quello che "Realizzato qui" dice meglio, e i fornitori
+// diceva a schermo quello che "Lavori in questa residenza" dice meglio, e i fornitori
 // creati dopo la 039 non ne hanno alcuna — le card risultavano disomogenee.
 // La colonna resta in DB: è la sorgente storica da cui la 039 fa il backfill.
 type SupplierRow = {

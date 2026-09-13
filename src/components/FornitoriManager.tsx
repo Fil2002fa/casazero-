@@ -386,10 +386,17 @@ export function FornitoriManager({
                           {s.email}
                         </a>
                       )}
+                      {/* Il vuoto non dice nulla: senza questa riga una card senza contatti
+                          sembra una card caricata a metà. */}
+                      {!s.phone && !s.email && (
+                        <p className="text-xs text-text-secondary mt-1.5">
+                          Nessun contatto. Aggiungilo dalla scheda fornitore.
+                        </p>
+                      )}
                       {s.installedSystemsHere && s.installedSystemsHere.length > 0 && (
                         <p className="flex items-center gap-1.5 text-xs text-text-secondary mt-2">
                           <Wrench className="w-3 h-3" strokeWidth={1.6} />
-                          Realizzato qui: {s.installedSystemsHere.map(sys => SISTEMA_LABELS[sys]).join(', ')}
+                          Lavori in questa residenza: {s.installedSystemsHere.map(sys => SISTEMA_LABELS[sys]).join(', ')}
                         </p>
                       )}
                     </>
