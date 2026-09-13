@@ -16,6 +16,8 @@ import {
   type DocType,
   type Sistema,
   type ClassificationStatus,
+  type SupplierProposalCandidate,
+  type SupplierInstallationRef,
 } from '@/lib/document-classification'
 import type { ChecklistResult, ChecklistExpectation } from '@/lib/document-checklist'
 import { createClient } from '@/lib/supabase/client'
@@ -178,6 +180,21 @@ interface Props {
   // i controlli al super_admin. Upload e conferma classificazione non
   // dipendono da questa prop: l'admin li ha entrambi.
   canManageChecklist: boolean
+  // Proposta del fornitore dalle DiCo, riservata al costruttore. Stessa
+  // regola di canManageChecklist: obbligatorie e senza default, così un
+  // chiamante che le dimentica fallisce in build invece di spegnere la
+  // funzione in silenzio.
+  //
+  // false ⇒ le due liste arrivano vuote per costruzione (page.tsx non esegue
+  // nemmeno le query): una lista vuota NON va letta come "nessun fornitore in
+  // anagrafica", e ogni consumo deve passare prima da questo booleano.
+  //
+  // Non ancora consumate: qui arrivano soltanto i dati. Sono gli input di
+  // buildSupplierProposal — anagrafica builder-wide e collegamenti già
+  // presenti su questa residenza.
+  canLinkSuppliers: boolean
+  suppliers: SupplierProposalCandidate[]
+  supplierInstallations: SupplierInstallationRef[]
 }
 
 export function DocumentiClient({ residenceId, docs, units, checklist, markedByNames, canManageChecklist }: Props) {
