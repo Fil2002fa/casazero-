@@ -33,7 +33,12 @@ type Supplier = {
   // 'documento'. Sempre sottoinsieme di installedSystemsHere non vuoto: la
   // riga che lo dichiara sta sotto i lavori e non ha senso senza.
   addedFromDocumentHere?: boolean
-  vatNumber?: string | null
+  // Obbligatoria per ENTRAMBI gli scope: il form "Modifica anagrafica" (ora
+  // aperto da tutte e due le pagine) precompila la P.IVA da qui e la rimanda
+  // sempre a updateSupplierAnagrafica. Una pagina che non la passasse
+  // aprirebbe il campo vuoto, e il primo salvataggio cancellerebbe una
+  // P.IVA esistente — anche quella registrata dalla conferma di una DiCo.
+  vatNumber: string | null
   installations?: Installation[]
 }
 
@@ -534,16 +539,7 @@ export function FornitoriManager({
                     </>
                   )}
                 </div>
-                {scope.kind === 'residence' ? (
-                  <button
-                    onClick={() => openDeleteModal(s.id)}
-                    disabled={deletePending}
-                    className="p-1.5 text-text-secondary hover:text-semantic-red transition-colors"
-                    title="Rimuovi"
-                  >
-                    <Trash2 className="w-4 h-4" strokeWidth={1.6} />
-                  </button>
-                ) : (
+                <div className="flex items-center">
                   <button
                     onClick={() => (editingId === s.id ? closeEdit() : openEdit(s.id))}
                     disabled={editPending}
@@ -552,10 +548,22 @@ export function FornitoriManager({
                   >
                     <Pencil className="w-4 h-4" strokeWidth={1.6} />
                   </button>
-                )}
+                  {scope.kind === 'residence' && (
+                    <button
+                      onClick={() => openDeleteModal(s.id)}
+                      disabled={deletePending}
+                      className="p-1.5 text-text-secondary hover:text-semantic-red transition-colors"
+                      title="Rimuovi"
+                    >
+                      <Trash2 className="w-4 h-4" strokeWidth={1.6} />
+                    </button>
+                  )}
+                </div>
               </div>
 
-              {scope.kind === 'builder' && editingId === s.id && (
+              {/* Stesso form per i due scope, nessun ramo: updateSupplierAnagrafica
+                  è riservata al super_admin, come entrambe le pagine che lo aprono. */}
+              {editingId === s.id && (
                 <form
                   onSubmit={e => handleEditSubmit(e, s.id)}
                   className="mt-3 pt-3 border-t border-border space-y-3"

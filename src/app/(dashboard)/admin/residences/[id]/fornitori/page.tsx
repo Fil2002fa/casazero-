@@ -21,6 +21,7 @@ type SupplierRow = {
   name: string
   phone: string | null
   email: string | null
+  vat_number: string | null
 }
 
 export default async function FornitoriPage({ params }: { params: Params }) {
@@ -46,11 +47,11 @@ export default async function FornitoriPage({ params }: { params: Params }) {
   const [{ data: byResidenceId }, { data: installationRows }] = await Promise.all([
     supabase
       .from('suppliers')
-      .select('id, name, phone, email')
+      .select('id, name, phone, email, vat_number')
       .eq('residence_id', residenceId),
     supabase
       .from('supplier_installations')
-      .select('sistema, source, suppliers(id, name, phone, email)')
+      .select('sistema, source, suppliers(id, name, phone, email, vat_number)')
       .eq('residence_id', residenceId),
   ])
 
@@ -83,6 +84,7 @@ export default async function FornitoriPage({ params }: { params: Params }) {
       name: s.name,
       phone: s.phone,
       email: s.email,
+      vatNumber: s.vat_number,
       installedSystemsHere: installedSystemsBySupplier.get(s.id) ?? [],
       addedFromDocumentHere: addedFromDocumentHere.has(s.id),
     }))
