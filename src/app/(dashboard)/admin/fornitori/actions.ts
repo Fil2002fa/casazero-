@@ -3,25 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { SISTEMI, type Sistema } from '@/lib/document-classification'
-
-// Messaggi utente per le violazioni di vincolo che il form può innescare
-// davvero (partita IVA duplicata sulla 039, collegamento duplicato sulla
-// 039). Non c'è modo di distinguerle da un altro unique-violation via
-// error.code (PostgREST restituisce sempre 23505 per entrambe): si
-// individua il vincolo per nome dal messaggio, stesso stile del controllo
-// "foreign key" già in uso per deleteSupplier.
-const VAT_UNIQUE_INDEX = 'idx_suppliers_builder_vat'
-const INSTALLATION_UNIQUE_CONSTRAINT = 'supplier_installations_unici'
-
-function friendlyError(message: string): string {
-  if (message.includes(VAT_UNIQUE_INDEX)) {
-    return 'Partita IVA già usata da un altro fornitore di questo costruttore.'
-  }
-  if (message.includes(INSTALLATION_UNIQUE_CONSTRAINT)) {
-    return 'Questo fornitore ha già un lavoro collegato per questo sistema in questa residenza.'
-  }
-  return message
-}
+import { friendlySupplierError } from '@/lib/supplier-errors'
 
 export async function createSupplierForBuilder(
   builderId: string,
@@ -71,7 +53,7 @@ export async function createSupplierForBuilder(
       vat_number: vatNumber,
     })
 
-  if (error) return { error: friendlyError(error.message) }
+  if (error) return { error: friendlySupplierError(error.message) }
 
   revalidatePath('/admin/fornitori')
   return { success: true }
@@ -115,7 +97,7 @@ export async function updateSupplierAnagrafica(
     .update({ name, phone, email, vat_number: vatNumber })
     .eq('id', supplierId)
 
-  if (error) return { error: friendlyError(error.message) }
+  if (error) return { error: friendlySupplierError(error.message) }
 
   revalidatePath('/admin/fornitori')
   return { success: true }
@@ -161,7 +143,7 @@ export async function addSupplierInstallation(
       source: 'manuale',
     })
 
-  if (error) return { error: friendlyError(error.message) }
+  if (error) return { error: friendlySupplierError(error.message) }
 
   revalidatePath('/admin/fornitori')
   return { success: true }

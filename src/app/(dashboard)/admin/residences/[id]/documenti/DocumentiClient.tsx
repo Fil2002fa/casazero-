@@ -4,7 +4,8 @@ import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { FileText, Download, Upload, X, Loader2, CheckCircle2, AlertCircle, Clock, Sparkles, ChevronDown } from 'lucide-react'
 import type { DocumentCategory } from '@/types/database'
-import { createUploadUrl, confirmDocument, confirmClassification, setChecklistException, clearChecklistException } from './actions'
+import { createUploadUrl, confirmDocument, confirmClassification, setChecklistException, clearChecklistException, confirmSupplierProposal } from './actions'
+import type { SupplierProposalExpectation } from './actions'
 import { ALLOWED_DOCUMENT_MIME, MAX_DOCUMENT_SIZE } from '@/lib/document-upload'
 import { pluralize } from '@/lib/pluralize'
 import { DateField } from '@/components/DateField'
@@ -1349,9 +1350,11 @@ function ReviewPanel({ doc, supplierContext, onDone }: {
   )
 }
 
-// Proposta del fornitore dalla dichiarazione di conformità. SOLA LETTURA:
-// nessun bottone, nessuna scrittura — la conferma arriverà con la server
-// action, che richiamerà la stessa buildSupplierProposal lato server.
+// Proposta del fornitore dalla dichiarazione di conformità, con il bottone di
+// conferma sui soli esiti che scrivono (per P.IVA, simile per nome, nessun
+// match). Il bottone NON porta al server cosa scrivere: porta l'esito letto, e
+// confirmSupplierProposal ricalcola tutto con la stessa buildSupplierProposal,
+// rifiutando se l'esito è cambiato nel frattempo.
 //
 // Gate: il ruolo sta a monte (supplierContext non null solo per il
 // costruttore); doc_type DiCo e ragione sociale non vuota li decide la
@@ -1367,6 +1370,10 @@ function ReviewPanel({ doc, supplierContext, onDone }: {
 // Ragione sociale e P.IVA vengono dal verbale (extracted_metadata), che la
 // conferma umana non riscrive mai.
 function SupplierProposalSection({ doc, context }: { doc: DocRow; context: SupplierContext }) {
+  const router = useRouter()
+  const [saving, setSaving] = useState(false)
+  const [error, setError]   = useState<string | null>(null)
+
   const proposal = buildSupplierProposal({
     docType: doc.doc_type,
     sistema: doc.sistema,
@@ -1378,10 +1385,47 @@ function SupplierProposalSection({ doc, context }: { doc: DocRow; context: Suppl
 
   if (proposal.kind === 'non_applicabile') return null
 
+  // L'esito LETTO, spedito solo perché il server possa rifiutare se il suo
+  // ricalcolo diverge. null sugli esiti che non si confermano (già collegato,
+  // sistema mancante): lì il bottone non esiste.
+  const expected: SupplierProposalExpectation | null =
+    proposal.kind === 'per_piva' || proposal.kind === 'simile_per_nome'
+      ? { kind: proposal.kind, sistema: proposal.sistema, supplierId: proposal.supplier.id }
+      : proposal.kind === 'nessun_match'
+        ? { kind: proposal.kind, sistema: proposal.sistema, supplierId: null }
+        : null
+
+  async function handleConfirm(exp: SupplierProposalExpectation) {
+    setSaving(true)
+    setError(null)
+    const res = await confirmSupplierProposal({ documentId: doc.id, expected: exp })
+    setSaving(false)
+    if ('error' in res) {
+      setError(res.error)
+    } else {
+      // Nessun onDone: il pannello resta aperto e, dopo il refresh, la stessa
+      // sezione rende "già collegato" — la conferma visibile di cosa è stato scritto.
+      router.refresh()
+    }
+  }
+
   return (
     <div className="mt-3 pt-3 border-t border-border space-y-1">
       <p className="text-xs font-medium text-text-secondary">Impresa installatrice</p>
       <SupplierProposalBody proposal={proposal} residenceName={context.residenceName} />
+      {error && <p className="text-xs text-semantic-red">{error}</p>}
+      {expected && (
+        <button
+          type="button"
+          onClick={() => handleConfirm(expected)}
+          disabled={saving}
+          className="w-full mt-2 border border-brand-medium text-brand-medium rounded-xl py-2.5 text-sm font-medium hover:bg-brand-light transition-colors disabled:opacity-50"
+        >
+          {saving
+            ? 'Salvataggio…'
+            : expected.kind === 'nessun_match' ? 'Crea fornitore e collega' : 'Collega fornitore'}
+        </button>
+      )}
     </div>
   )
 }

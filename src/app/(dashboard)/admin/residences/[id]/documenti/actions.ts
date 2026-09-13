@@ -4,15 +4,24 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import type { DocumentCategory } from '@/types/database'
 import { ALLOWED_DOCUMENT_MIME } from '@/lib/document-upload'
-import { DOC_TYPES, SISTEMI, type DocType, type Sistema } from '@/lib/document-classification'
+import {
+  DOC_TYPES,
+  SISTEMI,
+  buildSupplierProposal,
+  type DocType,
+  type Sistema,
+  type SupplierProposalCandidate,
+  type SupplierInstallationRef,
+} from '@/lib/document-classification'
+import { friendlySupplierError } from '@/lib/supplier-errors'
 import { computeResidenceChecklist } from '@/lib/document-checklist'
 
 type AuthorizedUser = { user: { id: string } }
 type AuthError = { error: string }
 
-// Le action di questo file si dividono in due gruppi con autorizzazioni
-// diverse, e i due helper sotto sono la sola fonte di verità di ciascuno.
-// Lo split non è cosmetico: rispecchia due RLS diverse, quindi allargare
+// Le action di questo file si dividono in tre gruppi con autorizzazioni
+// diverse, e i tre helper sotto sono la sola fonte di verità di ciascuno.
+// Lo split non è cosmetico: rispecchia tre RLS diverse, quindi allargare
 // un solo helper è anche la garanzia che il gate applicativo non prometta
 // più di quanto il DB conceda.
 
@@ -65,6 +74,33 @@ async function getAuthorizedChecklistManager(
   }
 
   return { user }
+}
+
+// Proposta fornitore dalle DiCo: solo super_admin, come le eccezioni
+// checklist, ma con in più il builder_id — il match cerca nell'anagrafica
+// del costruttore, non della residenza, e senza builder non c'è anagrafica
+// in cui cercare (stesso gate di documenti/page.tsx). Rispecchia la policy
+// "supplier_installations: super_admin gestisce" (039), che non ha un ramo
+// admin: allargare questo helper darebbe all'admin un errore RLS grezzo
+// invece di un rifiuto pulito.
+async function getAuthorizedSupplierLinker(
+  supabase: Awaited<ReturnType<typeof createClient>>
+): Promise<{ user: { id: string }; builderId: string } | AuthError> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Non autenticato' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role, builder_id')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile || profile.role !== 'super_admin') {
+    return { error: 'Permessi insufficienti' }
+  }
+  if (!profile.builder_id) return { error: 'Nessun builder associato al tuo account' }
+
+  return { user, builderId: profile.builder_id as string }
 }
 
 // Unica fonte di verità per il path storage di un documento: stesso
@@ -394,5 +430,200 @@ export async function clearChecklistException(
   }
 
   revalidatePath(`/admin/residences/${residenceId}/documenti`)
+  return { success: true }
+}
+
+// ============================================================
+// Proposta fornitore dalle dichiarazioni di conformità (blocco e)
+// ============================================================
+
+// Cosa l'utente ha LETTO nel pannello quando ha premuto il bottone. Non è
+// ciò che verrà scritto: fornitore, sistema e residenza del collegamento
+// vengono tutti dal ricalcolo server-side. Serve a una cosa sola — rifiutare
+// se il ricalcolo dà un esito diverso da quello mostrato.
+export type SupplierProposalExpectation = {
+  kind: 'per_piva' | 'simile_per_nome' | 'nessun_match'
+  sistema: Sistema
+  supplierId: string | null
+}
+
+export type ConfirmSupplierProposalResult = { success: true } | { error: string }
+
+// I due vincoli della 039 sull'INSERT del collegamento.
+//   • WITH CHECK di "supplier_installations: super_admin gestisce": fornitore
+//     e residenza del costruttore dell'utente, documento sorgente della stessa
+//     residenza. PostgREST lo restituisce come 42501, messaggio tecnico in
+//     inglese.
+//   • UNIQUE (supplier_id, residence_id, sistema): passa dall'helper condiviso
+//     con la pagina fornitori, così la stessa violazione dice la stessa cosa
+//     su entrambe le superfici.
+function installationInsertError(error: { code?: string; message: string }): string {
+  if (error.code === '42501') {
+    return 'Collegamento non consentito: fornitore e residenza devono appartenere al tuo costruttore, e il documento a questa residenza.'
+  }
+  return friendlySupplierError(error.message)
+}
+
+// Conferma la proposta di fornitore di una dichiarazione di conformità:
+// scrive la riga "ha realizzato" con source = 'documento' e il documento come
+// prova, creando prima il fornitore se non è in anagrafica.
+//
+// IL CLIENT NON DECIDE NULLA. Dal client arrivano solo l'id del documento e
+// l'esito che l'utente ha letto. Residenza, sistema e impresa si leggono qui
+// dalla riga documents; anagrafica e collegamenti si rileggono qui; l'esito si
+// ricalcola qui con la stessa buildSupplierProposal del pannello. Se il
+// ricalcolo differisce da quanto mostrato (anagrafica cambiata, documento
+// riclassificato, collegamento creato nel frattempo) si rifiuta, invece di
+// scrivere un collegamento che l'utente non ha mai letto.
+//
+// La partita IVA NON viene scritta in anagrafica, né sul fornitore creato né
+// su quello esistente: è un concern separato (commit successivo).
+//
+// Due rami:
+//   • per_piva / simile_per_nome → collega il fornitore esistente.
+//   • nessun_match              → crea il fornitore, poi lo collega.
+//
+// Non transazionale, stesso tradeoff di createSupplier
+// (residences/[id]/fornitori/actions.ts): supabase-js su REST non espone una
+// transazione multi-statement. Se nel secondo ramo il collegamento fallisce,
+// il fornitore resta creato senza collegamento — uno stato incompleto ma mai
+// corrotto (nessun record a metà, nessun dato inconsistente). Qui il recupero
+// è anche guidato: ricaricando, la proposta trova quel fornitore per nome ed
+// esce "Collega", non un secondo "Crea", quindi ritentare non produce un
+// doppione.
+export async function confirmSupplierProposal(input: {
+  documentId: string
+  expected: SupplierProposalExpectation
+}): Promise<ConfirmSupplierProposalResult> {
+  const supabase = await createClient()
+  const auth = await getAuthorizedSupplierLinker(supabase)
+  if ('error' in auth) return { error: auth.error }
+
+  const { documentId, expected } = input
+  if (!documentId || !expected) return { error: 'Parametri non validi' }
+
+  // RLS "documents: admin e super_admin gestiscono" (002): un documento fuori
+  // dal costruttore dell'utente torna come nessuna riga, non come errore.
+  const { data: doc, error: docError } = await supabase
+    .from('documents')
+    .select('residence_id, doc_type, sistema, extracted_metadata')
+    .eq('id', documentId)
+    .maybeSingle()
+
+  if (docError) return { error: `Errore lettura documento: ${docError.message}` }
+  if (!doc) return { error: 'Documento non trovato o non accessibile' }
+
+  // documents.sistema è TEXT senza CHECK (026): il valore in colonna non è
+  // garantito tra i 14 sistemi. supplier_installations il CHECK ce l'ha (039),
+  // ma rivalidare qui dà un messaggio leggibile invece di una violazione
+  // grezza — e impedisce che un valore fuori lista arrivi al ricalcolo.
+  if (doc.sistema !== null && !(SISTEMI as string[]).includes(doc.sistema)) {
+    return { error: 'Il sistema del documento non è valido: correggi prima la classificazione.' }
+  }
+
+  // Verbale jsonb: letto in difesa, accettate solo stringhe.
+  const metadata = (doc.extracted_metadata ?? {}) as Record<string, unknown>
+  const ragioneSociale = typeof metadata.ragione_sociale_installatore === 'string'
+    ? metadata.ragione_sociale_installatore
+    : null
+  const partitaIva = typeof metadata.partita_iva_installatore === 'string'
+    ? metadata.partita_iva_installatore
+    : null
+
+  // Stessi due scope di documenti/page.tsx: anagrafica builder-wide,
+  // collegamenti della sola residenza del documento.
+  const [{ data: fornitori, error: suppliersError }, { data: installazioni, error: installationsError }] =
+    await Promise.all([
+      supabase
+        .from('suppliers')
+        .select('id, name, vat_number')
+        .eq('builder_id', auth.builderId),
+      supabase
+        .from('supplier_installations')
+        .select('supplier_id, sistema')
+        .eq('residence_id', doc.residence_id),
+    ])
+
+  const readError = suppliersError ?? installationsError
+  if (readError) return { error: `Errore lettura anagrafica: ${readError.message}` }
+
+  const proposal = buildSupplierProposal({
+    docType: doc.doc_type as DocType | null,
+    sistema: doc.sistema as Sistema | null,
+    ragioneSociale,
+    partitaIva,
+    fornitori: (fornitori ?? []) as SupplierProposalCandidate[],
+    installazioni: (installazioni ?? []) as SupplierInstallationRef[],
+  })
+
+  if (proposal.kind === 'non_applicabile') {
+    return { error: 'Questo documento non propone un fornitore da collegare.' }
+  }
+  if (proposal.kind === 'sistema_mancante') {
+    return { error: 'Sistema non classificato: correggi prima la classificazione.' }
+  }
+  if (proposal.kind === 'gia_collegato') {
+    return { error: `${proposal.supplier.name} è già collegato per questo sistema in questa residenza: non c'è nulla da scrivere.` }
+  }
+
+  const serverSupplierId = proposal.kind === 'nessun_match' ? null : proposal.supplier.id
+  if (
+    proposal.kind !== expected.kind
+    || proposal.sistema !== expected.sistema
+    || serverSupplierId !== expected.supplierId
+  ) {
+    return { error: 'La proposta è cambiata da quando hai aperto la pagina. Ricarica e rileggila prima di confermare.' }
+  }
+
+  let supplierId: string
+  let createdName: string | null = null
+
+  if (proposal.kind === 'nessun_match') {
+    // residence_id = residenza di prima creazione (039): quella del documento.
+    // Nessun vat_number: la P.IVA in anagrafica è il commit successivo.
+    const { data: created, error: createError } = await supabase
+      .from('suppliers')
+      .insert({
+        residence_id: doc.residence_id,
+        builder_id: auth.builderId,
+        name: proposal.ragioneSociale,
+      })
+      .select('id')
+      .single()
+
+    if (createError || !created) {
+      return { error: `Errore creazione fornitore: ${createError ? friendlySupplierError(createError.message) : 'sconosciuto'}` }
+    }
+    supplierId = created.id as string
+    createdName = proposal.ragioneSociale
+  } else {
+    supplierId = proposal.supplier.id
+  }
+
+  const { error: installError } = await supabase
+    .from('supplier_installations')
+    .insert({
+      supplier_id: supplierId,
+      residence_id: doc.residence_id,
+      sistema: proposal.sistema,
+      source: 'documento',
+      source_document_id: documentId,
+    })
+
+  const documentiPath = `/admin/residences/${doc.residence_id}/documenti`
+
+  if (installError) {
+    if (createdName !== null) {
+      // Il fornitore ormai esiste: la pagina va rinfrescata comunque, o la
+      // proposta continuerebbe a dire "Crea" su un fornitore già creato.
+      revalidatePath(documentiPath)
+      return {
+        error: `Fornitore ${createdName} creato, ma collegamento non riuscito. ${installationInsertError(installError)} Ricarica la pagina per riprovare.`,
+      }
+    }
+    return { error: installationInsertError(installError) }
+  }
+
+  revalidatePath(documentiPath)
   return { success: true }
 }
