@@ -150,6 +150,7 @@ export default async function ResidenceDocumentiPage({
         markedByNames={markedByNames}
         canManageChecklist={profile.role === 'super_admin'}
         canLinkSuppliers={canLinkSuppliers}
+        residenceName={residence.name}
         suppliers={suppliers}
         supplierInstallations={supplierInstallations}
       />

@@ -13,11 +13,13 @@ import {
   DOC_TYPE_LABELS,
   SISTEMI,
   SISTEMA_LABELS,
+  buildSupplierProposal,
   type DocType,
   type Sistema,
   type ClassificationStatus,
   type SupplierProposalCandidate,
   type SupplierInstallationRef,
+  type SupplierProposal,
 } from '@/lib/document-classification'
 import type { ChecklistResult, ChecklistExpectation } from '@/lib/document-checklist'
 import { createClient } from '@/lib/supabase/client'
@@ -189,15 +191,35 @@ interface Props {
   // nemmeno le query): una lista vuota NON va letta come "nessun fornitore in
   // anagrafica", e ogni consumo deve passare prima da questo booleano.
   //
-  // Non ancora consumate: qui arrivano soltanto i dati. Sono gli input di
-  // buildSupplierProposal — anagrafica builder-wide e collegamenti già
-  // presenti su questa residenza.
+  // Sono gli input di buildSupplierProposal — anagrafica builder-wide e
+  // collegamenti già presenti su questa residenza — e arrivano al pannello di
+  // revisione solo dentro supplierContext, che è null quando il booleano è
+  // false. residenceName serve alla frase che dichiara il collegamento.
   canLinkSuppliers: boolean
   suppliers: SupplierProposalCandidate[]
   supplierInstallations: SupplierInstallationRef[]
+  residenceName: string
 }
 
-export function DocumentiClient({ residenceId, docs, units, checklist, markedByNames, canManageChecklist }: Props) {
+// Contesto della proposta fornitore dalle DiCo. Esiste solo per il
+// costruttore: null per l'admin, e allora la sezione non si rende. Il
+// booleano e le liste viaggiano fusi in un solo valore apposta: nessun
+// componente a valle può leggere le liste senza essere passato dal gate, né
+// scambiare la lista vuota dell'admin per un'anagrafica vuota.
+type SupplierContext = {
+  residenceName: string
+  suppliers: SupplierProposalCandidate[]
+  installations: SupplierInstallationRef[]
+}
+
+export function DocumentiClient({
+  residenceId, docs, units, checklist, markedByNames, canManageChecklist,
+  canLinkSuppliers, suppliers, supplierInstallations, residenceName,
+}: Props) {
+  const supplierContext: SupplierContext | null = canLinkSuppliers
+    ? { residenceName, suppliers, installations: supplierInstallations }
+    : null
+
   // --- filter state ---
   const [search, setSearch]       = useState('')
 
@@ -697,7 +719,7 @@ export function DocumentiClient({ residenceId, docs, units, checklist, markedByN
                 Nessun documento di residenza{isFiltered ? ' per questo filtro' : ''}.
               </p>
             ) : (
-              residenceDocs.map(doc => <DocCard key={doc.id} doc={doc} />)
+              residenceDocs.map(doc => <DocCard key={doc.id} doc={doc} supplierContext={supplierContext} />)
             )}
           </section>
 
@@ -710,7 +732,7 @@ export function DocumentiClient({ residenceId, docs, units, checklist, markedByN
                   <h3 className="text-sm font-medium text-text-primary">
                     {unitMap.get(unitId)?.label ?? 'Unità'}
                   </h3>
-                  {unitDocs.map(doc => <DocCard key={doc.id} doc={doc} />)}
+                  {unitDocs.map(doc => <DocCard key={doc.id} doc={doc} supplierContext={supplierContext} />)}
                 </div>
               ))}
             </section>
@@ -1156,7 +1178,7 @@ function ClassificationBadge({ doc }: { doc: DocRow }) {
   )
 }
 
-function DocCard({ doc }: { doc: DocRow }) {
+function DocCard({ doc, supplierContext }: { doc: DocRow; supplierContext: SupplierContext | null }) {
   const [reviewOpen, setReviewOpen] = useState(false)
   const formattedDate = new Date(doc.file_date ?? doc.created_at).toLocaleDateString('it-IT', {
     day: 'numeric', month: 'short', year: 'numeric',
@@ -1210,14 +1232,20 @@ function DocCard({ doc }: { doc: DocRow }) {
             />
             {reviewOpen ? 'Chiudi revisione' : 'Rivedi classificazione'}
           </button>
-          {reviewOpen && <ReviewPanel doc={doc} onDone={() => setReviewOpen(false)} />}
+          {reviewOpen && (
+            <ReviewPanel doc={doc} supplierContext={supplierContext} onDone={() => setReviewOpen(false)} />
+          )}
         </div>
       )}
     </div>
   )
 }
 
-function ReviewPanel({ doc, onDone }: { doc: DocRow; onDone: () => void }) {
+function ReviewPanel({ doc, supplierContext, onDone }: {
+  doc: DocRow
+  supplierContext: SupplierContext | null
+  onDone: () => void
+}) {
   const router = useRouter()
   // REGOLA (non riaprire): il blocco "Proposta AI" legge SEMPRE E SOLO
   // extracted_metadata (il verbale di cosa ha detto la macchina, mai la
@@ -1315,6 +1343,134 @@ function ReviewPanel({ doc, onDone }: { doc: DocRow; onDone: () => void }) {
       >
         {saving ? 'Salvataggio…' : 'Conferma classificazione'}
       </button>
+
+      {supplierContext && <SupplierProposalSection doc={doc} context={supplierContext} />}
     </div>
+  )
+}
+
+// Proposta del fornitore dalla dichiarazione di conformità. SOLA LETTURA:
+// nessun bottone, nessuna scrittura — la conferma arriverà con la server
+// action, che richiamerà la stessa buildSupplierProposal lato server.
+//
+// Gate: il ruolo sta a monte (supplierContext non null solo per il
+// costruttore); doc_type DiCo e ragione sociale non vuota li decide la
+// funzione pura (non_applicabile → niente sezione). Il sistema null NON
+// nasconde la sezione: la DiCo con un'impresa leggibile c'è, e tacere
+// lascerebbe credere che non ci sia nulla da collegare. Si dice invece di
+// correggere prima la classificazione.
+//
+// Legge le COLONNE documents.doc_type / documents.sistema, non i select del
+// pannello: la proposta descrive ciò che verrebbe scritto a partire dalla
+// classificazione salvata, che è anche ciò che la server action riverificherà.
+// Cambiare un select senza confermare non la aggiorna, di proposito.
+// Ragione sociale e P.IVA vengono dal verbale (extracted_metadata), che la
+// conferma umana non riscrive mai.
+function SupplierProposalSection({ doc, context }: { doc: DocRow; context: SupplierContext }) {
+  const proposal = buildSupplierProposal({
+    docType: doc.doc_type,
+    sistema: doc.sistema,
+    ragioneSociale: doc.extracted_metadata?.ragione_sociale_installatore ?? null,
+    partitaIva: doc.extracted_metadata?.partita_iva_installatore ?? null,
+    fornitori: context.suppliers,
+    installazioni: context.installations,
+  })
+
+  if (proposal.kind === 'non_applicabile') return null
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border space-y-1">
+      <p className="text-xs font-medium text-text-secondary">Impresa installatrice</p>
+      <SupplierProposalBody proposal={proposal} residenceName={context.residenceName} />
+    </div>
+  )
+}
+
+// Ogni esito dichiara per esteso fornitore, sistema e residenza: chi leggerà
+// il bottone di conferma deve aver già letto il collegamento che nascerà, non
+// un'etichetta di stato da interpretare.
+function SupplierProposalBody({ proposal, residenceName }: {
+  proposal: Exclude<SupplierProposal, { kind: 'non_applicabile' }>
+  residenceName: string
+}) {
+  switch (proposal.kind) {
+    case 'sistema_mancante':
+      return (
+        <p className="text-xs text-semantic-amber">
+          Sistema non classificato: correggi prima la classificazione. Senza impianto di
+          riferimento <span className="font-medium">{proposal.ragioneSociale}</span> non può essere
+          collegata come esecutore in <span className="font-medium">{residenceName}</span>.
+        </p>
+      )
+
+    case 'gia_collegato':
+      return (
+        <>
+          <p className="text-sm text-text-primary">
+            <span className="font-medium">{proposal.supplier.name}</span> è già collegato{' '}
+            <EsecutoreIn sistema={proposal.sistema} residenceName={residenceName} />.
+          </p>
+          <p className="text-xs text-text-secondary">Il collegamento esiste già: non verrà scritto nulla.</p>
+        </>
+      )
+
+    case 'per_piva':
+      return (
+        <>
+          <p className="text-sm text-text-primary">
+            Collega <span className="font-medium">{proposal.supplier.name}</span>{' '}
+            <EsecutoreIn sistema={proposal.sistema} residenceName={residenceName} />
+          </p>
+          <p className="text-xs text-text-secondary">
+            Trovato in anagrafica per partita IVA {proposal.partitaIva}.
+          </p>
+        </>
+      )
+
+    case 'simile_per_nome':
+      return (
+        <>
+          <p className="text-sm text-text-primary">
+            Collega <span className="font-medium">{proposal.supplier.name}</span>{' '}
+            <EsecutoreIn sistema={proposal.sistema} residenceName={residenceName} />
+          </p>
+          <p className="text-xs text-text-secondary">
+            {proposal.partitaIva
+              ? `Nome simile a «${proposal.ragioneSociale}» indicato nella dichiarazione, ma la partita IVA ${proposal.partitaIva} non è in anagrafica. Verifica che sia la stessa impresa.`
+              : `Nome simile a «${proposal.ragioneSociale}» indicato nella dichiarazione, che non riporta una partita IVA leggibile. Verifica che sia la stessa impresa.`}
+          </p>
+          {proposal.altriOmonimi > 0 && (
+            <p className="text-xs text-semantic-amber">
+              Stesso nome anche per {pluralize(proposal.altriOmonimi, 'altro fornitore', 'altri fornitori')} in
+              anagrafica: controlla quale sia l&apos;impresa giusta.
+            </p>
+          )}
+        </>
+      )
+
+    case 'nessun_match':
+      return (
+        <>
+          <p className="text-sm text-text-primary">
+            Crea il fornitore <span className="font-medium">{proposal.ragioneSociale}</span>
+            {proposal.partitaIva && <> (P.IVA {proposal.partitaIva})</>} e collegalo{' '}
+            <EsecutoreIn sistema={proposal.sistema} residenceName={residenceName} />
+          </p>
+          <p className="text-xs text-text-secondary">
+            {proposal.partitaIva
+              ? 'Nessun fornitore in anagrafica con questa partita IVA o con un nome simile.'
+              : 'Nessun fornitore in anagrafica con un nome simile, e la dichiarazione non riporta una partita IVA leggibile.'}
+          </p>
+        </>
+      )
+  }
+}
+
+function EsecutoreIn({ sistema, residenceName }: { sistema: Sistema; residenceName: string }) {
+  return (
+    <>
+      come esecutore di <span className="font-medium">{SISTEMA_LABELS[sistema]}</span> in{' '}
+      <span className="font-medium">{residenceName}</span>
+    </>
   )
 }
