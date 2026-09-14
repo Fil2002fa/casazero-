@@ -1,4 +1,4 @@
-const CACHE = 'casazero-v2'
+const CACHE = 'casazero-v3'
 const PRECACHE = ['/offline.html']
 
 self.addEventListener('install', (e) => {
@@ -27,6 +27,10 @@ self.addEventListener('fetch', (e) => {
     url.pathname.startsWith('/api/') ||
     url.pathname.startsWith('/auth/')
   ) return
+
+  // Mai intercettare i payload RSC (router.refresh, Link, prefetch): servirli
+  // dalla cache fa ripiegare Next su una navigazione completa
+  if (url.searchParams.has('_rsc') || e.request.headers.get('RSC') === '1') return
 
   // Network-first per la navigazione (HTML): garantisce HTML fresco,
   // fallback su cache o offline.html solo se la rete è irraggiungibile
