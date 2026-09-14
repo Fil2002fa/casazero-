@@ -154,21 +154,31 @@ export async function createBulkInvites(
   const now = new Date().toISOString()
 
   // Idempotency: skip units that already have an active invite
-  const { data: existing } = await admin
+  const { data: existing, error: existingError } = await admin
     .from('invites')
     .select('unit_id')
     .in('unit_id', unitIds)
     .is('used_at', null)
     .gt('expires_at', now)
 
+  if (existingError) {
+    console.error('createBulkInvites: errore lettura inviti esistenti', { residenceId, existingError })
+    return { count: 0, skipped: 0, error: 'Errore temporaneo nella verifica degli inviti esistenti, riprova.' }
+  }
+
   const alreadyInvited = new Set((existing ?? []).map(i => i.unit_id as string))
 
   // Safety net: solo unità senza account cliente attivo, indipendentemente da cosa
   // ha già filtrato il chiamante (stesso helper condiviso usato lato client).
-  const { data: memberRows } = await admin
+  const { data: memberRows, error: memberError } = await admin
     .from('unit_members')
     .select('unit_id, ended_at')
     .in('unit_id', unitIds)
+
+  if (memberError) {
+    console.error('createBulkInvites: errore lettura membri unità', { residenceId, memberError })
+    return { count: 0, skipped: 0, error: 'Errore temporaneo nella verifica degli account esistenti, riprova.' }
+  }
 
   const membersByUnit = new Map<string, { ended_at: string | null }[]>()
   for (const row of memberRows ?? []) {
