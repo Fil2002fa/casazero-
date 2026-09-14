@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useTransition, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
 import { Plus, Trash2, UserPlus, Copy, Check, MessageCircle, Mail, Pencil, X, Loader2 } from 'lucide-react'
 import { createUnit, createInvite, revokeInvite, updateUnitLabel, createBulkInvites } from './actions'
 import { unitHasNoActiveAccount } from '@/lib/unit-utils'
@@ -20,7 +19,6 @@ export function UnitsManager({
   appUrl: string
   initialFilter?: string
 }) {
-  const router = useRouter()
   const { showToast } = useToast()
   const [pending, startTransition] = useTransition()
   const [newUnitLabel, setNewUnitLabel] = useState('')
@@ -78,7 +76,6 @@ export function UnitsManager({
           setLocalError(res.error)
         } else {
           showToast('success', 'Invito generato.')
-          router.refresh()
         }
       } catch {
         setLocalError('Errore imprevisto, ricarica la pagina')
@@ -96,7 +93,6 @@ export function UnitsManager({
           setLocalError(res.error)
         } else {
           setEditingUnitId(null)
-          router.refresh()
         }
       } catch {
         setLocalError('Errore imprevisto, ricarica la pagina')
@@ -111,8 +107,6 @@ export function UnitsManager({
         const res = await revokeInvite(inviteId, residenceId)
         if (res.error) {
           setLocalError(res.error)
-        } else {
-          router.refresh()
         }
       } catch {
         setLocalError('Errore imprevisto, ricarica la pagina')
@@ -129,10 +123,8 @@ export function UnitsManager({
           setLocalError(res.error)
         } else if (res.count === 0) {
           showToast('success', 'Nessuna nuova unità da invitare: tutte hanno già un account o un invito attivo.')
-          router.refresh()
         } else {
           showToast('success', `Inviti generati per ${res.count} unità.`)
-          router.refresh()
         }
       } catch {
         setLocalError('Errore imprevisto, ricarica la pagina')
