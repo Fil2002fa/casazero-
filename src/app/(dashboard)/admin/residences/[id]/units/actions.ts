@@ -79,12 +79,42 @@ export async function createUnit(
   return { id: unitId as string }
 }
 
+async function requireUnitsInResidence(
+  action: string,
+  residenceId: string,
+  unitIds: string[]
+): Promise<{ error: string } | null> {
+  const denied = await requireResidenceAccess(action, residenceId)
+  if (denied) return denied
+
+  const wanted = [...new Set(unitIds)]
+  const supabase = await createClient()
+  const { data: units, error } = await supabase
+    .from('units')
+    .select('id')
+    .eq('residence_id', residenceId)
+    .in('id', wanted)
+
+  if (error) {
+    console.error(`${action}: errore lettura unità`, { residenceId, error })
+    return { error: 'Errore temporaneo nella verifica delle unità, riprova.' }
+  }
+  if ((units ?? []).length !== wanted.length) {
+    console.warn(`${action}: unità fuori residenza`, { residenceId, requested: wanted.length, found: units?.length ?? 0 })
+    return { error: 'Unità non trovata in questa residenza' }
+  }
+  return null
+}
+
 export async function createInvite(
   unitId: string,
   residenceId: string
 ): Promise<{ error?: string; token?: string }> {
-  const caller = await requireCaller('createInvite', ['admin', 'super_admin'])
+  const caller = await requireCaller('createInvite', ['super_admin'])
   if ('error' in caller) return { error: caller.error }
+
+  const denied = await requireUnitsInResidence('createInvite', residenceId, [unitId])
+  if (denied) return denied
 
   const admin = createServiceClient()
 
@@ -114,8 +144,11 @@ export async function createBulkInvites(
 ): Promise<{ count: number; skipped: number; error?: string }> {
   if (unitIds.length === 0) return { count: 0, skipped: 0 }
 
-  const caller = await requireCaller('createBulkInvites', ['admin', 'super_admin'])
+  const caller = await requireCaller('createBulkInvites', ['super_admin'])
   if ('error' in caller) return { count: 0, skipped: 0, error: caller.error }
+
+  const denied = await requireUnitsInResidence('createBulkInvites', residenceId, unitIds)
+  if (denied) return { count: 0, skipped: 0, error: denied.error }
 
   const admin = createServiceClient()
   const now = new Date().toISOString()
