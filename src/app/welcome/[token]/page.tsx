@@ -11,13 +11,14 @@ type ResidenceRow = { name: string; address: string | null; builder_id: string; 
 type UnitRow = { label: string; residence_id: string; residences: ResidenceRow } | null
 
 export default async function WelcomePage({ params }: { params: Params }) {
-  const { token } = await params
+  // Trim una volta sola: query e CTA devono usare lo stesso token
+  const token = (await params).token.trim()
   const svc = createServiceClient()
 
   const { data: invite, error: inviteError } = await svc
     .from('invites')
     .select('id, unit_id, residence_id, role, expires_at, used_at, units(label, residence_id, residences(name, address, builder_id, builders(name, logo_url, primary_color)))')
-    .eq('token', token.trim())
+    .eq('token', token)
     .maybeSingle()
 
   if (inviteError) {

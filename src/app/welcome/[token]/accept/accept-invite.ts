@@ -27,7 +27,7 @@ export async function checkInviteForUser(token: string, userId: string): Promise
   const { data: invite, error: inviteError } = await admin
     .from('invites')
     .select('id, unit_id, residence_id, role, expires_at, units(label, residence_id, residences(name, builder_id)), residences(name)')
-    .eq('token', token)
+    .eq('token', token.trim())
     .is('used_at', null)
     .maybeSingle()
 
