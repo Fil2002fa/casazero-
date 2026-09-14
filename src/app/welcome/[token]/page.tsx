@@ -1,6 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import { Home, FileText, Wrench, ClipboardList, Shield } from 'lucide-react'
+import InstallPrompt from '@/components/InstallPrompt'
 
 type Params = Promise<{ token: string }>
 
@@ -157,6 +158,8 @@ function WelcomeResidente({
             </div>
           </div>
         </div>
+
+        <InstallPrompt />
 
         {/* CTA */}
         <div className="space-y-3">
