@@ -16,7 +16,7 @@ export default async function WelcomePage({ params }: { params: Params }) {
   const { data: invite, error: inviteError } = await svc
     .from('invites')
     .select('id, unit_id, residence_id, role, expires_at, used_at, units(label, residence_id, residences(name, address, builder_id, builders(name, logo_url, primary_color)))')
-    .eq('token', token)
+    .eq('token', token.trim())
     .maybeSingle()
 
   if (inviteError) {
