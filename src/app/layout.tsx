@@ -25,6 +25,7 @@ export const metadata: Metadata = {
   },
   description: 'Il libretto di manutenzione digitale della tua casa',
   manifest: '/manifest.webmanifest',
+  icons: { apple: '/icons/apple-touch-icon.png' },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
