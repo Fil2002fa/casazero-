@@ -380,10 +380,9 @@ export function UnitsManager({
                     {pending ? '…' : <><UserPlus className="w-3.5 h-3.5" /> Genera invito</>}
                   </button>
                   {activeInvites.length === 0 && usedInvites.length === 0 && unit.members.length === 0 && (
-                    <div className="flex items-center gap-1.5 px-3 py-2 bg-background rounded-lg text-xs text-text-secondary">
-                      <UserPlus className="w-3.5 h-3.5" />
+                    <p className="self-center text-xs text-text-secondary">
                       Nessun invito — generane uno
-                    </div>
+                    </p>
                   )}
                 </div>
               </div>
