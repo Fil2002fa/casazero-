@@ -105,10 +105,15 @@ export function UnitsManager({
   }
 
   function handleRevokeInvite(inviteId: string) {
+    setLocalError(null)
     startTransition(async () => {
       try {
-        await revokeInvite(inviteId, residenceId)
-        router.refresh()
+        const res = await revokeInvite(inviteId, residenceId)
+        if (res.error) {
+          setLocalError(res.error)
+        } else {
+          router.refresh()
+        }
       } catch {
         setLocalError('Errore imprevisto, ricarica la pagina')
       }
