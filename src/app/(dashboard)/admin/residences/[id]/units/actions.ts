@@ -5,22 +5,43 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/admin'
 import { unitHasNoActiveAccount } from '@/lib/unit-utils'
 
+type Caller = { userId: string; role: string } | { error: string }
+
+async function requireCaller(action: string, roles: string[]): Promise<Caller> {
+  const supabase = await createClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError) console.error(`${action}: errore lettura sessione`, authError)
+  if (!user) return { error: 'Non autenticato' }
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (profileError) {
+    console.error(`${action}: errore lettura profilo`, { userId: user.id, profileError })
+    return { error: 'Errore temporaneo nella verifica dei permessi, riprova.' }
+  }
+  if (!profile) {
+    console.error(`${action}: profilo non leggibile`, { userId: user.id })
+    return { error: 'Profilo non leggibile per questo account, esci e rientra.' }
+  }
+  if (!roles.includes(profile.role)) {
+    console.warn(`${action}: ruolo non ammesso`, { userId: user.id, role: profile.role })
+    return { error: 'Permessi insufficienti' }
+  }
+
+  return { userId: user.id, role: profile.role }
+}
+
 export async function createUnit(
   residenceId: string,
   label: string,
   floor: number | null
 ): Promise<{ error?: string; id?: string }> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Non autenticato' }
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role, builder_id')
-    .eq('id', user.id)
-    .single()
-
-  if (profile?.role !== 'super_admin') return { error: 'Permessi insufficienti' }
+  const caller = await requireCaller('createUnit', ['super_admin'])
+  if ('error' in caller) return { error: caller.error }
 
   const admin = createServiceClient()
 
@@ -42,19 +63,8 @@ export async function createInvite(
   unitId: string,
   residenceId: string
 ): Promise<{ error?: string; token?: string }> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Non autenticato' }
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile || !['admin', 'super_admin'].includes(profile.role)) {
-    return { error: 'Permessi insufficienti' }
-  }
+  const caller = await requireCaller('createInvite', ['admin', 'super_admin'])
+  if ('error' in caller) return { error: caller.error }
 
   const admin = createServiceClient()
 
@@ -84,19 +94,8 @@ export async function createBulkInvites(
 ): Promise<{ count: number; skipped: number; error?: string }> {
   if (unitIds.length === 0) return { count: 0, skipped: 0 }
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { count: 0, skipped: 0, error: 'Non autenticato' }
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile || !['admin', 'super_admin'].includes(profile.role)) {
-    return { count: 0, skipped: 0, error: 'Permessi insufficienti' }
-  }
+  const caller = await requireCaller('createBulkInvites', ['admin', 'super_admin'])
+  if ('error' in caller) return { count: 0, skipped: 0, error: caller.error }
 
   const admin = createServiceClient()
   const now = new Date().toISOString()
@@ -153,17 +152,8 @@ export async function updateUnitLabel(
   label: string,
   residenceId: string
 ): Promise<{ error?: string }> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Non autenticato' }
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (profile?.role !== 'super_admin') return { error: 'Permessi insufficienti' }
+  const caller = await requireCaller('updateUnitLabel', ['super_admin'])
+  if ('error' in caller) return { error: caller.error }
 
   const trimmed = label.trim()
   if (!trimmed) return { error: 'L\'etichetta non può essere vuota' }
