@@ -52,15 +52,19 @@ export function UnitsManager({
     if (!newUnitLabel.trim()) return
     setLocalError(null)
     startTransition(async () => {
-      const res = await createUnit(residenceId, newUnitLabel, newUnitFloor ? parseInt(newUnitFloor) : null)
-      if (res.error) {
-        setLocalError(res.error)
-      } else {
-        setNewUnitLabel('')
-        setNewUnitFloor('')
-        setShowNewUnitForm(false)
-        // Trigger page refresh via router.refresh would be ideal, but page will revalidate
-        window.location.reload()
+      try {
+        const res = await createUnit(residenceId, newUnitLabel, newUnitFloor ? parseInt(newUnitFloor) : null)
+        if (res.error) {
+          setLocalError(res.error)
+        } else {
+          setNewUnitLabel('')
+          setNewUnitFloor('')
+          setShowNewUnitForm(false)
+          // Trigger page refresh via router.refresh would be ideal, but page will revalidate
+          window.location.reload()
+        }
+      } catch {
+        setLocalError('Errore imprevisto, ricarica la pagina')
       }
     })
   }
@@ -68,12 +72,16 @@ export function UnitsManager({
   function handleGenerateInvite(unitId: string) {
     setLocalError(null)
     startTransition(async () => {
-      const res = await createInvite(unitId, residenceId)
-      if (res.error) {
-        setLocalError(res.error)
-      } else {
-        showToast('success', 'Invito generato.')
-        router.refresh()
+      try {
+        const res = await createInvite(unitId, residenceId)
+        if (res.error) {
+          setLocalError(res.error)
+        } else {
+          showToast('success', 'Invito generato.')
+          router.refresh()
+        }
+      } catch {
+        setLocalError('Errore imprevisto, ricarica la pagina')
       }
     })
   }
@@ -82,35 +90,47 @@ export function UnitsManager({
     const trimmed = editLabel.trim()
     if (!trimmed) return
     startTransition(async () => {
-      const res = await updateUnitLabel(unitId, trimmed, residenceId)
-      if (res.error) {
-        setLocalError(res.error)
-      } else {
-        setEditingUnitId(null)
-        router.refresh()
+      try {
+        const res = await updateUnitLabel(unitId, trimmed, residenceId)
+        if (res.error) {
+          setLocalError(res.error)
+        } else {
+          setEditingUnitId(null)
+          router.refresh()
+        }
+      } catch {
+        setLocalError('Errore imprevisto, ricarica la pagina')
       }
     })
   }
 
   function handleRevokeInvite(inviteId: string) {
     startTransition(async () => {
-      await revokeInvite(inviteId, residenceId)
-      router.refresh()
+      try {
+        await revokeInvite(inviteId, residenceId)
+        router.refresh()
+      } catch {
+        setLocalError('Errore imprevisto, ricarica la pagina')
+      }
     })
   }
 
   function handleBulkInvite() {
     setLocalError(null)
     startTransition(async () => {
-      const res = await createBulkInvites(bulkTargets.map(u => u.id), residenceId)
-      if (res.error) {
-        setLocalError(res.error)
-      } else if (res.count === 0) {
-        showToast('success', 'Nessuna nuova unità da invitare: tutte hanno già un account o un invito attivo.')
-        router.refresh()
-      } else {
-        showToast('success', `Inviti generati per ${res.count} unità.`)
-        router.refresh()
+      try {
+        const res = await createBulkInvites(bulkTargets.map(u => u.id), residenceId)
+        if (res.error) {
+          setLocalError(res.error)
+        } else if (res.count === 0) {
+          showToast('success', 'Nessuna nuova unità da invitare: tutte hanno già un account o un invito attivo.')
+          router.refresh()
+        } else {
+          showToast('success', `Inviti generati per ${res.count} unità.`)
+          router.refresh()
+        }
+      } catch {
+        setLocalError('Errore imprevisto, ricarica la pagina')
       }
     })
   }
