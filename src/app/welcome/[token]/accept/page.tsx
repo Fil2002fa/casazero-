@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/admin'
+import { InviteError } from '../InviteError'
 
 type Params = Promise<{ token: string }>
 
@@ -24,6 +25,27 @@ export default async function AcceptInvitePage({ params }: { params: Params }) {
   // Token invalido, scaduto, o già usato — va bene lo stesso, mandiamo alla home
   if (!invite || new Date(invite.expires_at) < new Date()) {
     redirect('/')
+  }
+
+  const { data: profile, error: profileError } = await admin
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (profileError || !profile) {
+    console.error('accept: errore lettura profilo', profileError ?? 'profilo assente')
+    return <InviteError message="Errore temporaneo, riprova tra poco." />
+  }
+
+  // Un invito può solo far salire un client: mai cambiare il ruolo di un account di gestione.
+  if (profile.role !== 'client' && profile.role !== invite.role) {
+    return (
+      <InviteError
+        message="Questo account ha già un ruolo di gestione su CasaZero e l'invito non può cambiarlo. Accedi con un altro indirizzo email."
+        loginHref={`/auth/login?invite=${token}`}
+      />
+    )
   }
 
   // Ricava builder_id dal percorso unit → residence → builder
