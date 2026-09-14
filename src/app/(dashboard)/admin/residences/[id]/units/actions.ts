@@ -35,6 +35,26 @@ async function requireCaller(action: string, roles: string[]): Promise<Caller> {
   return { userId: user.id, role: profile.role }
 }
 
+// Il perimetro lo decide la RLS su residences (czero_can_access_residence), non un confronto ricopiato qui.
+async function requireResidenceAccess(action: string, residenceId: string): Promise<{ error: string } | null> {
+  const supabase = await createClient()
+  const { data: residence, error } = await supabase
+    .from('residences')
+    .select('id')
+    .eq('id', residenceId)
+    .maybeSingle()
+
+  if (error) {
+    console.error(`${action}: errore lettura residenza`, { residenceId, error })
+    return { error: 'Errore temporaneo nella verifica della residenza, riprova.' }
+  }
+  if (!residence) {
+    console.warn(`${action}: residenza fuori perimetro`, { residenceId })
+    return { error: 'Residenza non trovata' }
+  }
+  return null
+}
+
 export async function createUnit(
   residenceId: string,
   label: string,
@@ -168,11 +188,29 @@ export async function updateUnitLabel(
 }
 
 export async function revokeInvite(inviteId: string, residenceId: string): Promise<{ error?: string }> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Non autenticato' }
+  const caller = await requireCaller('revokeInvite', ['super_admin'])
+  if ('error' in caller) return { error: caller.error }
+
+  const denied = await requireResidenceAccess('revokeInvite', residenceId)
+  if (denied) return denied
 
   const admin = createServiceClient()
+  const { data: invite, error: readError } = await admin
+    .from('invites')
+    .select('id, residence_id, units(residence_id)')
+    .eq('id', inviteId)
+    .maybeSingle()
+
+  if (readError) {
+    console.error('revokeInvite: errore lettura invito', { inviteId, readError })
+    return { error: 'Errore temporaneo nella lettura dell\'invito, riprova.' }
+  }
+
+  const unitResidenceId = (invite?.units as unknown as { residence_id: string } | null)?.residence_id ?? null
+  if (!invite || (invite.residence_id ?? unitResidenceId) !== residenceId) {
+    return { error: 'Invito non trovato' }
+  }
+
   const { error } = await admin.from('invites').delete().eq('id', inviteId)
   if (error) return { error: error.message }
 
