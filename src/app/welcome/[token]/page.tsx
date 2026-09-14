@@ -13,12 +13,16 @@ export default async function WelcomePage({ params }: { params: Params }) {
   const { token } = await params
   const svc = createServiceClient()
 
-  const { data: invite } = await svc
+  const { data: invite, error: inviteError } = await svc
     .from('invites')
     .select('id, unit_id, residence_id, role, expires_at, used_at, units(label, residence_id, residences(name, address, builder_id, builders(name, logo_url, primary_color)))')
     .eq('token', token)
     .maybeSingle()
 
+  if (inviteError) {
+    console.error('welcome: errore lettura invito', inviteError)
+    return <InviteError message="Errore temporaneo, riprova tra poco." />
+  }
   if (!invite) {
     return <InviteError message="Invito non valido o già utilizzato." />
   }
