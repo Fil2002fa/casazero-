@@ -24,7 +24,10 @@ export default async function WelcomePage({ params }: { params: Params }) {
     return <InviteError message="Errore temporaneo, riprova tra poco." />
   }
   if (!invite) {
-    return <InviteError message="Invito non valido o già utilizzato." />
+    return <InviteError message="Invito non valido." />
+  }
+  if (invite.used_at) {
+    return <InviteError message="Questo invito è già stato utilizzato." />
   }
   if (new Date(invite.expires_at) < new Date()) {
     return <InviteError message="Questo invito è scaduto. Richiedi un nuovo link al costruttore." />
