@@ -58,8 +58,6 @@ export function UnitsManager({
           setNewUnitLabel('')
           setNewUnitFloor('')
           setShowNewUnitForm(false)
-          // Trigger page refresh via router.refresh would be ideal, but page will revalidate
-          window.location.reload()
         }
       } catch {
         setLocalError('Errore imprevisto, ricarica la pagina')
