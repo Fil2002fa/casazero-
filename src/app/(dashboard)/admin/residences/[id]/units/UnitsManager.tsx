@@ -72,6 +72,7 @@ export function UnitsManager({
       if (res.error) {
         setLocalError(res.error)
       } else {
+        showToast('success', 'Invito generato.')
         router.refresh()
       }
     })
