@@ -38,7 +38,7 @@ const STACK: Record<TableStack, {
     emphasis:  'max-lg:order-first',
     unlabeled: 'max-lg:justify-end',
     label:     'lg:hidden',
-    value:     'max-lg:min-w-0 max-lg:text-right max-lg:line-clamp-2',
+    value:     'max-lg:min-w-0 max-lg:text-right max-lg:line-clamp-2 max-lg:break-words',
   },
   xl: {
     wrapper:   'max-xl:overflow-visible max-xl:rounded-none max-xl:border-0 max-xl:bg-transparent',
@@ -50,7 +50,7 @@ const STACK: Record<TableStack, {
     emphasis:  'max-xl:order-first',
     unlabeled: 'max-xl:justify-end',
     label:     'xl:hidden',
-    value:     'max-xl:min-w-0 max-xl:text-right max-xl:line-clamp-2',
+    value:     'max-xl:min-w-0 max-xl:text-right max-xl:line-clamp-2 max-xl:break-words',
   },
 }
 
@@ -167,6 +167,10 @@ export function TableCell({ className, numeric, emphasis, label, children, ...pr
           <span className={cn('text-[13px] font-medium text-neutral-500 whitespace-nowrap flex-shrink-0', s.label)}>{label}</span>
           <span className={s.value}>{children}</span>
         </>
+      ) : emphasis ? (
+        // Titolo della card: spezza solo una parola più larga della card (es. un
+        // nome residenza senza spazi), invece di far scorrere la pagina di lato.
+        <span className="min-w-0 break-words">{children}</span>
       ) : children}
     </td>
   )
