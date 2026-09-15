@@ -1412,7 +1412,9 @@ function SupplierProposalSection({ doc, context }: { doc: DocRow; context: Suppl
   }
 
   return (
-    <div className="mt-3 pt-3 border-t border-border space-y-1">
+    // break-words sul blocco: le frasi citano nome residenza e ragione sociale, e una
+    // parola più larga della card va spezzata invece di far scorrere la pagina.
+    <div className="mt-3 pt-3 border-t border-border space-y-1 break-words">
       <p className="text-xs font-medium text-text-secondary">Impresa installatrice</p>
       <SupplierProposalBody proposal={proposal} residenceName={context.residenceName} />
       {error && <p className="text-xs text-semantic-red">{error}</p>}
