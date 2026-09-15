@@ -14,21 +14,32 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const role = profile.role
 
-  // Due stati soli: da lg in su sidebar fissa, sotto lg niente sidebar e
-  // navigazione in un drawer aperto dall'header. Sotto lg il main occupa tutto
+  // Due stati soli.
+  // Da lg in su: sidebar fissa e <main> che scorre accanto, dentro un contenitore
+  // alto quanto il viewport (h-dvh e non h-screen: sul telefono 100vh include la
+  // barra del browser).
+  // Sotto lg: niente sidebar, navigazione nel drawer aperto dall'header, e scorre
+  // il documento come nella PWA residente, non <main>. L'header resta attaccato in
+  // alto perché l'hamburger non esca di vista sulle liste lunghe: è la stessa
+  // barra, con il fondo e il bordo che ha già, nessuna ombra. Il main occupa tutto
   // il viewport, quindi i breakpoint delle pagine misurano davvero il contenuto.
-  // h-dvh e non h-screen: sul telefono 100vh include la barra del browser e il
-  // fondo del main finirebbe sotto.
+  // Nessuna protezione contro lo scroll orizzontale: se compare, è una rottura
+  // da correggere nel componente, non da nascondere.
   return (
     <div
-      className="flex h-dvh overflow-hidden bg-background"
+      className="bg-background lg:flex lg:h-dvh lg:overflow-hidden"
       style={{ '--wl-brand-dark': brandDark } as React.CSSProperties}
     >
       <AdminSidebar role={role} />
 
-      <main className="flex-1 overflow-auto">
+      <main className="lg:flex-1 lg:overflow-auto">
         {/* Identità costruttore — CasaZero resta il marchio della sidebar (BrandMark) */}
-        <BuilderIdentityBar name={builderName} logoSrc={logoUrl} leading={<MobileNav role={role} />} />
+        <BuilderIdentityBar
+          name={builderName}
+          logoSrc={logoUrl}
+          leading={<MobileNav role={role} />}
+          className="sticky top-0 z-sticky lg:static lg:z-auto"
+        />
 
         {/* Container unico del contenuto: le pagine non dichiarano più padding né
             larghezza proprie, li prendono da qui (src/lib/layout.ts). */}
