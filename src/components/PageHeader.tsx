@@ -18,17 +18,19 @@ interface BackLinkProps {
 
 // Ritorno alla pagina madre con il nome della destinazione scritto, invece della
 // sola freccia senza nome accessibile. Sotto lg l'area toccabile è alta 44px.
+// L'etichetta è spesso un nome residenza: max-w-full e min-w-0 le permettono di
+// andare a capo, e break-words spezza solo una parola più larga dello spazio.
 export function BackLink({ href, label, className }: BackLinkProps) {
   return (
     <Link
       href={href}
       className={cn(
-        'inline-flex items-center gap-1 min-h-11 lg:min-h-0 -ml-1 px-1 text-sm text-text-secondary hover:text-text-primary rounded-lg focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2',
+        'inline-flex max-w-full items-center gap-1 min-h-11 lg:min-h-0 -ml-1 px-1 text-sm text-text-secondary hover:text-text-primary rounded-lg focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2',
         className,
       )}
     >
       <ChevronLeft className="w-4 h-4 flex-shrink-0" strokeWidth={1.6} />
-      {label}
+      <span className="min-w-0 break-words">{label}</span>
     </Link>
   )
 }
