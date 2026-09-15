@@ -252,7 +252,7 @@ export default async function FascicoloPage({ searchParams }: { searchParams: Se
                   </div>
 
                   {/* Card */}
-                  <div className="flex-1 bg-surface rounded-xl border border-border p-4 mb-2">
+                  <div className="flex-1 min-w-0 bg-surface rounded-xl border border-border p-4 mb-2">
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <div className="flex-1 min-w-0">
                         <p className="text-base font-medium text-text-primary truncate">
