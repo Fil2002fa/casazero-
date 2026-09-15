@@ -1,4 +1,4 @@
-const CACHE = 'casazero-v3'
+const CACHE = 'casazero-v4'
 const PRECACHE = ['/offline.html']
 
 self.addEventListener('install', (e) => {
@@ -32,19 +32,12 @@ self.addEventListener('fetch', (e) => {
   // dalla cache fa ripiegare Next su una navigazione completa
   if (url.searchParams.has('_rsc') || e.request.headers.get('RSC') === '1') return
 
-  // Network-first per la navigazione (HTML): garantisce HTML fresco,
-  // fallback su cache o offline.html solo se la rete è irraggiungibile
+  // Navigazione (HTML): solo rete, mai salvata in cache. Offline si serve
+  // sempre offline.html: una pagina salvata non ha il CSS di Next (hash per
+  // build) e conserverebbe HTML autenticato sul dispositivo dopo il logout
   if (e.request.mode === 'navigate') {
     e.respondWith(
-      fetch(e.request)
-        .then((res) => {
-          const clone = res.clone()
-          caches.open(CACHE).then((c) => c.put(e.request, clone))
-          return res
-        })
-        .catch(() =>
-          caches.match(e.request).then((cached) => cached ?? caches.match('/offline.html'))
-        )
+      fetch(e.request).catch(() => caches.match('/offline.html'))
     )
     return
   }
