@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/cn'
+import { useDialogFocus } from './useDialogFocus'
 
 type ModalSize = 'confirm' | 'form'
 
@@ -11,9 +12,6 @@ const SIZE_STYLES: Record<ModalSize, string> = {
   confirm: 'max-w-md',
   form:    'max-w-lg',
 }
-
-const FOCUSABLE_SELECTOR =
-  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 interface ModalProps {
   open: boolean
@@ -27,47 +25,7 @@ interface ModalProps {
 /** Una modale non apre mai un'altra modale. */
 export function Modal({ open, onClose, title, size = 'confirm', footer, children }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null)
-  const previouslyFocused = useRef<HTMLElement | null>(null)
-
-  useEffect(() => {
-    if (!open) return
-
-    previouslyFocused.current = document.activeElement as HTMLElement | null
-    document.body.style.overflow = 'hidden'
-
-    const panel = panelRef.current
-    const firstFocusable = panel?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
-    ;(firstFocusable ?? panel)?.focus()
-
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
-        onClose()
-        return
-      }
-      if (e.key !== 'Tab' || !panel) return
-
-      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
-      if (focusable.length === 0) return
-
-      const first = focusable[0]
-      const last = focusable[focusable.length - 1]
-
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault()
-        last.focus()
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault()
-        first.focus()
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.body.style.overflow = ''
-      window.removeEventListener('keydown', handleKeyDown)
-      previouslyFocused.current?.focus()
-    }
-  }, [open, onClose])
+  useDialogFocus(open, onClose, panelRef)
 
   if (!open) return null
 
