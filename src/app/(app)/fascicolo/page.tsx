@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
-import { Download, Paperclip, FileDown } from 'lucide-react'
+import { FileDown } from 'lucide-react'
 import { createServiceClient } from '@/lib/supabase/admin'
 import { requireProfile } from '@/lib/auth'
 import type { MaintenancePriority } from '@/types/database'
@@ -10,10 +9,9 @@ import {
   LIVE_STATUS_FIELDS, LIVE_STATUS_TEMPLATE_FIELDS,
   type LiveStatusItem,
 } from '@/lib/maintenance-status'
+import { FascicoloList, type FascicoloEntry } from './FascicoloList'
 
 export const metadata: Metadata = { title: 'Fascicolo' }
-
-type SearchParams = Promise<{ scope?: string }>
 
 type CompletionRow = {
   id: string
@@ -29,8 +27,7 @@ type CompletionRow = {
   attachments: { id: string; file_name: string; storage_path: string; mime_type: string | null }[]
 }
 
-export default async function FascicoloPage({ searchParams }: { searchParams: SearchParams }) {
-  const { scope = 'all' } = await searchParams
+export default async function FascicoloPage() {
   const profile = await requireProfile()
   const adminClient = createServiceClient()
 
@@ -110,6 +107,8 @@ export default async function FascicoloPage({ searchParams }: { searchParams: Se
   // ── Completions ──────────────────────────────────────────────────────────
   // Usa adminClient per evitare dipendenza da RLS e applicare esplicitamente
   // lo stesso perimetro usato per conformità e PDF (residence_id + unit_id).
+  // Si carica sempre lo scope "Tutti": Unità e Condominio sono una partizione
+  // su unit_id e li filtra FascicoloList in memoria, senza tornare al server.
   let completionsQuery = adminClient
     .from('completions')
     .select(`
@@ -126,27 +125,44 @@ export default async function FascicoloPage({ searchParams }: { searchParams: Se
     completionsQuery = completionsQuery.eq('residence_id', primaryResidenceId)
   }
 
-  if (scope === 'unit') {
-    // Tab "Unità": solo completions della propria unità (o di qualsiasi unità per admin)
-    completionsQuery = primaryUnitId
-      ? completionsQuery.eq('unit_id', primaryUnitId)
-      : completionsQuery.not('unit_id', 'is', null)
-  } else if (scope === 'condominium') {
-    completionsQuery = completionsQuery.is('unit_id', null)
-  } else if (primaryUnitId) {
-    // Tab "Tutti" per un client: la propria unità + parti condominiali
+  if (primaryUnitId) {
+    // Client: la propria unità + parti condominiali
     completionsQuery = completionsQuery.or(`unit_id.eq.${primaryUnitId},unit_id.is.null`)
   }
-  // Tab "Tutti" per admin/super_admin: nessun filtro ulteriore (tutte le completions della residenza)
+  // Admin/super_admin: nessun filtro ulteriore (tutte le completions della residenza)
 
   const { data: rawCompletions } = await completionsQuery
   const completions = (rawCompletions ?? []) as unknown as CompletionRow[]
 
-  // Contatori
   const thisYear = new Date().getFullYear()
-  const yearCount = completions.filter(
-    c => new Date(c.completed_at).getFullYear() === thisYear
-  ).length
+
+  // Date, anno e colore del punto calcolati qui sul server e passati come
+  // valori già pronti: calcolarli nel client darebbe testo diverso fra Node e
+  // Safari e un mismatch di hydration.
+  const entries: FascicoloEntry[] = completions.map(c => {
+    const tpl = c.maintenance_items?.maintenance_templates
+    const effectivePriority = c.maintenance_items?.priority ?? tpl?.priority ?? 'N2'
+    return {
+      id: c.id,
+      title: tpl?.title ?? 'Intervento',
+      category: tpl?.category ?? null,
+      isCondominium: c.unit_id === null,
+      dotClass: effectivePriority === 'N3' ? 'bg-brand-medium'
+        : effectivePriority === 'N2' ? 'bg-semantic-blue'
+        : 'bg-text-secondary',
+      dateStr: new Date(c.completed_at).toLocaleDateString('it-IT', {
+        day: 'numeric', month: 'long', year: 'numeric',
+      }),
+      year: new Date(c.completed_at).getFullYear(),
+      performedByName: c.performed_by_name,
+      notes: c.notes,
+      attachments: c.attachments.map(att => ({
+        id: att.id,
+        file_name: att.file_name,
+        storage_path: att.storage_path,
+      })),
+    }
+  })
 
   return (
     <div className="p-4 space-y-6 pb-safe">
@@ -184,145 +200,12 @@ export default async function FascicoloPage({ searchParams }: { searchParams: Se
         </div>
       </div>
 
-      {/* Contatori */}
-      <div className="grid grid-cols-3 gap-3">
-        <StatBox label="Totali" value={completions.length} />
-        <StatBox label={`Anno ${thisYear}`} value={yearCount} />
-        <StatBox label="Scadute" value={scaduteCount} alert={scaduteCount > 0} />
-      </div>
-
-      {/* Filtro scope */}
-      <div className="flex gap-2">
-        {(['all', 'unit', 'condominium'] as const).map(s => (
-          <Link
-            key={s}
-            href={`/fascicolo${s !== 'all' ? `?scope=${s}` : ''}`}
-            className={`flex items-center h-11 px-4 rounded-full text-sm font-medium focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 ${
-              scope === s || (s === 'all' && scope !== 'unit' && scope !== 'condominium')
-                ? 'bg-brand-dark text-white'
-                : 'bg-surface border border-border text-text-secondary'
-            }`}
-          >
-            {s === 'all' ? 'Tutti' : s === 'unit' ? 'Unità' : 'Condominio'}
-          </Link>
-        ))}
-      </div>
-
-      {/* Timeline */}
-      {completions.length === 0 ? (
-        <div className="bg-surface rounded-xl border border-border p-8 text-center">
-          <p className="text-base text-text-secondary">Nessun intervento registrato.</p>
-        </div>
-      ) : (
-        <div className="space-y-1">
-          {completions.map((c, idx) => {
-            const tpl = c.maintenance_items?.maintenance_templates
-            const effectivePriority = c.maintenance_items?.priority ?? tpl?.priority ?? 'N2'
-            const isCondominium = c.unit_id === null
-            const dateStr = new Date(c.completed_at).toLocaleDateString('it-IT', {
-              day: 'numeric', month: 'long', year: 'numeric',
-            })
-            const prevDate = idx > 0
-              ? new Date(completions[idx - 1].completed_at).getFullYear()
-              : null
-            const thisDateYear = new Date(c.completed_at).getFullYear()
-            const showYearSep = prevDate !== null && prevDate !== thisDateYear
-
-            return (
-              <div key={c.id}>
-                {(idx === 0 || showYearSep) && (
-                  <div className="flex items-center gap-3 py-3">
-                    <div className="h-px flex-1 bg-border" />
-                    <span className="text-xs text-text-secondary font-medium">{thisDateYear}</span>
-                    <div className="h-px flex-1 bg-border" />
-                  </div>
-                )}
-
-                <div className="flex gap-3">
-                  {/* Timeline line */}
-                  <div className="flex flex-col items-center">
-                    <div className={`w-2.5 h-2.5 rounded-full mt-1.5 flex-shrink-0 ${
-                      effectivePriority === 'N3' ? 'bg-brand-medium'
-                      : effectivePriority === 'N2' ? 'bg-semantic-blue'
-                      : 'bg-text-secondary'
-                    }`} />
-                    {idx < completions.length - 1 && (
-                      <div className="w-px flex-1 bg-border mt-1" />
-                    )}
-                  </div>
-
-                  {/* Card */}
-                  <div className="flex-1 min-w-0 bg-surface rounded-xl border border-border p-4 mb-2">
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-base font-medium text-text-primary truncate">
-                          {tpl?.title ?? 'Intervento'}
-                        </p>
-                        <p className="text-xs text-text-secondary">{tpl?.category}</p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                        <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
-                          isCondominium
-                            ? 'bg-brand-light text-brand-dark'
-                            : 'bg-semantic-blue-bg text-semantic-blue'
-                        }`}>
-                          {isCondominium ? 'Condominio' : 'Unità'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <p className="text-xs text-text-secondary">{dateStr}</p>
-
-                    {c.performed_by_name && (
-                      <p className="text-xs text-text-secondary mt-0.5">
-                        Eseguito da: <span className="text-text-primary">{c.performed_by_name}</span>
-                      </p>
-                    )}
-
-                    {c.notes && (
-                      <p className="text-base text-text-secondary mt-1.5 leading-relaxed">{c.notes}</p>
-                    )}
-
-                    {c.attachments.length > 0 && (
-                      <div className="mt-2 space-y-1">
-                        {c.attachments.map(att => (
-                          <a
-                            key={att.id}
-                            href={`/api/download?bucket=attachments&path=${encodeURIComponent(att.storage_path)}`}
-                            className="flex items-center gap-1.5 h-11 -mx-1 px-1 rounded-lg text-sm text-brand-medium focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20"
-                          >
-                            <Paperclip className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={1.6} />
-                            <span className="truncate">{att.file_name}</span>
-                            <Download className="w-3.5 h-3.5 ml-auto flex-shrink-0" strokeWidth={1.6} />
-                          </a>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
+      <FascicoloList entries={entries} thisYear={thisYear} scaduteCount={scaduteCount} />
 
       {/* Footer nota immutabilità */}
       <p className="text-xs text-text-secondary text-center pb-2">
         Il fascicolo è un registro permanente e non modificabile.
       </p>
-    </div>
-  )
-}
-
-function StatBox({ label, value, alert }: { label: string; value: number; alert?: boolean }) {
-  return (
-    <div className={`rounded-xl p-4 text-center border ${
-      alert ? 'bg-semantic-red-bg border-semantic-red/20' : 'bg-surface border-border'
-    }`}>
-      <p className={`text-2xl font-medium ${alert ? 'text-semantic-red' : 'text-text-primary'}`}>
-        {value}
-      </p>
-      <p className="text-xs text-text-secondary mt-0.5">{label}</p>
     </div>
   )
 }
