@@ -122,8 +122,10 @@ export default async function AdminManutenzioniPage({ searchParams }: { searchPa
         </p>
       </header>
 
-      {/* Contatori — stessa partizione della lista; cliccabili per filtrarla, toggle se già attivi */}
-      <div className="grid grid-cols-3 gap-3">
+      {/* Contatori — stessa partizione della lista; cliccabili per filtrarla, toggle se già attivi.
+          Impilati sotto sm: la regola delle griglie vuole una base a 320 di 1 o 2
+          colonne, e con tre contatori 2 lascerebbe un orfano. */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Link href={statHref('in_ritardo', activeFilter)} className="block rounded-xl focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2">
           <Stat label="In ritardo" value={counts.in_ritardo} tone="overdue" active={activeFilter === 'in_ritardo'} />
         </Link>

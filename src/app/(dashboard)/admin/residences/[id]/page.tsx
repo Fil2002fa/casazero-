@@ -378,12 +378,15 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
       </div>
 
       {/* Gestione — navigazione principale, subito sotto la testata. Le colonne
-          seguono il numero di porte (6 per il costruttore, 4 per l'amministratore). */}
+          seguono il numero di porte (6 per il costruttore, 4 per l'amministratore).
+          Base a una colonna: a 320px due porte affiancate lasciano all'etichetta
+          meno spazio di "Manutenzioni", che non va a capo. Per lo stesso motivo
+          le 4 porte stanno affiancate solo da xl (992px di contenuto). */}
       <PorteNav
         porte={porte}
         className={canManage
-          ? 'grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mt-4'
-          : 'grid grid-cols-2 md:grid-cols-4 gap-3 mt-4'}
+          ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mt-4'
+          : 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mt-4'}
       />
 
       {/* Amministratore — l'assegnazione è decisione del costruttore su se stesso */}

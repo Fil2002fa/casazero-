@@ -387,8 +387,9 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
 
       {effectivePlanView === 'attive' && (
       <>
-      {/* Card-contatore cliccabili */}
-      <div className="grid grid-cols-3 gap-3">
+      {/* Card-contatore cliccabili — impilate sotto sm: base a 320 di una colonna,
+          perché con tre contatori due colonne lascerebbero un orfano. */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <button
           onClick={() => toggleFilter('scaduta')}
           className={`rounded-xl p-3 text-center border transition-all ${

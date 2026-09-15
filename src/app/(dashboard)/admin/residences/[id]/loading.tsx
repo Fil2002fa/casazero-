@@ -15,7 +15,7 @@ export default function Loading() {
       </div>
 
       {/* Gestione — quick-nav sotto la testata */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mt-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mt-4">
         {[0, 1, 2, 3, 4].map(i => (
           <div key={i} className="bg-surface rounded-xl border border-border p-4 flex items-center gap-3">
             <div className="w-9 h-9 bg-border rounded-lg flex-shrink-0" />
