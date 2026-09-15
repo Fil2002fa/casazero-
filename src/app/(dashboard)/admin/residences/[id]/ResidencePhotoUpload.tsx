@@ -10,9 +10,13 @@ interface Props {
   initialPhotoUrl: string | null
   title: string
   subtitle?: string | null
+  // Sola lettura (amministratore): stessa testata, thumbnail non interattiva,
+  // niente input file né salvataggio. La riga thumbnail + identità è una sola
+  // per i due ruoli, così non può disallinearsi.
+  readOnly?: boolean
 }
 
-// Upload della foto (facciata) della residenza — visibile solo al super_admin.
+// Upload della foto (facciata) della residenza — solo il super_admin può caricarla.
 // Riusa il pattern strutturale di IdentityTab (fileInputRef + openPicker +
 // handleFileChange con object URL per l'anteprima + handleSubmit con FormData).
 // A differenza di IdentityTab NON c'è hack onError/thumbError: il bucket è pubblico,
@@ -20,7 +24,7 @@ interface Props {
 // Il componente possiede lo stato di upload MA renderizza anche nome/indirizzo
 // della residenza: sono la stessa riga di testata (thumbnail + identità), non ha
 // senso spezzarli in due componenti che devono restare visivamente allineati.
-export default function ResidencePhotoUpload({ residenceId, initialPhotoUrl, title, subtitle }: Props) {
+export default function ResidencePhotoUpload({ residenceId, initialPhotoUrl, title, subtitle, readOnly = false }: Props) {
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
@@ -81,6 +85,31 @@ export default function ResidencePhotoUpload({ residenceId, initialPhotoUrl, tit
     })
   }
 
+  const identity = (
+    <div className="flex-1 min-w-0 pt-1">
+      <h1 className="font-serif text-3xl font-semibold text-text-primary text-balance">{title}</h1>
+      {subtitle && <p className="text-sm text-neutral-500 mt-1">{subtitle}</p>}
+    </div>
+  )
+
+  if (readOnly) {
+    return (
+      <div className="flex items-start gap-4">
+        {hasPhoto ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={previewSrc!}
+            alt=""
+            className="w-24 h-[72px] rounded-xl object-cover flex-shrink-0 bg-background"
+          />
+        ) : (
+          <div className="w-24 h-[72px] rounded-xl bg-background flex-shrink-0" aria-hidden="true" />
+        )}
+        {identity}
+      </div>
+    )
+  }
+
   return (
     <form onSubmit={handleSubmit}>
       <input type="hidden" name="residence_id" value={residenceId} />
@@ -117,10 +146,7 @@ export default function ResidencePhotoUpload({ residenceId, initialPhotoUrl, tit
           </button>
         )}
 
-        <div className="flex-1 min-w-0 pt-1">
-          <h1 className="font-serif text-3xl font-semibold text-text-primary text-balance">{title}</h1>
-          {subtitle && <p className="text-sm text-neutral-500 mt-1">{subtitle}</p>}
-        </div>
+        {identity}
       </div>
 
       {error && (
