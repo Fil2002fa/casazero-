@@ -389,10 +389,13 @@ export function FornitoriManager({
                           {s.phone}
                         </a>
                       )}
+                      {/* Email a capo anche a metà parola, mai troncata: è una stringa
+                          senza spazi che altrimenti allarga la card, e su telefono non
+                          c'è il passaggio del mouse per leggerla intera. */}
                       {s.email && (
-                        <a href={`mailto:${s.email}`} className="flex items-center gap-1.5 text-xs text-text-secondary mt-1">
-                          <Mail className="w-3 h-3" strokeWidth={1.6} />
-                          {s.email}
+                        <a href={`mailto:${s.email}`} className="flex items-start gap-1.5 text-xs text-text-secondary mt-1">
+                          <Mail className="w-3 h-3 flex-shrink-0 mt-0.5" strokeWidth={1.6} />
+                          <span className="min-w-0 break-all">{s.email}</span>
                         </a>
                       )}
                       {/* Il vuoto non dice nulla: senza questa riga una card senza contatti
@@ -432,9 +435,9 @@ export function FornitoriManager({
                             </a>
                           )}
                           {s.email && (
-                            <a href={`mailto:${s.email}`} className="flex items-center gap-1.5">
-                              <Mail className="w-3 h-3" strokeWidth={1.6} />
-                              {s.email}
+                            <a href={`mailto:${s.email}`} className="flex min-w-0 items-start gap-1.5">
+                              <Mail className="w-3 h-3 flex-shrink-0 mt-0.5" strokeWidth={1.6} />
+                              <span className="min-w-0 break-all">{s.email}</span>
                             </a>
                           )}
                         </div>
