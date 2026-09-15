@@ -28,11 +28,7 @@ export default function SettingsShell(props: Props) {
 
   return (
     <>
-      <PageHeader
-        back={{ href: '/admin/residences', label: 'Residenze' }}
-        title="Impostazioni"
-        className="mb-6"
-      />
+      <PageHeader title="Impostazioni" className="mb-6" />
 
       {/* Tab bar */}
       <div className="border-b border-border">
