@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { ChevronDown, ChevronUp, Bell } from 'lucide-react'
 import { MaintenanceBadge } from '@/components/MaintenanceBadge'
+import { FilterCounters } from '@/components/FilterCounters'
 import { Select } from '@/components/ui/Input'
 import { ItemConfigForm } from './ItemConfigForm'
 import { setTemplateActivationForResidence } from '../fornitori/actions'
@@ -387,55 +388,15 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
 
       {effectivePlanView === 'attive' && (
       <>
-      {/* Card-contatore cliccabili — impilate sotto sm: base a 320 di una colonna,
-          perché con tre contatori due colonne lascerebbero un orfano. */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <button
-          onClick={() => toggleFilter('scaduta')}
-          className={`rounded-xl p-3 text-center border transition-all ${
-            activeFilter === 'scaduta'
-              ? 'bg-semantic-red-bg border-semantic-red/40 ring-2 ring-semantic-red/20'
-              : scaduteCount > 0
-              ? 'bg-semantic-red-bg border-semantic-red/20'
-              : 'bg-surface border-border'
-          }`}
-        >
-          <p className={`text-xl font-medium ${scaduteCount > 0 ? 'text-semantic-red' : 'text-text-primary'}`}>
-            {scaduteCount}
-          </p>
-          <p className="text-[10px] text-text-secondary">Scadute</p>
-        </button>
-
-        <button
-          onClick={() => toggleFilter('in_corso')}
-          className={`rounded-xl p-3 text-center border transition-all ${
-            activeFilter === 'in_corso'
-              ? 'bg-semantic-amber-bg border-semantic-amber/40 ring-2 ring-semantic-amber/20'
-              : inCorsoCount > 0
-              ? 'bg-semantic-amber-bg border-semantic-amber/20'
-              : 'bg-surface border-border'
-          }`}
-        >
-          <p className={`text-xl font-medium ${inCorsoCount > 0 ? 'text-semantic-amber' : 'text-text-primary'}`}>
-            {inCorsoCount}
-          </p>
-          <p className="text-[10px] text-text-secondary">In corso</p>
-        </button>
-
-        <button
-          onClick={() => toggleFilter('completate')}
-          className={`rounded-xl p-3 text-center border transition-all ${
-            activeFilter === 'completate'
-              ? 'bg-brand-light border-brand-medium/40 ring-2 ring-brand-medium/20'
-              : 'bg-surface border-border'
-          }`}
-        >
-          <p className={`text-xl font-medium ${activeFilter === 'completate' ? 'text-brand-dark' : 'text-text-primary'}`}>
-            {completedCount}
-          </p>
-          <p className="text-[10px] text-text-secondary">Completate</p>
-        </button>
-      </div>
+      {/* Contatori-filtro: stessa partizione della lista, toggle se già attivi */}
+      <FilterCounters
+        label="Filtra il piano per stato"
+        items={[
+          { key: 'scaduta',    label: 'Scadute',    value: scaduteCount,   tone: 'overdue',    active: activeFilter === 'scaduta',    onClick: () => toggleFilter('scaduta') },
+          { key: 'in_corso',   label: 'In corso',   value: inCorsoCount,   tone: 'inprogress', active: activeFilter === 'in_corso',   onClick: () => toggleFilter('in_corso') },
+          { key: 'completate', label: 'Completate', value: completedCount, tone: 'neutral',    active: activeFilter === 'completate', onClick: () => toggleFilter('completate') },
+        ]}
+      />
 
       {/* Selettore anni — visibile solo con filtro Completate */}
       {activeFilter === 'completate' && years.length > 0 && (
