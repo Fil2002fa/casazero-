@@ -1,16 +1,18 @@
 import AdminSidebar from '@/components/AdminSidebar'
 import { BuilderIdentityBar } from '@/components/BuilderIdentity'
 import { getWhitelabelBrand } from '@/lib/whitelabel'
-import { getProfile } from '@/lib/auth'
+import { requireProfile } from '@/lib/auth'
 import { CONTENT_GRID, CONTENT_RHYTHM } from '@/lib/layout'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  // Senza profilo si torna al login, come fanno già le pagine via requireRole:
+  // la shell non disegna mai la navigazione di un ruolo che l'utente non ha.
   const [{ brandDark, logoUrl, builderName }, profile] = await Promise.all([
     getWhitelabelBrand(),
-    getProfile(),
+    requireProfile(),
   ])
 
-  const role = profile?.role ?? 'admin'
+  const role = profile.role
 
   return (
     <div
