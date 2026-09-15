@@ -96,14 +96,6 @@ export default async function FascicoloPage() {
     }
   }
 
-  const { data: rawItems } = await itemsQuery
-  const allItems = (rawItems ?? []) as unknown as LiveStatusItem[]
-  const counted = allItems.filter(i => isCountable(i) && resolveCompletionMode(i) !== 'promemoria')
-  const scaduteCount = overdueLive(counted, todayISO()).length
-  const conformita = counted.length > 0
-    ? Math.round(((counted.length - scaduteCount) / counted.length) * 100)
-    : 100
-
   // ── Completions ──────────────────────────────────────────────────────────
   // Usa adminClient per evitare dipendenza da RLS e applicare esplicitamente
   // lo stesso perimetro usato per conformità e PDF (residence_id + unit_id).
@@ -131,7 +123,20 @@ export default async function FascicoloPage() {
   }
   // Admin/super_admin: nessun filtro ulteriore (tutte le completions della residenza)
 
-  const { data: rawCompletions } = await completionsQuery
+  // In parallelo: conformità e completions dipendono solo dal perimetro già
+  // risolto sopra, non l'una dall'altra.
+  const [{ data: rawItems }, { data: rawCompletions }] = await Promise.all([
+    itemsQuery,
+    completionsQuery,
+  ])
+
+  const allItems = (rawItems ?? []) as unknown as LiveStatusItem[]
+  const counted = allItems.filter(i => isCountable(i) && resolveCompletionMode(i) !== 'promemoria')
+  const scaduteCount = overdueLive(counted, todayISO()).length
+  const conformita = counted.length > 0
+    ? Math.round(((counted.length - scaduteCount) / counted.length) * 100)
+    : 100
+
   const completions = (rawCompletions ?? []) as unknown as CompletionRow[]
 
   const thisYear = new Date().getFullYear()

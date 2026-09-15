@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import { requireProfile } from '@/lib/auth'
 import { UploadDocumentForm } from '@/components/UploadDocumentForm'
-import type { DocumentCategory } from '@/types/database'
+import type { DocumentCategory, Profile } from '@/types/database'
 import { DocumentiList, type DocItem } from './DocumentiList'
 
 export const metadata: Metadata = { title: 'Documenti' }
@@ -17,13 +17,10 @@ type DocRow = {
   created_at: string
 }
 
-export default async function DocumentiPage() {
-  const profile = await requireProfile()
-  const supabase = await createClient()
-  const canUpload = profile.role === 'admin' || profile.role === 'super_admin'
+type ServerClient = Awaited<ReturnType<typeof createClient>>
 
-  // Residenza per il form di upload
-  let residenceId: string | null = null
+// Residenza per il form di upload
+async function uploadResidenceId(supabase: ServerClient, profile: Profile): Promise<string | null> {
   if (profile.role === 'admin') {
     const { data } = await supabase
       .from('admin_assignments')
@@ -31,30 +28,40 @@ export default async function DocumentiPage() {
       .eq('profile_id', profile.id)
       .limit(1)
       .maybeSingle()
-    residenceId = data?.residence_id ?? null
-  } else if (profile.role === 'super_admin') {
+    return data?.residence_id ?? null
+  }
+  if (profile.role === 'super_admin') {
     const { data } = await supabase
       .from('residences')
       .select('id')
       .limit(1)
       .maybeSingle()
-    residenceId = data?.id ?? null
-  } else {
-    const { data } = await supabase
-      .from('unit_members')
-      .select('units(residence_id)')
-      .eq('profile_id', profile.id)
-      .is('ended_at', null)
-      .maybeSingle()
-    residenceId = (data?.units as unknown as { residence_id: string } | null)?.residence_id ?? null
+    return data?.id ?? null
   }
+  const { data } = await supabase
+    .from('unit_members')
+    .select('units(residence_id)')
+    .eq('profile_id', profile.id)
+    .is('ended_at', null)
+    .maybeSingle()
+  return (data?.units as unknown as { residence_id: string } | null)?.residence_id ?? null
+}
 
-  // Documenti accessibili via RLS, tutti: filtri e ricerca avvengono in memoria
-  // nel componente client, senza ricaricare la pagina.
-  const { data: rawDocs } = await supabase
-    .from('documents')
-    .select('id, title, category, file_name, storage_path, file_date, created_at')
-    .order('created_at', { ascending: false })
+export default async function DocumentiPage() {
+  const profile = await requireProfile()
+  const supabase = await createClient()
+  const canUpload = profile.role === 'admin' || profile.role === 'super_admin'
+
+  // In parallelo: la residenza per l'upload e i documenti non dipendono l'una
+  // dagli altri. Documenti accessibili via RLS, tutti: filtri e ricerca
+  // avvengono in memoria nel componente client, senza ricaricare la pagina.
+  const [residenceId, { data: rawDocs }] = await Promise.all([
+    uploadResidenceId(supabase, profile),
+    supabase
+      .from('documents')
+      .select('id, title, category, file_name, storage_path, file_date, created_at')
+      .order('created_at', { ascending: false }),
+  ])
 
   // Date formattate qui sul server e passate come stringhe: formattarle nel
   // client darebbe testo diverso fra Node e Safari e un mismatch di hydration.
