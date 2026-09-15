@@ -219,7 +219,9 @@ function AttentionCard({ admin }: { admin: AdminSummary }) {
           {admin.fullName ?? 'Amministratore'}
         </p>
         {admin.email && (
-          <p className={`text-xs ${textSecondary} mt-0.5 truncate`}>{admin.email}</p>
+          // Email a capo anche a metà parola, mai troncata: su telefono non c'è il
+          // passaggio del mouse per leggerla intera.
+          <p className={`text-xs ${textSecondary} mt-0.5 break-all`}>{admin.email}</p>
         )}
         <div className="mt-1.5 space-y-0.5">
           {issueLines.map((line, i) => (
