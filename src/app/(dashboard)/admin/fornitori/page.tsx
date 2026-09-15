@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { requireRole } from '@/lib/auth'
+import { PageHeader } from '@/components/PageHeader'
 import { createClient } from '@/lib/supabase/server'
 import { FornitoriManager } from '@/components/FornitoriManager'
 import type { Sistema } from '@/lib/document-classification'
@@ -71,10 +72,7 @@ export default async function FornitoriBuilderPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-xl font-medium text-text-primary">Fornitori</h1>
-        <p className="text-xs text-text-secondary mt-0.5">Anagrafica del costruttore</p>
-      </header>
+      <PageHeader title="Fornitori" description="Anagrafica del costruttore" />
 
       <FornitoriManager
         scope={{ kind: 'builder', builderId, residences: residences ?? [] }}

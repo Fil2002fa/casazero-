@@ -4,6 +4,7 @@ import { Plus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import { buttonVariants } from '@/components/ui/Button'
+import { PageHeader } from '@/components/PageHeader'
 import { ResidencesTable, type ResidenceRow } from './ResidencesTable'
 import { ResidencesEmptyState } from './ResidencesEmptyState'
 
@@ -56,15 +57,15 @@ export default async function ResidencesPage() {
 
   return (
     <>
-      <header className="flex items-center justify-between">
-        <h1 className="font-serif text-3xl font-semibold text-text-primary">Residenze</h1>
-        {canManage && (
+      <PageHeader
+        title="Residenze"
+        actions={canManage && (
           <Link href="/admin/residences/new" className={buttonVariants('primary', 'default', 'gap-2')}>
             <Plus className="w-4 h-4" strokeWidth={2} />
             Nuova residenza
           </Link>
         )}
-      </header>
+      />
 
       <div className="mt-12">
         {rows.length === 0

@@ -2,10 +2,11 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import {
-  ChevronLeft, ChevronRight, UserCheck,
+  ChevronRight, UserCheck,
   Mail, Phone, AlertTriangle, CheckCircle2,
 } from 'lucide-react'
 import { requireRole } from '@/lib/auth'
+import { PageHeader } from '@/components/PageHeader'
 import { createServiceClient } from '@/lib/supabase/admin'
 import {
   overdueLive, todayISO,
@@ -65,7 +66,10 @@ export default async function AdminDetailPage({ params }: { params: Params }) {
   if (residenceIds.length === 0) {
     return (
       <div className="space-y-6">
-        <BackHeader name={adminProfile.full_name} />
+        <PageHeader
+          back={{ href: '/admin/administrators', label: 'Amministratori' }}
+          title={adminProfile.full_name ?? 'Amministratore'}
+        />
         <div className="bg-[#F4F3EF] rounded-xl p-6 text-center">
           <p className="text-sm text-[#20302A]/50">Nessuna residenza assegnata.</p>
         </div>
@@ -150,21 +154,10 @@ export default async function AdminDetailPage({ params }: { params: Params }) {
 
   return (
     <div className="space-y-6">
-      {/* Back */}
-      <div className="flex items-center gap-3">
-        <Link
-          href="/admin/administrators"
-          className="p-1 -ml-1 rounded-lg text-[#20302A]/50 hover:bg-white transition-colors"
-        >
-          <ChevronLeft className="w-5 h-5" strokeWidth={1.6} />
-        </Link>
-        <div>
-          <p className="text-[10px] text-[#20302A]/50 uppercase tracking-wide">Amministratori</p>
-          <h1 className="text-xl font-medium text-[#20302A]">
-            {adminProfile.full_name ?? 'Amministratore'}
-          </h1>
-        </div>
-      </div>
+      <PageHeader
+        back={{ href: '/admin/administrators', label: 'Amministratori' }}
+        title={adminProfile.full_name ?? 'Amministratore'}
+      />
 
       {/* Identity block — pattern AdminBlock, sola lettura */}
       <div className="bg-white rounded-xl border border-[#E4E6E2] overflow-hidden">
@@ -209,20 +202,6 @@ export default async function AdminDetailPage({ params }: { params: Params }) {
           <ResidenceCard key={res.id} residence={res} />
         ))}
       </section>
-    </div>
-  )
-}
-
-function BackHeader({ name }: { name: string | null }) {
-  return (
-    <div className="flex items-center gap-3">
-      <Link
-        href="/admin/administrators"
-        className="p-1 -ml-1 rounded-lg text-[#20302A]/50 hover:bg-white transition-colors"
-      >
-        <ChevronLeft className="w-5 h-5" strokeWidth={1.6} />
-      </Link>
-      <h1 className="text-xl font-medium text-[#20302A]">{name ?? 'Amministratore'}</h1>
     </div>
   )
 }

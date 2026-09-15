@@ -2,11 +2,12 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import {
-  ChevronLeft, Wrench, Users, Settings, FileText, BookOpen, AlertTriangle, Activity,
+  Wrench, Users, Settings, FileText, BookOpen, AlertTriangle, Activity,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
+import { BackLink } from '@/components/PageHeader'
 import {
   overdueLive, isCountable, resolveCompletionMode, formatRelativeDue, todayISO,
   LIVE_STATUS_FIELDS, LIVE_STATUS_TEMPLATE_FIELDS,
@@ -354,17 +355,17 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
   ].filter(porta => canManage || !porta.managerOnly)
 
   // Il costruttore arriva dall'elenco residenze; l'amministratore dalla sua
-  // vista trasversale Attività (/admin/manutenzioni), che è la sua home.
+  // vista trasversale Attività (/admin/manutenzioni), che è la sua home. Il
+  // nome del ritorno è il titolo della pagina di destinazione.
   const back = canManage
     ? { href: '/admin/residences', label: 'Residenze' }
-    : { href: '/admin/manutenzioni', label: 'Manutenzioni' }
+    : { href: '/admin/manutenzioni', label: 'Attività' }
 
   return (
     <>
-      <Link href={back.href} className="inline-flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary mb-6 rounded-lg focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2">
-        <ChevronLeft className="w-4 h-4" strokeWidth={1.6} />
-        {back.label}
-      </Link>
+      {/* Ritorno fuori da PageHeader: il titolo di questa pagina è il nome
+          residenza dentro la card con la foto, non una testata a sé. */}
+      <BackLink href={back.href} label={back.label} className="mb-3 lg:mb-6" />
 
       {/* Testata */}
       <div className="bg-surface rounded-xl border border-border p-6">

@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronLeft, ShieldCheck, Wrench, Eye } from 'lucide-react'
+import { ShieldCheck, Wrench, Eye } from 'lucide-react'
+import { PageHeader } from '@/components/PageHeader'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import { N3AdminActions } from '@/components/N3AdminActions'
@@ -125,21 +126,20 @@ export default async function AdminItemDetailPage({ params }: { params: Params }
 
   return (
     <>
-      <div className="flex items-center gap-3 mb-6">
-        <Link href="/admin/manutenzioni" className="text-text-secondary p-1 -ml-1 rounded-lg active:bg-background">
-          <ChevronLeft className="w-5 h-5" strokeWidth={1.6} />
-        </Link>
-        <div className="flex-1 min-w-0">
-          <p className="text-xs text-text-secondary">{tpl?.category}</p>
-          <h1 className="text-lg font-semibold text-text-primary truncate">{tpl?.title ?? '—'}</h1>
-        </div>
-        <div className="flex flex-col items-end gap-1 flex-shrink-0">
-          {isReminder
-            ? <PromemoriaBadge frequencyMonths={frequencyMonths} />
-            : <StatusBadge status={effectiveStatus} />}
-          {obligationType && <TypeBadge obligationType={obligationType} />}
-        </div>
-      </div>
+      <PageHeader
+        back={{ href: '/admin/manutenzioni', label: 'Attività' }}
+        title={tpl?.title ?? '—'}
+        description={tpl?.category}
+        actions={
+          <div className="flex flex-col items-start gap-1 sm:items-end">
+            {isReminder
+              ? <PromemoriaBadge frequencyMonths={frequencyMonths} />
+              : <StatusBadge status={effectiveStatus} />}
+            {obligationType && <TypeBadge obligationType={obligationType} />}
+          </div>
+        }
+        className="mb-6"
+      />
 
       <div className="space-y-4">
         {/* Scadenza — mai per le voci promemoria: non confrontano mai date (invariante di prodotto) */}

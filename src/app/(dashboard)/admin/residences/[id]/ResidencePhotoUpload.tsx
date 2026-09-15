@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from 'react'
 import { ImagePlus } from 'lucide-react'
 import { updateResidencePhoto } from './actions'
 import { MAX_PHOTO_BYTES } from './constants'
+import { PAGE_TITLE } from '@/components/PageHeader'
 
 interface Props {
   residenceId: string
@@ -87,7 +88,7 @@ export default function ResidencePhotoUpload({ residenceId, initialPhotoUrl, tit
 
   const identity = (
     <div className="flex-1 min-w-0 pt-1">
-      <h1 className="font-serif text-3xl font-semibold text-text-primary text-balance">{title}</h1>
+      <h1 className={PAGE_TITLE}>{title}</h1>
       {subtitle && <p className="text-sm text-neutral-500 mt-1">{subtitle}</p>}
     </div>
   )

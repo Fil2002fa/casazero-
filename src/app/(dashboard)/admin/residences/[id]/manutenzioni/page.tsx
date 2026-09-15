@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import Link from 'next/link'
-import { ChevronLeft } from 'lucide-react'
+import { PageHeader } from '@/components/PageHeader'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import { ManutenzioniClient } from './ManutenzioniClient'
@@ -106,15 +105,11 @@ export default async function ResidenceManutenzioniPage({ params, searchParams }
 
   return (
     <>
-      <div className="flex items-center gap-3 mb-6">
-        <Link href={`/admin/residences/${residenceId}`} className="text-text-secondary p-1 -ml-1 rounded-lg">
-          <ChevronLeft className="w-5 h-5" strokeWidth={1.6} />
-        </Link>
-        <div className="flex-1">
-          <h1 className="text-base font-medium text-text-primary">Manutenzioni</h1>
-          <p className="text-xs text-text-secondary">{residence.name}</p>
-        </div>
-      </div>
+      <PageHeader
+        back={{ href: `/admin/residences/${residenceId}`, label: residence.name }}
+        title="Manutenzioni"
+        className="mb-6"
+      />
 
       <ManutenzioniClient
         residenceId={residenceId}

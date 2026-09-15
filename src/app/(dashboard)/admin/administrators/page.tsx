@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { PageHeader } from '@/components/PageHeader'
 import { ChevronRight } from 'lucide-react'
 import { requireRole } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase/admin'
@@ -138,9 +139,7 @@ export default async function AdministratorsPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-xl font-medium text-text-primary">Amministratori</h1>
-      </header>
+      <PageHeader title="Amministratori" />
 
       {/* Zona A — Attenzione */}
       <section className="space-y-2">

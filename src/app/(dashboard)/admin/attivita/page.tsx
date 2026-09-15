@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { CheckCircle2, UserPlus, AlertTriangle, FileText, MessageSquare, Wrench } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { requireRole } from '@/lib/auth'
+import { PageHeader } from '@/components/PageHeader'
 import { groupByDay } from '@/lib/activity-feed'
 import { ActivityTimelineRow } from '@/components/ActivityTimelineRow'
 import { PILL_BASE } from '@/components/ui/Badge'
@@ -62,12 +63,10 @@ export default async function AttivitaPage() {
 
   return (
     <>
-      <header>
-        <h1 className="font-serif text-3xl font-semibold text-neutral-900">Attività</h1>
-        <p className="text-sm text-neutral-500 mt-2">
-          Registro cronologico degli eventi recenti nel sistema.
-        </p>
-      </header>
+      <PageHeader
+        title="Attività"
+        description="Registro cronologico degli eventi recenti nel sistema."
+      />
 
       <div className="mt-12">
         {groups.length === 0 ? (

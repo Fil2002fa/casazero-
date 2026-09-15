@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
+import { PageHeader } from '@/components/PageHeader'
 import { ManutenzioniTable, type ActivityRow } from './ManutenzioniTable'
 import type { MaintenanceStatus, CompletionMode, ItemActivation, ObligationType } from '@/types/database'
 import {
@@ -115,12 +116,10 @@ export default async function AdminManutenzioniPage({ searchParams }: { searchPa
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="font-serif text-3xl font-semibold text-text-primary">Attività</h1>
-        <p className="text-sm text-text-secondary mt-2">
-          Interventi a tuo carico su tutte le residenze che segui.
-        </p>
-      </header>
+      <PageHeader
+        title="Attività"
+        description="Interventi a tuo carico su tutte le residenze che segui."
+      />
 
       {/* Contatori — stessa partizione della lista; cliccabili per filtrarla, toggle se già attivi.
           Impilati sotto sm: la regola delle griglie vuole una base a 320 di 1 o 2

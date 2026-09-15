@@ -1,8 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
-import { ChevronLeft } from 'lucide-react'
+import { PageHeader } from '@/components/PageHeader'
 import IdentityTab from './IdentityTab'
 import NotificationsTab from './NotificationsTab'
 import AccountTab from './AccountTab'
@@ -29,12 +28,11 @@ export default function SettingsShell(props: Props) {
 
   return (
     <>
-      <div className="flex items-center gap-3 mb-6">
-        <Link href="/admin/residences" className="text-text-secondary p-1 -ml-1 rounded-lg">
-          <ChevronLeft className="w-5 h-5" strokeWidth={1.6} />
-        </Link>
-        <h1 className="text-base font-medium text-text-primary">Impostazioni</h1>
-      </div>
+      <PageHeader
+        back={{ href: '/admin/residences', label: 'Residenze' }}
+        title="Impostazioni"
+        className="mb-6"
+      />
 
       {/* Tab bar */}
       <div className="border-b border-border">
