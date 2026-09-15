@@ -466,7 +466,9 @@ export function FornitoriManager({
                           <div className="space-y-1.5">
                             {groupedInstallations(s.installations).map(group => (
                               <div key={group.residenceId} className="flex items-start gap-2 flex-wrap">
-                                <span className="text-xs text-text-primary shrink-0 mt-0.5">{group.residenceName}</span>
+                                {/* Niente shrink-0: in una riga che va a capo i nomi normali restano
+                                    interi, e break-words spezza solo un nome più largo della card. */}
+                                <span className="text-xs text-text-primary min-w-0 break-words mt-0.5">{group.residenceName}</span>
                                 <div className="flex items-center gap-1 flex-wrap">
                                   {group.installations.map(inst => (
                                     <span
