@@ -23,13 +23,6 @@ export const metadata: Metadata = { title: 'Residenza' }
 
 type Params = Promise<{ id: string }>
 
-type ResidenceHeader = {
-  id: string
-  name: string
-  address: string | null
-  photo_url: string | null
-}
-
 type UnitRow = {
   id: string
   label: string
@@ -122,6 +115,10 @@ type Porta = {
   sub: string | null
   // Tono del sottotitolo: 'overdue' usa lo stesso token di PlanSummarySection.
   subTone?: 'overdue'
+  // Porta del solo costruttore: Unità (censimento e inviti) e Fornitori (dato
+  // interno). L'amministratore non la vede, e la pagina dietro lo respinge
+  // comunque con il proprio requireRole.
+  managerOnly?: boolean
 }
 
 // Sottotitolo della porta Manutenzioni: lo STATO del piano, non un conteggio
@@ -254,98 +251,119 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
 
   if (!residence) notFound()
 
-  // Ramo admin: vista ridotta, sola lettura, senza le azioni del costruttore
-  // (foto, assegnazione amministratore, censimento/inviti unità — porta
-  // Unità esclusa di proposito). Le altre porte restano chiuse dai loro
-  // stessi requireRole finché non si apre il commit 4: link non morti perché
-  // puntano a pagine che si apriranno insieme a questa, non a caso.
-  if (profile.role === 'admin') {
-    return <AdminResidenceView id={id} residence={residence as ResidenceHeader} />
-  }
-
+  // Una sola vista per i due ruoli. Al costruttore spettano foto, assegnazione
+  // amministratore, censimento/inviti unità e fornitori: sono le sole parti
+  // che cambiano, e cambiano come dati e prop, non come pagina. Le porte
+  // restano chiuse dal requireRole di ciascuna sotto-pagina.
+  const canManage = profile.role === 'super_admin'
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
 
   const [
-    { data: unitsRaw },
-    { data: itemsRaw },
-    { count: docCount },
-    { data: suppliersByResidenceId },
-    { data: supplierInstallations },
-    { count: completionCount },
-    { count: eventCount },
-    { data: adminRaw },
-    { data: adminListRaw },
+    [
+      { data: unitsRaw },
+      { data: itemsRaw },
+      { count: docCount },
+      { count: completionCount },
+      { count: eventCount },
+    ],
+    managerData,
   ] = await Promise.all([
-    supabase.from('units')
-      .select('id, label, floor, unit_members!left(ended_at, is_primary, profiles(full_name))')
-      .eq('residence_id', id)
-      .order('floor', { ascending: true, nullsFirst: false })
-      .order('label', { ascending: true }),
-    supabase.from('maintenance_items')
-      .select(`
-        id, unit_id, ${LIVE_STATUS_FIELDS}, units(label),
-        maintenance_templates!inner(title, ${LIVE_STATUS_TEMPLATE_FIELDS})
-      `)
-      .eq('residence_id', id)
-      .neq('status', 'completata')
-      .order('next_due_date', { ascending: true, nullsFirst: false }),
-    supabase.from('documents')
-      .select('id', { count: 'exact', head: true })
-      .eq('residence_id', id),
-    // Due fonti, unite (stesso bug/fix di residences/[id]/fornitori/page.tsx):
-    // residence_id è la residenza di prima creazione, non il collegamento
-    // vero. Non un head-count: serve l'insieme distinto dei due id-set per
-    // non contare due volte un fornitore che ricade in entrambe le fonti.
-    supabase.from('suppliers')
-      .select('id')
-      .eq('residence_id', id),
-    supabase.from('supplier_installations')
-      .select('supplier_id')
-      .eq('residence_id', id),
-    // Fascicolo: conteggio senza filtro su activation_status (piano ≠ fascicolo).
-    supabase.from('completions')
-      .select('id', { count: 'exact', head: true })
-      .eq('residence_id', id),
-    supabase.from('activity_events')
-      .select('id', { count: 'exact', head: true })
-      .eq('residence_id', id),
-    supabase.from('admin_assignments')
-      .select('profiles(id, full_name, phone)')
-      .eq('residence_id', id)
-      .maybeSingle(),
-    supabase.from('profiles')
-      .select('id, full_name, phone')
-      .eq('role', 'admin'),
+    Promise.all([
+      supabase.from('units')
+        .select('id, label, floor, unit_members!left(ended_at, is_primary, profiles(full_name))')
+        .eq('residence_id', id)
+        .order('floor', { ascending: true, nullsFirst: false })
+        .order('label', { ascending: true }),
+      supabase.from('maintenance_items')
+        .select(`
+          id, unit_id, ${LIVE_STATUS_FIELDS}, units(label),
+          maintenance_templates!inner(title, ${LIVE_STATUS_TEMPLATE_FIELDS})
+        `)
+        .eq('residence_id', id)
+        .neq('status', 'completata')
+        .order('next_due_date', { ascending: true, nullsFirst: false }),
+      supabase.from('documents')
+        .select('id', { count: 'exact', head: true })
+        .eq('residence_id', id),
+      // Fascicolo: conteggio senza filtro su activation_status (piano ≠ fascicolo).
+      supabase.from('completions')
+        .select('id', { count: 'exact', head: true })
+        .eq('residence_id', id),
+      supabase.from('activity_events')
+        .select('id', { count: 'exact', head: true })
+        .eq('residence_id', id),
+    ]),
+    // Solo costruttore: fornitori (dato interno, mai all'amministratore),
+    // assegnazione e lista amministratori (decisione del costruttore su se stesso).
+    canManage
+      ? Promise.all([
+          // Due fonti, unite (stesso bug/fix di residences/[id]/fornitori/page.tsx):
+          // residence_id è la residenza di prima creazione, non il collegamento
+          // vero. Non un head-count: serve l'insieme distinto dei due id-set per
+          // non contare due volte un fornitore che ricade in entrambe le fonti.
+          supabase.from('suppliers')
+            .select('id')
+            .eq('residence_id', id),
+          supabase.from('supplier_installations')
+            .select('supplier_id')
+            .eq('residence_id', id),
+          supabase.from('admin_assignments')
+            .select('profiles(id, full_name, phone)')
+            .eq('residence_id', id)
+            .maybeSingle(),
+          supabase.from('profiles')
+            .select('id, full_name, phone')
+            .eq('role', 'admin'),
+        ])
+      : null,
   ])
 
   const { unitCount, unitsSenzaAccount, unitRows } = buildUnitSummary(unitsRaw)
-
-  const supplierIds = new Set<string>()
-  for (const s of suppliersByResidenceId ?? []) supplierIds.add(s.id)
-  for (const si of supplierInstallations ?? []) supplierIds.add(si.supplier_id)
-  const supplierCount = supplierIds.size
 
   const today = todayISO()
   const { overdueItems, upcomingItems } = summarizePlan(itemsRaw, today)
   const overdueCount = overdueItems.length
 
-  const adminProfile = (adminRaw as unknown as AdminRow)?.profiles ?? null
-  const adminList = (adminListRaw ?? []) as AdminProfile[]
+  let supplierCount = 0
+  let adminProfile: AdminProfile | null = null
+  let adminList: AdminProfile[] = []
+  if (managerData) {
+    const [
+      { data: suppliersByResidenceId },
+      { data: supplierInstallations },
+      { data: adminRaw },
+      { data: adminListRaw },
+    ] = managerData
+
+    const supplierIds = new Set<string>()
+    for (const s of suppliersByResidenceId ?? []) supplierIds.add(s.id)
+    for (const si of supplierInstallations ?? []) supplierIds.add(si.supplier_id)
+    supplierCount = supplierIds.size
+
+    adminProfile = (adminRaw as unknown as AdminRow)?.profiles ?? null
+    adminList = (adminListRaw ?? []) as AdminProfile[]
+  }
 
   const porte: Porta[] = [
-    { href: `/admin/residences/${id}/units`,        icon: Users,     label: 'Unità e inviti', sub: `${unitCount} unità` },
+    { href: `/admin/residences/${id}/units`,        icon: Users,     label: 'Unità e inviti', sub: `${unitCount} unità`, managerOnly: true },
     { href: `/admin/residences/${id}/manutenzioni`, icon: Wrench,    label: 'Manutenzioni',   ...manutenzioniSub(overdueCount) },
     { href: `/admin/residences/${id}/fascicolo`,    icon: BookOpen,  label: 'Fascicolo',      sub: completionCount ? `${completionCount} completamenti` : null },
     { href: `/admin/residences/${id}/documenti`,    icon: FileText,  label: 'Documenti',      sub: docCount ? `${docCount} file` : null },
-    { href: `/admin/residences/${id}/fornitori`,    icon: Settings,  label: 'Fornitori',      sub: supplierCount ? `${supplierCount} fornitori` : null },
+    { href: `/admin/residences/${id}/fornitori`,    icon: Settings,  label: 'Fornitori',      sub: supplierCount ? `${supplierCount} fornitori` : null, managerOnly: true },
     { href: `/admin/residences/${id}/attivita`,     icon: Activity,  label: 'Attività',       sub: eventCount ? pluralize(eventCount, 'evento', 'eventi') : null },
-  ]
+  ].filter(porta => canManage || !porta.managerOnly)
+
+  // Il costruttore arriva dall'elenco residenze; l'amministratore dalla sua
+  // vista trasversale Attività (/admin/manutenzioni), che è la sua home.
+  const back = canManage
+    ? { href: '/admin/residences', label: 'Residenze' }
+    : { href: '/admin/manutenzioni', label: 'Manutenzioni' }
 
   return (
     <>
-      <Link href="/admin/residences" className="inline-flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary mb-6 rounded-lg focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2">
+      <Link href={back.href} className="inline-flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary mb-6 rounded-lg focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2">
         <ChevronLeft className="w-4 h-4" strokeWidth={1.6} />
-        Residenze
+        {back.label}
       </Link>
 
       {/* Testata */}
@@ -355,24 +373,34 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
           initialPhotoUrl={residence.photo_url}
           title={residence.name}
           subtitle={residence.address}
+          readOnly={!canManage}
         />
       </div>
 
-      {/* Gestione — navigazione principale, subito sotto la testata */}
-      <PorteNav porte={porte} className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mt-4" />
+      {/* Gestione — navigazione principale, subito sotto la testata. Le colonne
+          seguono il numero di porte (6 per il costruttore, 4 per l'amministratore). */}
+      <PorteNav
+        porte={porte}
+        className={canManage
+          ? 'grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mt-4'
+          : 'grid grid-cols-2 md:grid-cols-4 gap-3 mt-4'}
+      />
 
-      {/* Amministratore */}
-      <div className="bg-surface rounded-xl border border-border overflow-hidden mt-8">
-        <AdminBlock
-          residenceId={id}
-          adminProfile={adminProfile}
-          availableAdmins={adminList}
-          appUrl={appUrl}
-        />
-      </div>
+      {/* Amministratore — l'assegnazione è decisione del costruttore su se stesso */}
+      {canManage && (
+        <div className="bg-surface rounded-xl border border-border overflow-hidden mt-8">
+          <AdminBlock
+            residenceId={id}
+            adminProfile={adminProfile}
+            availableAdmins={adminList}
+            appUrl={appUrl}
+          />
+        </div>
+      )}
 
-      {/* Zona attenzione — solo gap di configurazione senza elemento dedicato */}
-      {unitsSenzaAccount > 0 && (
+      {/* Zona attenzione — solo gap di configurazione senza elemento dedicato.
+          Solo costruttore: punta a .../units, porta che l'amministratore non ha. */}
+      {canManage && unitsSenzaAccount > 0 && (
         <Link
           href={`/admin/residences/${id}/units?filter=senza_account`}
           className="flex items-center gap-3 bg-semantic-amber-bg border border-semantic-amber/20 rounded-xl p-4 hover:brightness-[0.98] transition-all mt-8 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2"
@@ -389,116 +417,13 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
         </Link>
       )}
 
-      {/* Tabella unità */}
+      {/* Tabella unità — per l'amministratore in sola lettura: di quante e quali
+          unità è fatta la residenza è informazione di base, ma nessuna riga
+          naviga verso .../units (porta che non ha). */}
       <section className="mt-8">
         <h2 className="text-lg font-semibold text-text-primary mb-3">Unità</h2>
         {unitRows.length > 0 ? (
-          <UnitsSummaryTable residenceId={id} rows={unitRows} />
-        ) : (
-          <p className="text-sm text-neutral-500 py-6 text-center bg-surface rounded-xl border border-border">
-            Nessuna unità configurata.
-          </p>
-        )}
-      </section>
-
-      <PlanSummarySection residenceId={id} overdueItems={overdueItems} upcomingItems={upcomingItems} today={today} />
-    </>
-  )
-}
-
-// Vista amministratore: stessa URL del costruttore, contenuto ridotto e sola
-// lettura. Niente foto (ResidencePhotoUpload), niente AdminBlock (assegnazione
-// amministratore è decisione del costruttore su se stesso), niente zona
-// attenzione (punta a .../units?filter=senza_account, porta esclusa qui di
-// proposito). La tabella unità resta: di quante e quali unità è fatta la
-// residenza è informazione di base — ma in variante readOnly, nessuna riga
-// naviga verso .../units.
-async function AdminResidenceView({ id, residence }: { id: string; residence: ResidenceHeader }) {
-  const supabase = await createClient()
-  const today = todayISO()
-
-  const [
-    { data: unitsRaw },
-    { data: itemsRaw },
-    { count: docCount },
-    { count: completionCount },
-    { count: eventCount },
-  ] = await Promise.all([
-    supabase.from('units')
-      .select('id, label, floor, unit_members!left(ended_at, is_primary, profiles(full_name))')
-      .eq('residence_id', id)
-      .order('floor', { ascending: true, nullsFirst: false })
-      .order('label', { ascending: true }),
-    supabase.from('maintenance_items')
-      .select(`
-        id, unit_id, ${LIVE_STATUS_FIELDS}, units(label),
-        maintenance_templates!inner(title, ${LIVE_STATUS_TEMPLATE_FIELDS})
-      `)
-      .eq('residence_id', id)
-      .neq('status', 'completata')
-      .order('next_due_date', { ascending: true, nullsFirst: false }),
-    supabase.from('documents')
-      .select('id', { count: 'exact', head: true })
-      .eq('residence_id', id),
-    supabase.from('completions')
-      .select('id', { count: 'exact', head: true })
-      .eq('residence_id', id),
-    supabase.from('activity_events')
-      .select('id', { count: 'exact', head: true })
-      .eq('residence_id', id),
-  ])
-
-  const { unitRows } = buildUnitSummary(unitsRaw)
-  const { overdueItems, upcomingItems } = summarizePlan(itemsRaw, today)
-  const overdueCount = overdueItems.length
-
-  // NON Unità: censimento e inviti restano al costruttore (decisione presa).
-  // NON Fornitori: dato interno del costruttore, mai all'amministratore.
-  const porte: Porta[] = [
-    { href: `/admin/residences/${id}/manutenzioni`, icon: Wrench,   label: 'Manutenzioni', ...manutenzioniSub(overdueCount) },
-    { href: `/admin/residences/${id}/fascicolo`,    icon: BookOpen, label: 'Fascicolo',    sub: completionCount ? `${completionCount} completamenti` : null },
-    { href: `/admin/residences/${id}/documenti`,    icon: FileText, label: 'Documenti',    sub: docCount ? `${docCount} file` : null },
-    { href: `/admin/residences/${id}/attivita`,     icon: Activity, label: 'Attività',     sub: eventCount ? pluralize(eventCount, 'evento', 'eventi') : null },
-  ]
-
-  return (
-    <>
-      <Link href="/admin/manutenzioni" className="inline-flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary mb-6 rounded-lg focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2">
-        <ChevronLeft className="w-4 h-4" strokeWidth={1.6} />
-        Manutenzioni
-      </Link>
-
-      {/* Testata sola lettura: stesso layout di ResidencePhotoUpload (thumbnail
-          96×72 + identità), senza input file né bottone salva. */}
-      <div className="bg-surface rounded-xl border border-border p-6">
-        <div className="flex items-start gap-4">
-          {residence.photo_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={residence.photo_url}
-              alt=""
-              className="w-24 h-[72px] rounded-xl object-cover flex-shrink-0 bg-background"
-            />
-          ) : (
-            <div className="w-24 h-[72px] rounded-xl bg-background flex-shrink-0" aria-hidden="true" />
-          )}
-          <div className="flex-1 min-w-0 pt-1">
-            <h1 className="font-serif text-3xl font-semibold text-text-primary text-balance">{residence.name}</h1>
-            {residence.address && <p className="text-sm text-neutral-500 mt-1">{residence.address}</p>}
-          </div>
-        </div>
-      </div>
-
-      {/* Gestione — stesse porte del costruttore, meno Unità */}
-      <PorteNav porte={porte} className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4" />
-
-      {/* Tabella unità — sola lettura: di quante e quali unità è fatta la
-          residenza è informazione di base, ma nessuna riga naviga verso
-          .../units (porta esclusa per questo ruolo). */}
-      <section className="mt-8">
-        <h2 className="text-lg font-semibold text-text-primary mb-3">Unità</h2>
-        {unitRows.length > 0 ? (
-          <UnitsSummaryTable residenceId={id} rows={unitRows} readOnly />
+          <UnitsSummaryTable residenceId={id} rows={unitRows} readOnly={!canManage} />
         ) : (
           <p className="text-sm text-neutral-500 py-6 text-center bg-surface rounded-xl border border-border">
             Nessuna unità configurata.
