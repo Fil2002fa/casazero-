@@ -226,7 +226,9 @@ function ResidenceCard({ residence }: { residence: ResidenceDetail }) {
         <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
           isRed ? 'bg-[#A32D2D]' : isAmber ? 'bg-[#854F0B]' : 'bg-[#0F6E56]'
         }`} />
-        <p className="flex-1 text-sm font-medium text-[#20302A]">{residence.name}</p>
+        {/* min-w-0 + break-words: un nome residenza senza spazi va a capo dentro la
+            card invece di far scorrere la pagina di lato. */}
+        <p className="flex-1 min-w-0 text-sm font-medium text-[#20302A] break-words">{residence.name}</p>
         {isGreen && (
           <CheckCircle2 className="w-4 h-4 text-[#0F6E56] flex-shrink-0" strokeWidth={1.6} />
         )}
