@@ -169,7 +169,7 @@ export default async function AdminItemDetailPage({ params }: { params: Params }
               dentro la residenza, che è il contesto della voce. */}
           <Link
             href={`/admin/residences/${item.residence_id}`}
-            className="text-sm text-brand-dark font-medium hover:underline rounded focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2"
+            className="text-sm text-brand-dark font-medium hover:underline rounded break-words focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2"
           >
             {item.residences?.name ?? '—'}
           </Link>
