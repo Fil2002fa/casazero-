@@ -7,8 +7,9 @@ product
 ## Users
 
 - **Residente**: proprietario di un'unità immobiliare che ha appena ricevuto le chiavi. Usa la PWA `(app)` da mobile per sapere cosa va fatto e quando, consultare il fascicolo della propria unità e archiviare documenti. Non è un utente esperto di gestione immobiliare: vuole risposte rapide, non un gestionale.
-- **Amministratore di condominio**: gestisce le manutenzioni a carico delle parti condominiali per una residenza. Opera nella stessa PWA `(app)` in modalità amministratore.
-- **Super admin (costruttore, es. Furlan Costruzioni)**: configura residenze, piani di manutenzione, inviti e amministratori da `(dashboard)` desktop. Multi-tenant fin dal primo giorno — più costruttori, più residenze.
+- **Amministratore di condominio**: gestisce le manutenzioni a carico delle parti condominiali per una residenza. Opera nella dashboard `(dashboard)`, sulle sole residenze che segue e con le sole azioni che gli competono.
+- **Super admin (costruttore, es. Furlan Costruzioni)**: configura residenze, piani di manutenzione, inviti e amministratori da `(dashboard)`. Multi-tenant fin dal primo giorno — più costruttori, più residenze.
+- **Dashboard ovunque**: costruttore e amministratore usano `(dashboard)` dal computer e dal browser del telefono con tutte le funzioni. Non esiste una versione ridotta per mobile.
 
 ## Product Purpose
 
