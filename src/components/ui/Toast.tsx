@@ -18,14 +18,29 @@ const DURATIONS: Record<ToastKind, number> = {
   error: 8000,
 }
 
+type ToastPlacement = 'app' | 'dashboard'
+
+const PLACEMENT_STYLES: Record<ToastPlacement, string> = {
+  // PWA residente: basso-destra da md, basso-centro sopra la BottomNav sotto md.
+  app: 'bottom-4 right-4 max-md:bottom-20 max-md:left-1/2 max-md:right-auto max-md:-translate-x-1/2',
+  // Dashboard: non ha BottomNav. Basso-destra da lg, accanto alla sidebar; sotto lg
+  // basso-centro senza offset, largo quanto il testo ma mai oltre lo schermo.
+  dashboard:
+    'bottom-4 right-4 max-lg:left-1/2 max-lg:right-auto max-lg:-translate-x-1/2 max-lg:w-max max-lg:max-w-[calc(100vw-2rem)]',
+}
+
 interface ToastContextValue {
   showToast: (kind: ToastKind, message: string) => void
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null)
 
-/** Uno alla volta: un nuovo toast rimpiazza quello in corso invece di accodarsi. */
-export function ToastProvider({ children }: { children: ReactNode }) {
+/**
+ * Uno alla volta: un nuovo toast rimpiazza quello in corso invece di accodarsi.
+ * `placement` dipende dalla shell: il layout radice usa 'app', la dashboard annida
+ * un provider suo con 'dashboard'. useToast prende il provider più vicino.
+ */
+export function ToastProvider({ children, placement = 'app' }: { children: ReactNode; placement?: ToastPlacement }) {
   const [toast, setToast] = useState<ToastState | null>(null)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const idRef = useRef(0)
@@ -50,8 +65,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             aria-live="polite"
             className={cn(
               'fixed z-toast flex items-center gap-2 rounded-lg border border-border bg-surface p-3 shadow-elevated text-sm',
-              'bottom-4 right-4',
-              'max-md:bottom-20 max-md:left-1/2 max-md:right-auto max-md:-translate-x-1/2'
+              PLACEMENT_STYLES[placement]
             )}
           >
             {toast.kind === 'success' ? (

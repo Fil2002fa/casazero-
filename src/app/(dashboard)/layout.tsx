@@ -3,6 +3,7 @@ import { BuilderIdentityBar } from '@/components/BuilderIdentity'
 import { getWhitelabelBrand } from '@/lib/whitelabel'
 import { requireProfile } from '@/lib/auth'
 import { CONTENT_GRID, CONTENT_RHYTHM } from '@/lib/layout'
+import { ToastProvider } from '@/components/ui/Toast'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   // Senza profilo si torna al login, come fanno già le pagine via requireRole:
@@ -30,23 +31,28 @@ export default async function DashboardLayout({ children }: { children: React.Re
       className="bg-background lg:flex lg:h-dvh lg:overflow-hidden"
       style={{ '--wl-brand-dark': brandDark } as React.CSSProperties}
     >
-      <AdminSidebar role={role} />
+      {/* Toast della dashboard: provider annidato con la posizione di questa shell,
+          che non ha BottomNav. Non aggiunge nodi al DOM: sidebar e main restano
+          figli diretti del contenitore flex. */}
+      <ToastProvider placement="dashboard">
+        <AdminSidebar role={role} />
 
-      <main className="lg:flex-1 lg:overflow-auto">
-        {/* Identità costruttore — CasaZero resta il marchio della sidebar (BrandMark) */}
-        <BuilderIdentityBar
-          name={builderName}
-          logoSrc={logoUrl}
-          leading={<MobileNav role={role} />}
-          className="sticky top-0 z-sticky lg:static lg:z-auto"
-        />
+        <main className="lg:flex-1 lg:overflow-auto">
+          {/* Identità costruttore — CasaZero resta il marchio della sidebar (BrandMark) */}
+          <BuilderIdentityBar
+            name={builderName}
+            logoSrc={logoUrl}
+            leading={<MobileNav role={role} />}
+            className="sticky top-0 z-sticky lg:static lg:z-auto"
+          />
 
-        {/* Container unico del contenuto: le pagine non dichiarano più padding né
-            larghezza proprie, li prendono da qui (src/lib/layout.ts). */}
-        <div className={`${CONTENT_GRID} ${CONTENT_RHYTHM}`}>
-          {children}
-        </div>
-      </main>
+          {/* Container unico del contenuto: le pagine non dichiarano più padding né
+              larghezza proprie, li prendono da qui (src/lib/layout.ts). */}
+          <div className={`${CONTENT_GRID} ${CONTENT_RHYTHM}`}>
+            {children}
+          </div>
+        </main>
+      </ToastProvider>
     </div>
   )
 }
