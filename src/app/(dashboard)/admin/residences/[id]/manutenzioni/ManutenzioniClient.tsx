@@ -731,7 +731,7 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
           onClick={() => { if (!isPending) setPendingAction(null) }}
         >
           <div
-            className="bg-surface rounded-xl border border-border max-w-sm w-full p-5 space-y-3"
+            className="bg-surface rounded-xl border border-border max-w-sm w-full p-5 space-y-3 break-words"
             onClick={e => e.stopPropagation()}
           >
             {pendingAction.targetStatus === 'inclusa' ? (
