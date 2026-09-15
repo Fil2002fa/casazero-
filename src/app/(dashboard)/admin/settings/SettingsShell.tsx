@@ -30,17 +30,19 @@ export default function SettingsShell(props: Props) {
     <>
       <PageHeader title="Impostazioni" className="mb-6" />
 
-      {/* Tab bar */}
-      <div className="border-b border-border">
-        <div className="flex gap-1 overflow-x-auto -mb-px">
+      {/* Schede: sotto sm impilate a tutta larghezza, la selezionata a tinta piena come
+          la voce attiva della sidebar. In riga non stanno, e lo scorrimento orizzontale
+          nascondeva la terza scheda senza segnali. Da sm in su in riga, sottolineate. */}
+      <div className="sm:border-b sm:border-border">
+        <div className="flex flex-col gap-1 sm:flex-row sm:-mb-px">
           {TABS.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActive(tab.id)}
-              className={`whitespace-nowrap px-3 py-3 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
+              className={`flex items-center h-11 px-3 rounded-lg text-left text-sm font-medium transition-colors cursor-pointer sm:h-auto sm:py-3 sm:rounded-none sm:border-b-2 sm:whitespace-nowrap ${
                 active === tab.id
-                  ? 'border-brand-dark text-brand-dark'
-                  : 'border-transparent text-neutral-500'
+                  ? 'bg-brand-dark text-white sm:bg-transparent sm:border-brand-dark sm:text-brand-dark'
+                  : 'text-neutral-500 hover:bg-brand-dark/6 sm:border-transparent sm:hover:bg-transparent'
               }`}
             >
               {tab.label}
