@@ -1,4 +1,4 @@
-import AdminSidebar from '@/components/AdminSidebar'
+import AdminSidebar, { MobileNav } from '@/components/AdminSidebar'
 import { BuilderIdentityBar } from '@/components/BuilderIdentity'
 import { getWhitelabelBrand } from '@/lib/whitelabel'
 import { requireProfile } from '@/lib/auth'
@@ -14,16 +14,21 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const role = profile.role
 
+  // Due stati soli: da lg in su sidebar fissa, sotto lg niente sidebar e
+  // navigazione in un drawer aperto dall'header. Sotto lg il main occupa tutto
+  // il viewport, quindi i breakpoint delle pagine misurano davvero il contenuto.
+  // h-dvh e non h-screen: sul telefono 100vh include la barra del browser e il
+  // fondo del main finirebbe sotto.
   return (
     <div
-      className="flex h-screen overflow-hidden bg-background"
+      className="flex h-dvh overflow-hidden bg-background"
       style={{ '--wl-brand-dark': brandDark } as React.CSSProperties}
     >
       <AdminSidebar role={role} />
 
       <main className="flex-1 overflow-auto">
         {/* Identità costruttore — CasaZero resta il marchio della sidebar (BrandMark) */}
-        <BuilderIdentityBar name={builderName} logoSrc={logoUrl} />
+        <BuilderIdentityBar name={builderName} logoSrc={logoUrl} leading={<MobileNav role={role} />} />
 
         {/* Container unico del contenuto: le pagine non dichiarano più padding né
             larghezza proprie, li prendono da qui (src/lib/layout.ts). */}

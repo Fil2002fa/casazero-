@@ -8,6 +8,10 @@ interface BuilderIdentityBarProps {
   name: string
   logoSrc: string | null
   className?: string
+  // Controllo prima dell'identità: nella shell è l'hamburger che apre la
+  // navigazione sotto lg. L'anteprima di Impostazioni non lo passa: mostra
+  // l'identità del costruttore, non la navigazione.
+  leading?: React.ReactNode
   children?: React.ReactNode
 }
 
@@ -31,7 +35,7 @@ interface BuilderIdentityBarProps {
 // sostitutiva — resta il solo nome, con la stessa tipografia. Nessuna icona rotta e
 // nessun marchio CasaZero al posto di quello del costruttore. Il logo compare appena
 // esiste e carica: è il punto del whitelabel.
-export function BuilderIdentityBar({ name, logoSrc, className, children }: BuilderIdentityBarProps) {
+export function BuilderIdentityBar({ name, logoSrc, className, leading, children }: BuilderIdentityBarProps) {
   const [imgError, setImgError] = useState(false)
 
   useEffect(() => { setImgError(false) }, [logoSrc])
@@ -41,6 +45,7 @@ export function BuilderIdentityBar({ name, logoSrc, className, children }: Build
   return (
     <div className={cn('bg-surface border-b border-border', className)}>
       <div className={cn(CONTENT_GRID, 'h-14 flex items-center gap-2')}>
+        {leading}
         {showLogo && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
