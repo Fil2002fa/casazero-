@@ -414,7 +414,10 @@ export function AdminBlock({
           <ChevronLeft className="w-4 h-4 text-text-secondary rotate-180 flex-shrink-0" strokeWidth={1.6} />
         </div>
       ) : !transitioning ? (
-        <div className="px-4 py-4 flex items-center justify-between gap-3">
+        // Sotto sm il bottone va sotto il testo, a tutta larghezza: accanto al
+        // testo gli lasciava meno spazio della parola "amministratore", che
+        // finiva sopra il bottone.
+        <div className="px-4 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-8 h-8 rounded-full bg-background flex items-center justify-center flex-shrink-0">
               <UserPlus className="w-4 h-4 text-neutral-500" strokeWidth={1.6} />
@@ -424,7 +427,7 @@ export function AdminBlock({
               <p className="text-xs text-text-secondary">Assegna o invita un amministratore per questa residenza</p>
             </div>
           </div>
-          <Button variant="secondary" onClick={openAssegnazione} className="flex-shrink-0">
+          <Button variant="secondary" onClick={openAssegnazione} className="w-full sm:w-auto sm:flex-shrink-0">
             Invita amministratore
           </Button>
         </div>
