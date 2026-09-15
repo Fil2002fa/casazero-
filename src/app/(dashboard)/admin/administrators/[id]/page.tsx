@@ -178,9 +178,11 @@ export default async function AdminDetailPage({ params }: { params: Params }) {
         {(email || adminProfile.phone) && (
           <div className="px-4 pb-4 pt-3 space-y-1.5 border-t border-[#E4E6E2]">
             {email && (
-              <div className="flex items-center gap-2">
-                <Mail className="w-3.5 h-3.5 text-[#20302A]/40 flex-shrink-0" strokeWidth={1.6} />
-                <span className="text-sm text-[#20302A] truncate">{email}</span>
+              // Email a capo anche a metà parola, mai troncata: su telefono non c'è il
+              // passaggio del mouse per leggerla intera. Icona allineata alla prima riga.
+              <div className="flex items-start gap-2">
+                <Mail className="w-3.5 h-3.5 text-[#20302A]/40 flex-shrink-0 mt-0.5" strokeWidth={1.6} />
+                <span className="text-sm text-[#20302A] min-w-0 break-all">{email}</span>
               </div>
             )}
             {adminProfile.phone && (
