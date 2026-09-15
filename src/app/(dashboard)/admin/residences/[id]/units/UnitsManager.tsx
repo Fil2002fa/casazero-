@@ -138,10 +138,12 @@ export function UnitsManager({
 
   return (
     <div className="space-y-4">
-      {/* Testata: conteggio + azioni */}
-      <div className="flex items-center justify-between gap-2">
+      {/* Testata: conteggio + azioni. Le azioni vanno a capo quando non stanno
+          accanto al conteggio: su un telefono i due bottoni da soli occupano
+          quasi tutta la larghezza, e senza wrap la pagina scorre di lato. */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-medium text-text-primary">{units.length} unità</p>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={handleBulkInvite}
             disabled={pending || bulkTargets.length === 0}
