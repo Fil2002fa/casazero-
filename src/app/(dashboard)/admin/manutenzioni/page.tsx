@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import { PageHeader } from '@/components/PageHeader'
+import { FilterCounters } from '@/components/FilterCounters'
 import { ManutenzioniTable, type ActivityRow } from './ManutenzioniTable'
 import type { MaintenanceStatus, CompletionMode, ItemActivation, ObligationType } from '@/types/database'
 import {
@@ -121,20 +121,15 @@ export default async function AdminManutenzioniPage({ searchParams }: { searchPa
         description="Interventi a tuo carico su tutte le residenze che segui."
       />
 
-      {/* Contatori — stessa partizione della lista; cliccabili per filtrarla, toggle se già attivi.
-          Impilati sotto sm: la regola delle griglie vuole una base a 320 di 1 o 2
-          colonne, e con tre contatori 2 lascerebbe un orfano. */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <Link href={statHref('in_ritardo', activeFilter)} className="block rounded-xl focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2">
-          <Stat label="In ritardo" value={counts.in_ritardo} tone="overdue" active={activeFilter === 'in_ritardo'} />
-        </Link>
-        <Link href={statHref('in_corso', activeFilter)} className="block rounded-xl focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2">
-          <Stat label="In corso" value={counts.in_corso} tone="inprogress" active={activeFilter === 'in_corso'} />
-        </Link>
-        <Link href={statHref('in_arrivo', activeFilter)} className="block rounded-xl focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2">
-          <Stat label="In arrivo" value={counts.in_arrivo} tone="neutral" active={activeFilter === 'in_arrivo'} />
-        </Link>
-      </div>
+      {/* Contatori — stessa partizione della lista; cliccabili per filtrarla, toggle se già attivi */}
+      <FilterCounters
+        label="Filtra le attività per stato"
+        items={[
+          { key: 'in_ritardo', label: 'In ritardo', value: counts.in_ritardo, tone: 'overdue',    active: activeFilter === 'in_ritardo', href: statHref('in_ritardo', activeFilter) },
+          { key: 'in_corso',   label: 'In corso',   value: counts.in_corso,   tone: 'inprogress', active: activeFilter === 'in_corso',   href: statHref('in_corso', activeFilter) },
+          { key: 'in_arrivo',  label: 'In arrivo',  value: counts.in_arrivo,  tone: 'neutral',    active: activeFilter === 'in_arrivo',  href: statHref('in_arrivo', activeFilter) },
+        ]}
+      />
 
       {visibleRows.length > 0 && <ManutenzioniTable rows={visibleRows} />}
 
@@ -160,28 +155,4 @@ const EMPTY_FILTER_LABELS: Record<ActivityBucket, string> = {
 
 function statHref(bucket: ActivityBucket, activeFilter: ActivityBucket | null): string {
   return activeFilter === bucket ? '/admin/manutenzioni' : `/admin/manutenzioni?filter=${bucket}`
-}
-
-type StatTone = 'overdue' | 'inprogress' | 'neutral'
-
-// Stato attivo del contatore: la card passa al colore pieno della sua tinta,
-// testo bianco. Niente contorno: la gerarchia in questo progetto si fa col
-// colore, non con bordi aggiunti. La card neutra usa il verde brand-dark,
-// lo stesso della voce selezionata in sidebar.
-const STAT_TONES: Record<StatTone, { idle: string; idleValue: string; active: string }> = {
-  overdue:    { idle: 'bg-semantic-red-bg',   idleValue: 'text-semantic-red',   active: 'bg-semantic-red' },
-  inprogress: { idle: 'bg-semantic-amber-bg', idleValue: 'text-semantic-amber', active: 'bg-semantic-amber' },
-  neutral:    { idle: 'bg-background',        idleValue: 'text-text-secondary', active: 'bg-brand-dark' },
-}
-
-function Stat({ label, value, tone, active }: {
-  label: string; value: number; tone: StatTone; active: boolean
-}) {
-  const t = STAT_TONES[tone]
-  return (
-    <div className={`rounded-xl p-3 text-center transition-colors ${active ? t.active : t.idle}`}>
-      <p className={`text-2xl font-medium ${active ? 'text-white' : t.idleValue}`}>{value}</p>
-      <p className={`text-xs mt-0.5 ${active ? 'text-white/80' : 'text-text-secondary'}`}>{label}</p>
-    </div>
-  )
 }

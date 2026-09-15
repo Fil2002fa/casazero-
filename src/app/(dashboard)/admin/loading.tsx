@@ -6,11 +6,12 @@ export default function Loading() {
         <div className="h-6 w-56 bg-border rounded" />
       </header>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      {/* Stessa forma dei contatori-filtro: righe compatte in un solo contenitore */}
+      <div className="rounded-xl border border-border bg-surface divide-y divide-border sm:grid sm:grid-cols-3 sm:divide-y-0 sm:divide-x">
         {[0, 1, 2].map(i => (
-          <div key={i} className="bg-surface rounded-xl border border-border p-3 space-y-2">
-            <div className="h-7 w-10 bg-border rounded mx-auto" />
-            <div className="h-3 w-14 bg-border rounded mx-auto" />
+          <div key={i} className="h-11 px-4 flex items-center justify-between">
+            <div className="h-3 w-16 bg-border rounded" />
+            <div className="h-4 w-6 bg-border rounded" />
           </div>
         ))}
       </div>
