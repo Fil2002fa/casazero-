@@ -107,9 +107,11 @@ function AdminModal({
                     </div>
                   )}
                   {adminEmail && (
-                    <div className="flex items-center gap-2 text-sm text-[#20302A]">
-                      <Mail className="w-3.5 h-3.5 text-[#20302A]/40 flex-shrink-0" strokeWidth={1.6} />
-                      <span className="truncate">{adminEmail}</span>
+                    // Email a capo anche a metà parola, mai troncata: su telefono non c'è il
+                    // passaggio del mouse per leggerla intera. Icona allineata alla prima riga.
+                    <div className="flex items-start gap-2 text-sm text-[#20302A]">
+                      <Mail className="w-3.5 h-3.5 text-[#20302A]/40 flex-shrink-0 mt-0.5" strokeWidth={1.6} />
+                      <span className="min-w-0 break-all">{adminEmail}</span>
                     </div>
                   )}
                 </div>
