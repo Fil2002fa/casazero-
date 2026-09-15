@@ -11,7 +11,7 @@ colors:
   border: "#E4E6E2"
   text-primary: "#20302A"
   text-secondary: "#5F6E68"
-  neutral-500: "#737373"
+  neutral-500: "#5E5E5E"
   neutral-600: "#525252"
   neutral-700: "#404040"
   neutral-900: "#171717"
@@ -143,14 +143,14 @@ Il sistema resta deliberatamente silenzioso allo stato di riposo — niente ombr
 - Flat by default: bordi sottili (1px) al posto di ombre sulle superfici statiche; un'unica ombra di sistema, tinta di verde primario, riservata a modali/dropdown/toast
 - Due soli livelli di radius con ruoli fissi: 12px per i contenitori, 8px per i controlli, full solo per badge/avatar
 - Scala di spaziatura chiusa a sei valori (4/8/12/16/24/48px): qualunque altro valore è un errore, non una scelta
-- Interfaccia a doppio guscio: `(app)` mobile-first per residente/amministratore, `(dashboard)` desktop per il super admin — stesso linguaggio visivo, densità diversa
+- Interfaccia a doppio guscio: `(app)` mobile-first per il residente, `(dashboard)` per costruttore (super admin) e amministratore, usabile per intero dal computer e dal browser del telefono — stesso linguaggio visivo, densità diversa
 
 ## 2. Colors
 
 Palette quasi monocromatica: il verde profondo domina header, azioni primarie e stato attivo; tutto il resto è neutro caldo. Esistono oggi **due generazioni parallele** di colori di stato: i `semantic-*` legacy (usati dai componenti N1/N2/N3 non ancora migrati) e i `status-*` di seconda generazione (usati dai nuovi componenti condivisi `ui/`). Sono deliberatamente famiglie separate, non alias l'una dell'altra.
 
 ### Primary
-- **Verde Fascicolo** (`#04342C` — brand-dark): header della sidebar admin, pulsanti primari, stato attivo nella bottom nav, testo su sfondo chiaro brand, overlay delle modali (`brand-dark/40`). È il colore "firma" del prodotto.
+- **Verde Fascicolo** (`#04342C` — brand-dark): voce attiva della navigazione dashboard (sidebar e drawer), filtro attivo dei contatori, pulsanti primari, stato attivo nella bottom nav, testo su sfondo chiaro brand, overlay delle modali (`brand-dark/40`). È il colore "firma" del prodotto.
 - **Verde Salvia Intenso** (`#0F6E56` — brand-medium): icone, link secondari, accenti dentro le card legacy.
 
 ### Secondary
@@ -161,8 +161,8 @@ Palette quasi monocromatica: il verde profondo domina header, azioni primarie e 
 - **Sabbia Grigia** (`#F4F3EF` — background): sfondo di tutte le pagine.
 - **Bianco Carta** (`#FFFFFF` — surface): card, form, superfici di contenuto, modali.
 - **Grigio Confine** (`#E4E6E2` — border): l'unico bordo che il sistema usa, 1px, ovunque servano card, input o wrapper tabella. *(Nota tecnica aperta: il contrasto non testuale di questo bordo su sfondo bianco è ~1.05:1, sotto la soglia 3:1 di WCAG 1.4.11 — segnalato in audit, non ancora affrontato: è un token di sistema, non un fix puntuale.)*
-- **Verde-Nero Testo** (`#20302A` — text-primary) / **Grigio Caldo Testo** (`#6B7A74` — text-secondary): coppia legacy, ancora in uso nei componenti non migrati.
-- **Scala neutra Tailwind** (`neutral-500` `#737373` · `neutral-600` `#525252` · `neutral-700` `#404040` · `neutral-900` `#171717`): la scala usata dai nuovi componenti `ui/` per testo secondario, label, bordi outline e testo di corpo — sostituisce progressivamente `text-primary`/`text-secondary` mano a mano che le schermate migrano.
+- **Verde-Nero Testo** (`#20302A` — text-primary) / **Grigio Caldo Testo** (`#5F6E68` — text-secondary): coppia legacy, ancora in uso nei componenti non migrati. Il valore precedente `#6B7A74` dava 4.06:1 sullo sfondo, sotto AA.
+- **Scala neutra Tailwind** (`neutral-500` `#5E5E5E`, sovrascritto in `globals.css` perché lo stock `#737373` era sotto AA sullo sfondo · `neutral-600` `#525252` · `neutral-700` `#404040` · `neutral-900` `#171717`): la scala usata dai nuovi componenti `ui/` per testo secondario, label, bordi outline e testo di corpo — sostituisce progressivamente `text-primary`/`text-secondary` mano a mano che le schermate migrano.
 
 ### Semantic (legacy — N1/N2/N3)
 - **Rosso Scadenza** (`#A32D2D` su `#FCEBEB`) · **Ambra In Corso** (`#854F0B` su `#FAEEDA`) · **Blu Consiglio** (`#185FA5` su `#E6F1FB`): usati solo da `PriorityBadge`, `MaintenanceBadge`, `MaintenanceCard`. Non toccare finché quei componenti non migrano al sistema v2.
@@ -259,18 +259,19 @@ Tre forme per tre livelli informativi, mai intercambiabili:
 - **Una modale non apre mai un'altra modale.**
 
 ### Toast
-- Basso-destra desktop, basso-centro sopra la bottom nav su mobile. `bg-surface` `border` `rounded-lg` `shadow-elevated`, `p-3`, icona 16px colorata (verde successo / rosso errore) + testo 14/400.
+- Posizione per shell, con la prop `placement` di `ToastProvider`. PWA: basso-destra da `md`, basso-centro sopra la bottom nav sotto `md`. Dashboard: basso-destra da `lg`, basso-centro senza offset sotto `lg` (la dashboard non ha bottom nav). `bg-surface` `border` `rounded-lg` `shadow-elevated`, `p-3`, icona 16px colorata (verde successo / rosso errore) + testo 14/400.
 - Successo 4s, errore 8s. Uno alla volta: un nuovo toast rimpiazza quello in corso.
 
 ### Table
-- Wrapper `rounded-xl border`, scroll orizzontale nel proprio contenitore mai sulla singola cella.
+- Mai scroll orizzontale. Sotto la soglia della tabella (`stack`: `lg` di norma, `xl` quando le colonne non stanno nei 736px di contenuto accanto alla sidebar) ogni riga diventa una card: la cella `emphasis` è il titolo, ogni altra cella è una riga etichetta · valore (`label` obbligatoria). Il valore arriva al massimo a due righe con i puntini, allineato in alto; l'etichetta non va mai a capo. Mai troncamento a una riga sola. Sopra la soglia: wrapper `rounded-xl border`.
 - Riga `h-12` (48px), header 13/500 `neutral-500` **senza sfondo**, separatori 1px `border`, ultima riga senza bordo.
 - Hover riga `bg-background`; `cursor-pointer` + `role="button"`/tastiera solo se la riga è cliccabile.
 - Numeri e date a destra, `tabular-nums`; prima colonna peso 500 (prop `emphasis`).
 
-### Navigation (legacy, invariata)
-- **Bottom nav:** solo icone, stato attivo `bg-brand-light text-brand-dark` su tile `rounded-xl`.
-- **Sidebar admin:** sfondo pieno `brand-dark`, voci bianco/opacità.
+### Navigation
+- **Bottom nav (solo PWA residente):** solo icone, stato attivo `bg-brand-light text-brand-dark` su tile `rounded-xl`. La dashboard non ha bottom nav: le due shell devono restare distinguibili a colpo d'occhio.
+- **Dashboard da `lg` in su:** sidebar fissa da 240px su `background`, voce attiva `bg-brand-dark` con testo bianco; scorre `<main>`.
+- **Dashboard sotto `lg`:** nessuna sidebar. Header sticky con hamburger che apre un drawer da sinistra con le stesse voci, alte 44px. Scorre il documento, non `<main>`. Due stati soli, nessuna sidebar a icone.
 
 ## 6. Do's and Don'ts
 
