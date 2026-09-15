@@ -5,9 +5,10 @@
 //
 // Solo padding: niente larghezza massima, niente centratura. Il contenuto occupa
 // tutta la larghezza disponibile accanto alla sidebar. Il valore viene dalla scala
-// di spaziatura chiusa del design system (4/8/12/16/24/48px — DESIGN.md); il px-8
-// (32px) usato finora da Residenze/Attività era fuori scala.
-export const CONTENT_GRID = 'px-6'
+// di spaziatura chiusa del design system (4/8/12/16/24/48px — DESIGN.md): 16px
+// sotto lg, dove non c'è sidebar e lo schermo è quello di un telefono o di un
+// tablet, 24px da lg in su. Il breakpoint è lo stesso della sidebar.
+export const CONTENT_GRID = 'px-4 lg:px-6'
 
 // Ritmo verticale del contenuto: 24px sotto la barra identità, 48px in fondo
 // perché il contenuto non tocchi il bordo dell'area di scroll.
