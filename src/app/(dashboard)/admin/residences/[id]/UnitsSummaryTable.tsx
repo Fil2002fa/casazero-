@@ -19,8 +19,10 @@ export type UnitSummaryRow = {
 export function UnitsSummaryTable({ residenceId, rows, readOnly = false }: { residenceId: string; rows: UnitSummaryRow[]; readOnly?: boolean }) {
   const router = useRouter()
 
+  // Card sotto lg (mai tabella compressa): a 320px etichetta unità, pill e
+  // nome residente non stanno su una riga di tabella.
   return (
-    <Table>
+    <Table stack="lg">
       <TableHeader>
         <TableHead>Unità</TableHead>
         <TableHead>Residente</TableHead>
@@ -33,7 +35,7 @@ export function UnitsSummaryTable({ residenceId, rows, readOnly = false }: { res
             onClick={readOnly ? undefined : () => router.push(`/admin/residences/${residenceId}/units`)}
           >
             <TableCell emphasis>{formatUnitLabel(r.label, r.floor)}</TableCell>
-            <TableCell>
+            <TableCell label="Residente">
               {r.active ? (
                 <span className="inline-flex items-center gap-2">
                   <span className={cn(PILL_BASE, 'bg-brand-dark/8 text-brand-dark')}>Attivo</span>

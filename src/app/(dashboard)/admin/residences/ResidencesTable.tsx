@@ -22,8 +22,10 @@ export function ResidencesTable({ rows, showAdminColumn }: {
 }) {
   const router = useRouter()
 
+  // Card sotto lg (mai tabella compressa); da lg quattro colonne corte stanno
+  // nei 736px di contenuto accanto alla sidebar.
   return (
-    <Table>
+    <Table stack="lg">
       <TableHeader>
         <TableHead>Nome</TableHead>
         <TableHead>Indirizzo</TableHead>
@@ -34,10 +36,10 @@ export function ResidencesTable({ rows, showAdminColumn }: {
         {rows.map((r) => (
           <TableRow key={r.id} clickable onClick={() => router.push(`/admin/residences/${r.id}`)}>
             <TableCell emphasis>{r.name}</TableCell>
-            <TableCell>{r.address ?? '—'}</TableCell>
-            <TableCell numeric>{r.unitCount}</TableCell>
+            <TableCell label="Indirizzo">{r.address ?? '—'}</TableCell>
+            <TableCell numeric label="Unità">{r.unitCount}</TableCell>
             {showAdminColumn && (
-              <TableCell>
+              <TableCell label="Amministratore">
                 {r.adminName ?? <span className="text-neutral-500">Non assegnato</span>}
               </TableCell>
             )}

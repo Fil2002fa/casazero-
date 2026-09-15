@@ -39,8 +39,10 @@ const BUCKET_DUE_CLASS: Record<ActivityBucket, string> = {
 export function ManutenzioniTable({ rows }: { rows: ActivityRow[] }) {
   const router = useRouter()
 
+  // Card sotto xl: sei colonne, due badge e un bottone non stanno in 736px di
+  // contenuto senza scroll orizzontale.
   return (
-    <Table>
+    <Table stack="xl">
       <TableHeader>
         <TableHead>Residenza</TableHead>
         <TableHead>Voce</TableHead>
@@ -53,10 +55,10 @@ export function ManutenzioniTable({ rows }: { rows: ActivityRow[] }) {
         {rows.map(r => (
           <TableRow key={r.id} clickable onClick={() => router.push(`/admin/manutenzioni/${r.id}`)}>
             <TableCell emphasis>{r.residenceName}</TableCell>
-            <TableCell>{r.title}</TableCell>
-            <TableCell>{r.obligationType ? <TypeBadge obligationType={r.obligationType} /> : '—'}</TableCell>
-            <TableCell><StatusBadge status={BUCKET_BADGE[r.bucket]} /></TableCell>
-            <TableCell numeric className={`text-xs ${BUCKET_DUE_CLASS[r.bucket]}`}>
+            <TableCell label="Voce">{r.title}</TableCell>
+            <TableCell label="Tipo">{r.obligationType ? <TypeBadge obligationType={r.obligationType} /> : '—'}</TableCell>
+            <TableCell label="Stato"><StatusBadge status={BUCKET_BADGE[r.bucket]} /></TableCell>
+            <TableCell numeric label="Scadenza" className={`text-xs ${BUCKET_DUE_CLASS[r.bucket]}`}>
               {r.dueLabel ?? '—'}
             </TableCell>
             <TableCell className="text-right">

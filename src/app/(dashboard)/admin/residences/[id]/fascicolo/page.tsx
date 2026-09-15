@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { Paperclip, FileDown } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
+import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/Table'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
@@ -79,66 +80,63 @@ export default async function ResidenceFascicoloPage({ params }: { params: Param
             </p>
           </div>
         ) : (
-          <div className="bg-surface rounded-xl border border-border overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left font-medium text-xs text-text-secondary px-4 py-2.5 whitespace-nowrap">Data</th>
-                    <th className="text-left font-medium text-xs text-text-secondary px-4 py-2.5">Voce</th>
-                    <th className="text-left font-medium text-xs text-text-secondary px-4 py-2.5">Unità</th>
-                    <th className="text-left font-medium text-xs text-text-secondary px-4 py-2.5">Registrato da</th>
-                    <th className="text-left font-medium text-xs text-text-secondary px-4 py-2.5 whitespace-nowrap">Allegati</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {completions.map(c => {
-                    const dateStr = new Date(c.completed_at).toLocaleDateString('it-IT', {
-                      day: 'numeric', month: 'short', year: 'numeric',
-                    })
-                    const title = c.maintenance_items?.maintenance_templates?.title ?? '—'
-                    const unitLabel = c.unit_id === null
-                      ? 'Condominio'
-                      : (c.units ? formatUnitLabel(c.units.label) : '—')
+          // Card sotto xl: cinque colonne con date e nomi non stanno in 736px di
+          // contenuto senza scroll orizzontale. La voce è il titolo della card.
+          <Table stack="xl">
+            <TableHeader>
+              <TableHead className="whitespace-nowrap">Data</TableHead>
+              <TableHead>Voce</TableHead>
+              <TableHead>Unità</TableHead>
+              <TableHead>Registrato da</TableHead>
+              <TableHead className="whitespace-nowrap">Allegati</TableHead>
+            </TableHeader>
+            <TableBody>
+              {completions.map(c => {
+                const dateStr = new Date(c.completed_at).toLocaleDateString('it-IT', {
+                  day: 'numeric', month: 'short', year: 'numeric',
+                })
+                const title = c.maintenance_items?.maintenance_templates?.title ?? '—'
+                const unitLabel = c.unit_id === null
+                  ? 'Condominio'
+                  : (c.units ? formatUnitLabel(c.units.label) : '—')
 
-                    return (
-                      <tr key={c.id} className="border-b border-border last:border-b-0">
-                        <td className="text-left tabular-nums text-text-secondary px-4 py-2.5 whitespace-nowrap">{dateStr}</td>
-                        <td className="text-text-primary font-medium px-4 py-2.5">{title}</td>
-                        <td className="text-text-secondary px-4 py-2.5">{unitLabel}</td>
-                        <td className="text-text-secondary px-4 py-2.5">
-                          {formatRegisteredBy(
-                            c.performed_by_name,
-                            c.maintenance_items?.completion_mode ?? null,
-                            c.maintenance_items?.maintenance_templates?.completion_mode ?? null,
-                          )}
-                        </td>
-                        <td className="px-4 py-2.5">
-                          {c.attachments.length > 0 && (
-                            <div className="flex items-center gap-1.5">
-                              {c.attachments.map(att => (
-                                <a
-                                  key={att.id}
-                                  href={`/api/download?bucket=attachments&path=${encodeURIComponent(att.storage_path)}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  aria-label={`Apri allegato: ${att.file_name}`}
-                                  title={att.file_name}
-                                  className="text-text-secondary hover:text-brand-dark transition-colors rounded focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2"
-                                >
-                                  <Paperclip className="w-3.5 h-3.5" strokeWidth={1.6} />
-                                </a>
-                              ))}
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                return (
+                  <TableRow key={c.id}>
+                    <TableCell label="Data" className="tabular-nums text-text-secondary whitespace-nowrap">{dateStr}</TableCell>
+                    <TableCell emphasis>{title}</TableCell>
+                    <TableCell label="Unità" className="text-text-secondary">{unitLabel}</TableCell>
+                    <TableCell label="Registrato da" className="text-text-secondary">
+                      {formatRegisteredBy(
+                        c.performed_by_name,
+                        c.maintenance_items?.completion_mode ?? null,
+                        c.maintenance_items?.maintenance_templates?.completion_mode ?? null,
+                      )}
+                    </TableCell>
+                    {/* Senza allegati la cella resta vuota e senza etichetta: nella card sparisce. */}
+                    <TableCell label={c.attachments.length > 0 ? 'Allegati' : undefined}>
+                      {c.attachments.length > 0 && (
+                        <div className="flex items-center gap-1.5">
+                          {c.attachments.map(att => (
+                            <a
+                              key={att.id}
+                              href={`/api/download?bucket=attachments&path=${encodeURIComponent(att.storage_path)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              aria-label={`Apri allegato: ${att.file_name}`}
+                              title={att.file_name}
+                              className="text-text-secondary hover:text-brand-dark transition-colors rounded focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2"
+                            >
+                              <Paperclip className="w-3.5 h-3.5" strokeWidth={1.6} />
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
       )}
     </>
   )
