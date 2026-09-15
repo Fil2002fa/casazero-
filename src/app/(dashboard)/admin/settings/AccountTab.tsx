@@ -63,7 +63,9 @@ export default function AccountTab({ initialName, email }: { initialName: string
 
         <div>
           <p className="text-[13px] font-medium text-neutral-700 mb-2">Email</p>
-          <p className="text-sm text-neutral-900">{email}</p>
+          {/* A capo anche a metà parola, mai troncata: un'email lunga è una stringa
+              senza spazi e altrimenti esce dalla card. */}
+          <p className="text-sm text-neutral-900 break-all">{email}</p>
         </div>
       </div>
 
