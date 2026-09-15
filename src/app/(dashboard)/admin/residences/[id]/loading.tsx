@@ -7,9 +7,11 @@ export default function Loading() {
       <div className="bg-surface rounded-xl border border-border p-6">
         <div className="flex items-start gap-4">
           <div className="w-24 h-[72px] rounded-xl bg-border flex-shrink-0" />
-          <div className="flex-1 space-y-2 pt-1">
-            <div className="h-7 w-64 bg-border rounded" />
-            <div className="h-4 w-40 bg-border rounded" />
+          {/* Barre fluide con tetto: accanto alla miniatura, su un telefono restano
+              meno di 200px, e una larghezza fissa faceva scorrere la pagina di lato. */}
+          <div className="flex-1 min-w-0 space-y-2 pt-1">
+            <div className="h-7 w-full max-w-64 bg-border rounded" />
+            <div className="h-4 w-full max-w-40 bg-border rounded" />
           </div>
         </div>
       </div>
@@ -22,16 +24,6 @@ export default function Loading() {
             <div className="space-y-1.5 flex-1">
               <div className="h-4 w-20 bg-border rounded" />
             </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Numeri chiave */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
-        {[0, 1, 2, 3].map(i => (
-          <div key={i} className="bg-surface rounded-xl border border-border p-4 space-y-2">
-            <div className="h-3 w-16 bg-border rounded" />
-            <div className="h-7 w-10 bg-border rounded" />
           </div>
         ))}
       </div>
