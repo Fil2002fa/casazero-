@@ -5,7 +5,10 @@ import { cn } from '@/lib/cn'
 // Titolo di pagina: Display serif, un solo stile per ogni H1 della dashboard
 // (DESIGN.md, Typography → Display). Esportato per la sola testata che non passa
 // da PageHeader: il nome residenza nella card con la foto (ResidencePhotoUpload).
-export const PAGE_TITLE = 'font-serif text-3xl font-semibold text-text-primary text-balance'
+// break-words (non break-all): un nome normale va a capo tra le parole, e solo una
+// parola più larga dello spazio (es. __TEST_ACCENSIONE__) viene spezzata invece di
+// far scorrere la pagina di lato. Funziona se il contenitore ha min-w-0.
+export const PAGE_TITLE = 'font-serif text-3xl font-semibold text-text-primary text-balance break-words'
 
 interface BackLinkProps {
   href: string
