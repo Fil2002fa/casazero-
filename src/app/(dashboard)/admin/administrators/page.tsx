@@ -225,7 +225,9 @@ function AttentionCard({ admin }: { admin: AdminSummary }) {
         )}
         <div className="mt-1.5 space-y-0.5">
           {issueLines.map((line, i) => (
-            <p key={i} className={`text-xs ${textSecondary}`}>· {line}</p>
+            // La riga contiene il nome residenza: break-words spezza solo una parola
+            // più larga della card invece di far scorrere la pagina di lato.
+            <p key={i} className={`text-xs ${textSecondary} break-words`}>· {line}</p>
           ))}
         </div>
       </div>
