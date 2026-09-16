@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Image from 'next/image'
 import { BookOpen, CalendarClock, ChevronRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireProfile } from '@/lib/auth'
@@ -145,10 +146,18 @@ export default async function HomePage() {
 
       {/* Card residenza */}
       <div className="bg-surface rounded-xl border border-border overflow-hidden">
-        <div className="h-36 bg-background flex items-center justify-center">
+        <div className="relative h-36 bg-background flex items-center justify-center">
           {photoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={photoUrl} alt={residenceName} className="w-full h-full object-cover" />
+            // Elemento LCP della home (misurato 4,66s con <img> nudo): next/image
+            // ridimensiona/serve WebP e priority salta il lazy-loading e precarica.
+            <Image
+              src={photoUrl}
+              alt={residenceName}
+              fill
+              sizes="(min-width: 560px) 464px, calc(100vw - 3rem)"
+              priority
+              className="object-cover"
+            />
           ) : (
             <span className="text-text-secondary text-sm">{residenceName}</span>
           )}
