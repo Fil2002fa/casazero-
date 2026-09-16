@@ -809,7 +809,7 @@ function ChecklistSection({
               }`}
             >
               <div className="flex items-center justify-between gap-1">
-                <p className="text-[11px] text-text-secondary">{SCOPE_LABELS[scope]}</p>
+                <p className="text-xs text-text-secondary">{SCOPE_LABELS[scope]}</p>
                 <ChevronDown
                   className={`w-3 h-3 flex-shrink-0 text-text-secondary transition-transform ${isOpen ? 'rotate-180' : ''}`}
                   strokeWidth={1.8}
@@ -822,7 +822,7 @@ function ChecklistSection({
                 )}
               </p>
               {c.notApplicable > 0 && (
-                <p className="text-[11px] text-text-secondary">
+                <p className="text-xs text-text-secondary">
                   {pluralize(c.notApplicable, 'esclusa', 'escluse')}
                 </p>
               )}
@@ -841,7 +841,7 @@ function ChecklistSection({
         </p>
       )}
       {checklist.warnings.length > 0 && (
-        <div className="text-[11px] text-neutral-600 bg-background rounded-lg px-3 py-2 space-y-0.5">
+        <div className="text-xs text-neutral-600 bg-background rounded-lg px-3 py-2 space-y-0.5">
           {checklist.warnings.map((w, i) => <p key={i}>{w}</p>)}
         </div>
       )}
@@ -849,7 +849,7 @@ function ChecklistSection({
       {openScope && (
         <div className="pt-2 border-t border-border">
           <div className="flex items-center justify-between gap-2 mb-1">
-            <h3 className="text-[11px] font-medium text-text-secondary uppercase tracking-wide">
+            <h3 className="text-xs font-medium text-text-secondary uppercase tracking-wide">
               {SCOPE_LABELS[openScope]}
             </h3>
             <button
@@ -972,7 +972,7 @@ function ChecklistItemRow({
           strokeWidth={1.8}
         />
         <span className="flex-1 text-sm text-text-primary min-w-0 truncate">{exp.label}</span>
-        <span className={`flex-shrink-0 text-[10px] px-2 py-0.5 rounded-full font-medium ${status.className}`}>
+        <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${status.className}`}>
           {status.label}
         </span>
       </button>
@@ -1173,7 +1173,7 @@ function ClassificationBadge({ doc }: { doc: DocRow }) {
   const info = classificationBadgeInfo(doc)
   if (!info) return null
   return (
-    <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium ${info.className}`}>
+    <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${info.className}`}>
       {info.spinner && <Loader2 className="w-3 h-3 animate-spin" strokeWidth={2} />}
       {info.label}
     </span>
@@ -1207,7 +1207,7 @@ function DocCard({ doc, supplierContext }: { doc: DocRow; supplierContext: Suppl
           {/* Due assi distinti, mai fusi (legge di dominio 024): categoria a
               sinistra, stato/tipo classificazione a destra. */}
           <div className="flex flex-wrap items-center gap-1.5 mt-1">
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-light text-brand-dark font-medium">
+            <span className="text-xs px-2 py-0.5 rounded-full bg-brand-light text-brand-dark font-medium">
               {CAT_LABELS[doc.category]}
             </span>
             <ClassificationBadge doc={doc} />

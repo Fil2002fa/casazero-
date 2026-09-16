@@ -163,7 +163,7 @@ export default function IdentityTab({ initialName, initialLogoUrl }: Props) {
         {/* Anteprima integrata — stesso componente dell'header reale della shell */}
         <div>
           <BuilderIdentityBar name={name} logoSrc={previewSrc} className="rounded-lg border border-border overflow-hidden">
-            <span className="ml-auto text-[10px] text-text-secondary flex-shrink-0">così appare nell&apos;header</span>
+            <span className="ml-auto text-xs text-text-secondary flex-shrink-0">così appare nell&apos;header</span>
           </BuilderIdentityBar>
           <p className="text-xs text-text-secondary mt-2">
             PNG o SVG, max 2 MB. Se rimosso, si usa l&apos;icona CasaZero.

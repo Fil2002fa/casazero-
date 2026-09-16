@@ -289,7 +289,7 @@ export function UnitsManager({
               </div>
               <div className="flex items-center gap-2">
                 {activeInvites.length > 0 && (
-                  <span className="text-[10px] bg-semantic-amber-bg text-semantic-amber px-2 py-0.5 rounded-full">
+                  <span className="text-xs bg-semantic-amber-bg text-semantic-amber px-2 py-0.5 rounded-full">
                     {activeInvites.length} invito/i attivo/i
                   </span>
                 )}
@@ -307,7 +307,7 @@ export function UnitsManager({
                     <div className="space-y-1">
                       {unit.members.map(m => (
                         <div key={m.profile_id} className="flex items-center gap-2">
-                          <div className="w-6 h-6 bg-brand-light rounded-full flex items-center justify-center text-brand-dark text-[10px] font-medium">
+                          <div className="w-6 h-6 bg-brand-light rounded-full flex items-center justify-center text-brand-dark text-xs font-medium">
                             {(m.profiles?.full_name ?? '?').charAt(0).toUpperCase()}
                           </div>
                           <span className="text-sm text-text-primary">{m.profiles?.full_name ?? 'Utente'}</span>
@@ -327,7 +327,7 @@ export function UnitsManager({
                         return (
                           <div key={inv.id} className="bg-background rounded-lg p-3 space-y-2">
                             <p className="text-xs text-text-primary break-all">{url}</p>
-                            <p className="text-[10px] text-text-secondary">
+                            <p className="text-xs text-text-secondary">
                               Scade il {new Date(inv.expires_at).toLocaleDateString('it-IT')}
                             </p>
                             <div className="flex flex-wrap gap-2">

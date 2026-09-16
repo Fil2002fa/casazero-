@@ -37,7 +37,7 @@ export function MaintenanceBadge({ mode, obligation, status, size = 'sm' }: Prop
       <span className={`inline-flex items-center rounded-full font-medium ${badgeStyle} ${px}`}>
         {MODE_LABELS[mode]}
       </span>
-      <span className="text-[10px] text-text-secondary">{OBLIGATION_LABELS[obligation]}</span>
+      <span className="text-xs text-text-secondary">{OBLIGATION_LABELS[obligation]}</span>
     </span>
   )
 }

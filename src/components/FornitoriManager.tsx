@@ -413,7 +413,7 @@ export function FornitoriManager({
                       )}
                       {/* ml allinea il testo a quello dei lavori, dopo icona (w-3) e gap-1.5. */}
                       {s.addedFromDocumentHere && (
-                        <p className="text-[10px] text-text-secondary mt-0.5 ml-[18px]">
+                        <p className="text-xs text-text-secondary mt-0.5 ml-[18px]">
                           Aggiunto dalla dichiarazione di conformità.
                         </p>
                       )}
@@ -444,7 +444,7 @@ export function FornitoriManager({
                       )}
 
                       <div className="mt-2.5">
-                        <p className="flex items-center gap-1.5 text-[10px] font-medium text-text-secondary uppercase tracking-wide mb-1">
+                        <p className="flex items-center gap-1.5 text-xs font-medium text-text-secondary uppercase tracking-wide mb-1">
                           <Wrench className="w-3 h-3" strokeWidth={1.6} />
                           Lavori realizzati
                         </p>
@@ -473,7 +473,7 @@ export function FornitoriManager({
                                   {group.installations.map(inst => (
                                     <span
                                       key={inst.id}
-                                      className="inline-flex items-center gap-1 text-[10px] text-text-secondary bg-background border border-border px-1.5 py-0.5 rounded-full"
+                                      className="inline-flex items-center gap-1 text-xs text-text-secondary bg-background border border-border px-1.5 py-0.5 rounded-full"
                                     >
                                       {SISTEMA_LABELS[inst.sistema]}
                                       <button

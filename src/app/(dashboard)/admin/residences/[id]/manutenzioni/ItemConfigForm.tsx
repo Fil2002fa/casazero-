@@ -54,7 +54,7 @@ export function ItemConfigForm({
         <div className="px-3 pb-3 space-y-2 bg-background">
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[10px] text-text-secondary block mb-0.5">Modalità</label>
+              <label className="text-xs text-text-secondary block mb-0.5">Modalità</label>
               <select
                 value={mode}
                 onChange={e => setMode(e.target.value as CompletionMode)}
@@ -66,7 +66,7 @@ export function ItemConfigForm({
               </select>
             </div>
             <div>
-              <label className="text-[10px] text-text-secondary block mb-0.5">Tipo</label>
+              <label className="text-xs text-text-secondary block mb-0.5">Tipo</label>
               <select
                 value={obligation}
                 onChange={e => setObligation(e.target.value as ObligationType)}
@@ -80,7 +80,7 @@ export function ItemConfigForm({
           </div>
 
           <div>
-            <label className="text-[10px] text-text-secondary block mb-0.5">Freq. (mesi)</label>
+            <label className="text-xs text-text-secondary block mb-0.5">Freq. (mesi)</label>
             <input
               type="number"
               value={frequency}
@@ -90,7 +90,7 @@ export function ItemConfigForm({
               className="w-full border border-border rounded-md px-2 py-1.5 text-xs bg-surface text-text-primary focus:outline-none"
             />
             {obligation === 'A' && (
-              <p className="mt-0.5 text-[10px] text-semantic-amber">
+              <p className="mt-0.5 text-xs text-semantic-amber">
                 Frequenza ancorata a una norma di legge. Modificala solo dopo verifica tecnica.
               </p>
             )}
@@ -98,7 +98,7 @@ export function ItemConfigForm({
 
           {suppliers.length > 0 && (
             <div>
-              <label className="text-[10px] text-text-secondary block mb-0.5">Installato da</label>
+              <label className="text-xs text-text-secondary block mb-0.5">Installato da</label>
               <select
                 value={supplierId}
                 onChange={e => setSupplierId(e.target.value)}
@@ -111,7 +111,7 @@ export function ItemConfigForm({
           )}
 
           <div>
-            <label className="text-[10px] text-text-secondary block mb-0.5">Info garanzia</label>
+            <label className="text-xs text-text-secondary block mb-0.5">Info garanzia</label>
             <input
               type="text"
               value={warranty}

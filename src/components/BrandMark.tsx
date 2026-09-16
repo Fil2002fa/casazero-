@@ -38,7 +38,7 @@ interface BrandMarkProps {
 
 export function BrandMark({
   iconSize = 20,
-  textClassName = 'text-[15px] font-semibold',
+  textClassName = 'text-sm font-semibold',
   className,
 }: BrandMarkProps) {
   return (

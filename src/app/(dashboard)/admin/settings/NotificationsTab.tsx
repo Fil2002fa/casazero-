@@ -51,7 +51,7 @@ export default function NotificationsTab({ initialPrefs }: { initialPrefs: Admin
         <div className="flex-1" />
         <div className="w-16 flex items-center justify-center gap-1">
           <Mail className="w-3.5 h-3.5 text-text-secondary" strokeWidth={1.6} />
-          <span className="text-[10px] text-text-secondary">Email</span>
+          <span className="text-xs text-text-secondary">Email</span>
         </div>
       </div>
 

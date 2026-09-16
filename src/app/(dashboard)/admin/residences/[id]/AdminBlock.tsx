@@ -191,7 +191,7 @@ function AdminModal({
               {/* Scegli esistente */}
               {availableAdmins.length > 0 ? (
                 <div>
-                  <p className="text-[10px] font-medium text-text-primary/50 uppercase tracking-wide mb-2">
+                  <p className="text-xs font-medium text-text-primary/50 uppercase tracking-wide mb-2">
                     Profili esistenti
                   </p>
                   <div className="space-y-1">
@@ -206,7 +206,7 @@ function AdminModal({
                         className={`flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-background cursor-pointer transition-colors${pending ? ' pointer-events-none opacity-50' : ''}`}
                       >
                         <div className="w-7 h-7 rounded-full bg-brand-light flex items-center justify-center flex-shrink-0">
-                          <span className="text-[10px] font-medium text-brand-medium">
+                          <span className="text-xs font-medium text-brand-medium">
                             {(a.full_name ?? '?').charAt(0).toUpperCase()}
                           </span>
                         </div>
@@ -231,7 +231,7 @@ function AdminModal({
 
               {/* Invita via link */}
               <div>
-                <p className="text-[10px] font-medium text-text-primary/50 uppercase tracking-wide mb-2">
+                <p className="text-xs font-medium text-text-primary/50 uppercase tracking-wide mb-2">
                   Invita via link
                 </p>
                 {!inviteToken ? (
@@ -252,7 +252,7 @@ function AdminModal({
                 ) : (
                   <div className="space-y-2">
                     <div className="bg-background rounded-lg px-3 py-2">
-                      <p className="text-[11px] text-text-primary/60 font-mono break-all">{inviteUrl}</p>
+                      <p className="text-xs text-text-primary/60 font-mono break-all">{inviteUrl}</p>
                     </div>
                     <div className="flex gap-2">
                       <div
