@@ -444,7 +444,7 @@ export function FornitoriManager({
                       )}
 
                       <div className="mt-2.5">
-                        <p className="flex items-center gap-1.5 text-xs font-medium text-text-secondary uppercase tracking-wide mb-1">
+                        <p className="flex items-center gap-1.5 text-xs font-medium text-text-secondary mb-1">
                           <Wrench className="w-3 h-3" strokeWidth={1.6} />
                           Lavori realizzati
                         </p>

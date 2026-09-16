@@ -164,7 +164,7 @@ export default async function AdministratorsPage() {
 
       {/* Zona B — Tutti gli amministratori */}
       <section className="space-y-2">
-        <h2 className="text-xs font-medium text-text-primary/50 uppercase tracking-wide">
+        <h2 className="text-xs font-medium text-text-primary/50">
           Tutti gli amministratori
         </h2>
         <div className="bg-white rounded-xl border border-border divide-y divide-border overflow-hidden">

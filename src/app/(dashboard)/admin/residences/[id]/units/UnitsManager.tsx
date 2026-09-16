@@ -303,7 +303,7 @@ export function UnitsManager({
                 {/* Residenti */}
                 {unit.members.length > 0 && (
                   <div>
-                    <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-2">Residenti</p>
+                    <p className="text-xs font-medium text-text-secondary mb-2">Residenti</p>
                     <div className="space-y-1">
                       {unit.members.map(m => (
                         <div key={m.profile_id} className="flex items-center gap-2">
@@ -320,7 +320,7 @@ export function UnitsManager({
                 {/* Inviti attivi */}
                 {activeInvites.length > 0 && (
                   <div>
-                    <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-2">Inviti attivi</p>
+                    <p className="text-xs font-medium text-text-secondary mb-2">Inviti attivi</p>
                     <div className="space-y-3">
                       {activeInvites.map(inv => {
                         const url = `${appUrl}/welcome/${inv.token}`

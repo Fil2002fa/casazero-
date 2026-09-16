@@ -197,7 +197,7 @@ export default async function AdminDetailPage({ params }: { params: Params }) {
 
       {/* Residenze gestite */}
       <section className="space-y-3">
-        <h2 className="text-xs font-medium text-text-primary/50 uppercase tracking-wide">
+        <h2 className="text-xs font-medium text-text-primary/50">
           Residenze gestite
         </h2>
         {residenceDetails.map(res => (

@@ -91,7 +91,7 @@ function NavContent({ role, onNavigate, brandAction }: Props & {
                   <Icon size={18} strokeWidth={isActive ? 2.2 : 1.6} />
                   <span className="flex-1">{label}</span>
                   {badge && (
-                    <span className="text-xs font-medium leading-none px-1.5 py-0.5 rounded-full bg-brand-dark/8 text-text-secondary uppercase tracking-wide">
+                    <span className="text-xs font-medium leading-none px-1.5 py-0.5 rounded-full bg-brand-dark/8 text-text-secondary">
                       {badge}
                     </span>
                   )}

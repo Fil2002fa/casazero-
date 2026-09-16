@@ -182,7 +182,7 @@ export default async function AdminItemDetailPage({ params }: { params: Params }
         {/* Descrizione */}
         {tpl?.description && (
           <div className="bg-surface rounded-xl border border-border p-4">
-            <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-1">Descrizione</p>
+            <p className="text-xs font-medium text-text-secondary mb-1">Descrizione</p>
             <p className="text-sm text-text-primary leading-relaxed">{tpl.description}</p>
           </div>
         )}
@@ -192,7 +192,7 @@ export default async function AdminItemDetailPage({ params }: { params: Params }
           <div className="bg-brand-light rounded-xl p-4 flex gap-3">
             <ShieldCheck className="w-5 h-5 text-brand-medium flex-shrink-0 mt-0.5" strokeWidth={1.6} />
             <div>
-              <p className="text-xs font-medium text-brand-dark uppercase tracking-wide mb-1">Garanzia collegata</p>
+              <p className="text-xs font-medium text-brand-dark mb-1">Garanzia collegata</p>
               <p className="text-sm text-brand-dark leading-relaxed">{item.warranty_info}</p>
             </div>
           </div>

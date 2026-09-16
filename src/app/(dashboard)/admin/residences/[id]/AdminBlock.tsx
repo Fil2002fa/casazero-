@@ -191,7 +191,7 @@ function AdminModal({
               {/* Scegli esistente */}
               {availableAdmins.length > 0 ? (
                 <div>
-                  <p className="text-xs font-medium text-text-primary/50 uppercase tracking-wide mb-2">
+                  <p className="text-xs font-medium text-text-primary/50 mb-2">
                     Profili esistenti
                   </p>
                   <div className="space-y-1">
@@ -231,7 +231,7 @@ function AdminModal({
 
               {/* Invita via link */}
               <div>
-                <p className="text-xs font-medium text-text-primary/50 uppercase tracking-wide mb-2">
+                <p className="text-xs font-medium text-text-primary/50 mb-2">
                   Invita via link
                 </p>
                 {!inviteToken ? (

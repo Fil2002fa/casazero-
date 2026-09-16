@@ -715,7 +715,7 @@ export function DocumentiClient({
         <div className="space-y-6">
           {/* Sezione residenza */}
           <section className="space-y-2">
-            <h2 className="text-xs font-medium text-text-secondary uppercase tracking-wide">Residenza</h2>
+            <h2 className="text-xs font-medium text-text-secondary">Residenza</h2>
             {residenceDocs.length === 0 ? (
               <p className="text-sm text-text-secondary px-1">
                 Nessun documento di residenza{isFiltered ? ' per questo filtro' : ''}.
@@ -728,7 +728,7 @@ export function DocumentiClient({
           {/* Sezione per unità */}
           {byUnit.size > 0 && (
             <section className="space-y-4">
-              <h2 className="text-xs font-medium text-text-secondary uppercase tracking-wide">Per unità</h2>
+              <h2 className="text-xs font-medium text-text-secondary">Per unità</h2>
               {[...byUnit.entries()].map(([unitId, unitDocs]) => (
                 <div key={unitId} className="space-y-2">
                   <h3 className="text-sm font-medium text-text-primary">
@@ -849,7 +849,7 @@ function ChecklistSection({
       {openScope && (
         <div className="pt-2 border-t border-border">
           <div className="flex items-center justify-between gap-2 mb-1">
-            <h3 className="text-xs font-medium text-text-secondary uppercase tracking-wide">
+            <h3 className="text-xs font-medium text-text-secondary">
               {SCOPE_LABELS[openScope]}
             </h3>
             <button
