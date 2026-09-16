@@ -3,22 +3,37 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/admin'
+import type { UserRole } from '@/types/database'
 
-async function assertSuperAdmin(): Promise<{ error: string } | null> {
+// Identità del super_admin che compie l'atto, letta lato server dalla
+// sessione: è ciò che il registro attività congela come attore
+// (activity-log.ts:44-58). `fullName` viene da `profiles.full_name` al
+// momento dell'atto, mai da input del client. Stessa forma di `requireCaller`
+// in units/actions.ts:8.
+type SuperAdminCaller =
+  | { userId: string; role: UserRole; fullName: string | null }
+  | { error: string }
+
+async function assertSuperAdmin(): Promise<SuperAdminCaller> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Non autenticato' }
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('role, full_name')
+    .eq('id', user.id)
+    .single()
+  if (profileError) console.error('assertSuperAdmin: errore lettura profilo', { userId: user.id, profileError })
   if (profile?.role !== 'super_admin') return { error: 'Permessi insufficienti' }
-  return null
+  return { userId: user.id, role: profile.role, fullName: profile.full_name ?? null }
 }
 
 export async function assignAdmin(
   residenceId: string,
   profileId: string,
 ): Promise<{ error?: string }> {
-  const authErr = await assertSuperAdmin()
-  if (authErr) return authErr
+  const caller = await assertSuperAdmin()
+  if ('error' in caller) return { error: caller.error }
 
   const supabase = await createClient()
   const { error } = await supabase
@@ -36,8 +51,8 @@ export async function assignAdmin(
 export async function removeAdminAssignment(
   residenceId: string,
 ): Promise<{ error?: string }> {
-  const authErr = await assertSuperAdmin()
-  if (authErr) return authErr
+  const caller = await assertSuperAdmin()
+  if ('error' in caller) return { error: caller.error }
 
   const supabase = await createClient()
   const { error } = await supabase
@@ -53,8 +68,8 @@ export async function removeAdminAssignment(
 export async function createAdminInvite(
   residenceId: string,
 ): Promise<{ error?: string; token?: string }> {
-  const authErr = await assertSuperAdmin()
-  if (authErr) return authErr
+  const caller = await assertSuperAdmin()
+  if ('error' in caller) return { error: caller.error }
 
   const svc = createServiceClient()
   const expiresAt = new Date()
@@ -73,8 +88,8 @@ export async function createAdminInvite(
 export async function getAdminEmail(
   profileId: string,
 ): Promise<{ email?: string; error?: string }> {
-  const authErr = await assertSuperAdmin()
-  if (authErr) return authErr
+  const caller = await assertSuperAdmin()
+  if ('error' in caller) return { error: caller.error }
 
   const svc = createServiceClient()
   const { data, error } = await svc.auth.admin.getUserById(profileId)
