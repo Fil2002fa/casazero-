@@ -213,14 +213,8 @@ function ResidenceCard({ residence }: { residence: ResidenceDetail }) {
   const isAmber = residence.status === 'amber'
   const isGreen = residence.status === 'green'
 
-  const accentBorder = isRed
-    ? 'border-l-4 border-l-[#A32D2D]'
-    : isAmber
-    ? 'border-l-4 border-l-[#854F0B]'
-    : ''
-
   return (
-    <div className={`bg-white rounded-xl border border-border overflow-hidden ${accentBorder}`}>
+    <div className="bg-white rounded-xl border border-border overflow-hidden">
       {/* Header riga */}
       <div className="px-4 py-3 flex items-center gap-3">
         <span className={`w-2 h-2 rounded-full flex-shrink-0 ${

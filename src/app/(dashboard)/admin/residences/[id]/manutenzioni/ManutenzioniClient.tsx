@@ -543,11 +543,10 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
                   ? 'Condominio'
                   : (item.units ? formatUnitLabel(item.units.label) : '—')
                 const overdueNow = isOverdueLive(item)
-                const accent = overdueNow ? 'border-l-semantic-red' : 'border-l-semantic-amber'
                 const badgeStatus = overdueNow ? 'scaduta' : item.status
                 const n = daysOverdue(item.next_due_date, today)
                 return (
-                  <div key={item.id} className={`bg-surface rounded-xl border border-border border-l-4 ${accent} p-3`}>
+                  <div key={item.id} className="bg-surface rounded-xl border border-border p-3">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-sm font-medium text-text-primary truncate">{tpl?.title}</p>
                       <MaintenanceBadge mode={effMode} obligation={effObl} status={badgeStatus} />

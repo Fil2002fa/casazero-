@@ -195,7 +195,6 @@ function StatusDot({ status }: { status: 'red' | 'amber' | 'green' }) {
 
 function AttentionCard({ admin }: { admin: AdminSummary }) {
   const isRed = admin.worstStatus === 'red'
-  const accentBorder = isRed ? 'border-l-[#A32D2D]' : 'border-l-[#854F0B]'
   const bg = isRed ? 'bg-semantic-red-bg' : 'bg-semantic-amber-bg'
   const textPrimary = isRed ? 'text-semantic-red' : 'text-semantic-amber'
   const textSecondary = isRed ? 'text-semantic-red/70' : 'text-semantic-amber/70'
@@ -212,7 +211,7 @@ function AttentionCard({ admin }: { admin: AdminSummary }) {
   return (
     <Link
       href={`/admin/administrators/${admin.profileId}`}
-      className={`flex items-start gap-3 p-4 ${bg} rounded-xl border border-border border-l-4 ${accentBorder} hover:brightness-[0.97] transition-all`}
+      className={`flex items-start gap-3 p-4 ${bg} rounded-xl border border-border hover:brightness-[0.97] transition-all`}
     >
       <div className="flex-1 min-w-0">
         <p className={`text-sm font-medium ${textPrimary}`}>
