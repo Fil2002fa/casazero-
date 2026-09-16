@@ -361,7 +361,7 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {/* Segmented control: piano attivo vs tipi esclusi — solo per chi può comporre il piano */}
       {canManagePlan && (
         <div className="flex rounded-lg border border-border p-0.5 bg-surface">
@@ -731,7 +731,7 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
           onClick={() => { if (!isPending) setPendingAction(null) }}
         >
           <div
-            className="bg-surface rounded-xl border border-border max-w-sm w-full p-5 space-y-3 break-words"
+            className="bg-surface rounded-xl border border-border max-w-sm w-full p-6 space-y-3 break-words"
             onClick={e => e.stopPropagation()}
           >
             {pendingAction.targetStatus === 'inclusa' ? (

@@ -121,7 +121,7 @@ export default async function ResidenceDocumentiPage({
 
       {/* Solo informativo: nessun gate, la pagina funziona identica senza ?onboarding=1 */}
       {isOnboarding && (
-        <div className="bg-brand-light rounded-xl p-4 flex items-center gap-3 mb-5">
+        <div className="bg-brand-light rounded-xl p-4 flex items-center gap-3 mb-6">
           <p className="text-sm text-brand-dark flex-1 min-w-0">
             Residenza creata. Puoi caricare ora i documenti di consegna, oppure farlo in
             qualsiasi momento da questa pagina.

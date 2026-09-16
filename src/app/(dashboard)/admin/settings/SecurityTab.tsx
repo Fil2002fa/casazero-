@@ -42,7 +42,7 @@ export default function SecurityTab() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form onSubmit={handleSubmit} className="space-y-6">
       <div className="bg-surface rounded-xl border border-border p-6 space-y-4">
         <div className="flex items-center gap-2">
           <Lock className="w-4 h-4 text-brand-medium" strokeWidth={1.8} />

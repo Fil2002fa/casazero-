@@ -74,7 +74,7 @@ export default function IdentityTab({ initialName, initialLogoUrl }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form onSubmit={handleSubmit} className="space-y-6">
       {/* Card 1 — Nome costruttore */}
       <div className="bg-surface rounded-xl border border-border p-6">
         <h2 className="text-lg font-semibold text-neutral-900 mb-4">Nome costruttore</h2>

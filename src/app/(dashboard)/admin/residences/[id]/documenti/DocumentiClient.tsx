@@ -405,7 +405,7 @@ export function DocumentiClient({
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
 
       {/* -------- Banner servizio classificazione -------- */}
       {/* Pagina intera, non per-documento: quando la causa è il servizio
@@ -421,7 +421,7 @@ export function DocumentiClient({
       {/* -------- Modale upload -------- */}
       {showModal && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-border p-5 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-lg space-y-4">
+          <div className="bg-white rounded-xl border border-border p-6 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-lg space-y-4">
 
             {/* Header modale */}
             <div className="flex items-center justify-between">
