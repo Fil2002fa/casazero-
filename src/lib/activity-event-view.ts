@@ -106,5 +106,10 @@ export function describeActivityEvent(event: ActivityEvent): string {
     return count !== null ? `${head} (${pluralize(count, 'istanza', 'istanze')})` : head
   }
 
+  if (event.event_type === 'admin_rimosso') {
+    const name = asString(event.payload.removed_name)
+    return name ? `Amministratore ${name} rimosso` : NEUTRAL_LABEL.admin_rimosso
+  }
+
   return NEUTRAL_LABEL[event.event_type]
 }
