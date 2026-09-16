@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { FileText, Download } from 'lucide-react'
 import { Input, Label } from '@/components/ui/Input'
 import { buttonVariants } from '@/components/ui/Button'
+import { pluralize } from '@/lib/pluralize'
 import type { DocumentCategory } from '@/types/database'
 
 const CATEGORIES: { value: DocumentCategory; label: string; icon: string }[] = [
@@ -55,7 +56,7 @@ export function DocumentiList({ docs, uploadSlot }: { docs: DocItem[]; uploadSlo
     <>
       <header>
         <h1 className="font-serif text-[22px] font-semibold text-text-primary">Documenti</h1>
-        <p className="text-sm text-text-secondary mt-0.5">{visible.length} documento{visible.length !== 1 ? 's' : ''}</p>
+        <p className="text-sm text-text-secondary mt-0.5">{pluralize(visible.length, 'documento', 'documenti')}</p>
       </header>
 
       {uploadSlot}
