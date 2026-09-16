@@ -36,6 +36,21 @@ export async function assignAdmin(
   const caller = await assertSuperAdmin()
   if ('error' in caller) return { error: caller.error }
 
+  const svc = createServiceClient()
+
+  // Letta PRIMA dell'upsert: con onConflict su residence_id l'upsert
+  // sostituisce in silenzio l'admin corrente, e dopo la sostituzione il
+  // precedente non è più ricostruibile. Il registro deve poter dire chi è
+  // stato sostituito. Lettura con service client e non bloccante: su errore
+  // il precedente resta null e l'atto procede come prima.
+  const { data: previous, error: previousError } = await svc
+    .from('admin_assignments')
+    .select('profile_id')
+    .eq('residence_id', residenceId)
+    .maybeSingle()
+  if (previousError) console.error('assignAdmin: errore lettura assegnazione precedente', { residenceId, previousError })
+  const replacedId = (previous?.profile_id as string | undefined) ?? null
+
   const supabase = await createClient()
   const { error } = await supabase
     .from('admin_assignments')
@@ -45,6 +60,36 @@ export async function assignAdmin(
     if (error.code === '23505') return { error: 'Amministratore già assegnato a questa residenza.' }
     return { error: 'Errore durante l\'assegnazione. Riprova.' }
   }
+
+  // Una riga per ATTO. L'upsert su un admin già identico (stesso profilo,
+  // stessa residenza) non cambia nulla e non è un atto: non si registra,
+  // la tabella è append-only.
+  if (replacedId !== profileId) {
+    const [assignedName, replacedName] = await Promise.all([
+      readProfileName(svc, profileId),
+      replacedId ? readProfileName(svc, replacedId) : Promise.resolve(null),
+    ])
+
+    await logActivityEvent(svc, {
+      residenceId,
+      unitId: null,
+      eventType: 'admin_assegnato',
+      // Attore dalla sessione (assertSuperAdmin), mai da input: il service
+      // client bypassa le policy INSERT della 037, l'antispoofing vive qui.
+      actorId: caller.userId,
+      actorRole: caller.role,
+      actorName: caller.fullName,
+      payload: {
+        assigned_profile_id: profileId,
+        // Nomi congelati come actor_name: il registro non deve cambiare di
+        // senso se le persone cambiano nome dopo.
+        assigned_name: assignedName,
+        replaced_profile_id: replacedId,
+        replaced_name: replacedName,
+      },
+    })
+  }
+
   revalidatePath(`/admin/residences/${residenceId}`)
   return {}
 }

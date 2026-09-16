@@ -106,6 +106,15 @@ export function describeActivityEvent(event: ActivityEvent): string {
     return count !== null ? `${head} (${pluralize(count, 'istanza', 'istanze')})` : head
   }
 
+  if (event.event_type === 'admin_assegnato') {
+    const name = asString(event.payload.assigned_name)
+    const replaced = asString(event.payload.replaced_name)
+    const head = name ? `Amministratore ${name} assegnato` : NEUTRAL_LABEL.admin_assegnato
+    // `replaced_name` è valorizzato solo quando l'upsert ha sostituito un
+    // admin precedente (admin-actions.ts): senza, l'atto è una prima nomina.
+    return replaced ? `${head} al posto di ${replaced}` : head
+  }
+
   if (event.event_type === 'admin_rimosso') {
     const name = asString(event.payload.removed_name)
     return name ? `Amministratore ${name} rimosso` : NEUTRAL_LABEL.admin_rimosso
