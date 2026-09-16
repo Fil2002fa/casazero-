@@ -70,8 +70,8 @@ export default async function AdminDetailPage({ params }: { params: Params }) {
           back={{ href: '/admin/administrators', label: 'Amministratori' }}
           title={adminProfile.full_name ?? 'Amministratore'}
         />
-        <div className="bg-[#F4F3EF] rounded-xl p-6 text-center">
-          <p className="text-sm text-[#20302A]/50">Nessuna residenza assegnata.</p>
+        <div className="bg-background rounded-xl p-6 text-center">
+          <p className="text-sm text-text-primary/50">Nessuna residenza assegnata.</p>
         </div>
       </div>
     )
@@ -147,10 +147,10 @@ export default async function AdminDetailPage({ params }: { params: Params }) {
 
   const badge =
     worstStatus === 'red'
-      ? { bg: 'bg-[#FCEBEB]', text: 'text-[#A32D2D]', label: 'Ritardo' }
+      ? { bg: 'bg-semantic-red-bg', text: 'text-semantic-red', label: 'Ritardo' }
       : worstStatus === 'amber'
-      ? { bg: 'bg-[#FAEEDA]', text: 'text-[#854F0B]', label: 'Da configurare' }
-      : { bg: 'bg-[#E1F5EE]', text: 'text-[#0F6E56]', label: 'In regola' }
+      ? { bg: 'bg-semantic-amber-bg', text: 'text-semantic-amber', label: 'Da configurare' }
+      : { bg: 'bg-brand-light', text: 'text-brand-medium', label: 'In regola' }
 
   return (
     <div className="space-y-6">
@@ -160,35 +160,35 @@ export default async function AdminDetailPage({ params }: { params: Params }) {
       />
 
       {/* Identity block — pattern AdminBlock, sola lettura */}
-      <div className="bg-white rounded-xl border border-[#E4E6E2] overflow-hidden">
+      <div className="bg-white rounded-xl border border-border overflow-hidden">
         <div className="px-4 py-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-[#E1F5EE] flex items-center justify-center flex-shrink-0">
-            <UserCheck className="w-5 h-5 text-[#0F6E56]" strokeWidth={1.6} />
+          <div className="w-10 h-10 rounded-full bg-brand-light flex items-center justify-center flex-shrink-0">
+            <UserCheck className="w-5 h-5 text-brand-medium" strokeWidth={1.6} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-[#20302A]">
+            <p className="text-sm font-medium text-text-primary">
               {adminProfile.full_name ?? 'Amministratore'}
             </p>
-            <p className="text-xs text-[#20302A]/50">Amministratore di condominio</p>
+            <p className="text-xs text-text-primary/50">Amministratore di condominio</p>
           </div>
           <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${badge.bg} ${badge.text}`}>
             {badge.label}
           </span>
         </div>
         {(email || adminProfile.phone) && (
-          <div className="px-4 pb-4 pt-3 space-y-1.5 border-t border-[#E4E6E2]">
+          <div className="px-4 pb-4 pt-3 space-y-1.5 border-t border-border">
             {email && (
               // Email a capo anche a metà parola, mai troncata: su telefono non c'è il
               // passaggio del mouse per leggerla intera. Icona allineata alla prima riga.
               <div className="flex items-start gap-2">
-                <Mail className="w-3.5 h-3.5 text-[#20302A]/40 flex-shrink-0 mt-0.5" strokeWidth={1.6} />
-                <span className="text-sm text-[#20302A] min-w-0 break-all">{email}</span>
+                <Mail className="w-3.5 h-3.5 text-text-primary/40 flex-shrink-0 mt-0.5" strokeWidth={1.6} />
+                <span className="text-sm text-text-primary min-w-0 break-all">{email}</span>
               </div>
             )}
             {adminProfile.phone && (
               <div className="flex items-center gap-2">
-                <Phone className="w-3.5 h-3.5 text-[#20302A]/40 flex-shrink-0" strokeWidth={1.6} />
-                <span className="text-sm text-[#20302A]">{adminProfile.phone}</span>
+                <Phone className="w-3.5 h-3.5 text-text-primary/40 flex-shrink-0" strokeWidth={1.6} />
+                <span className="text-sm text-text-primary">{adminProfile.phone}</span>
               </div>
             )}
           </div>
@@ -197,7 +197,7 @@ export default async function AdminDetailPage({ params }: { params: Params }) {
 
       {/* Residenze gestite */}
       <section className="space-y-3">
-        <h2 className="text-[10px] font-medium text-[#20302A]/50 uppercase tracking-wide">
+        <h2 className="text-[10px] font-medium text-text-primary/50 uppercase tracking-wide">
           Residenze gestite
         </h2>
         {residenceDetails.map(res => (
@@ -220,32 +220,32 @@ function ResidenceCard({ residence }: { residence: ResidenceDetail }) {
     : ''
 
   return (
-    <div className={`bg-white rounded-xl border border-[#E4E6E2] overflow-hidden ${accentBorder}`}>
+    <div className={`bg-white rounded-xl border border-border overflow-hidden ${accentBorder}`}>
       {/* Header riga */}
       <div className="px-4 py-3 flex items-center gap-3">
         <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
-          isRed ? 'bg-[#A32D2D]' : isAmber ? 'bg-[#854F0B]' : 'bg-[#0F6E56]'
+          isRed ? 'bg-semantic-red' : isAmber ? 'bg-semantic-amber' : 'bg-brand-medium'
         }`} />
         {/* min-w-0 + break-words: un nome residenza senza spazi va a capo dentro la
             card invece di far scorrere la pagina di lato. */}
-        <p className="flex-1 min-w-0 text-sm font-medium text-[#20302A] break-words">{residence.name}</p>
+        <p className="flex-1 min-w-0 text-sm font-medium text-text-primary break-words">{residence.name}</p>
         {isGreen && (
-          <CheckCircle2 className="w-4 h-4 text-[#0F6E56] flex-shrink-0" strokeWidth={1.6} />
+          <CheckCircle2 className="w-4 h-4 text-brand-medium flex-shrink-0" strokeWidth={1.6} />
         )}
       </div>
 
       {/* Dettaglio scadute */}
       {isRed && residence.overdueItems.length > 0 && (
-        <div className="px-4 pb-3 border-t border-[#E4E6E2]">
-          <p className="text-xs font-medium text-[#A32D2D] mt-2 mb-1.5">
+        <div className="px-4 pb-3 border-t border-border">
+          <p className="text-xs font-medium text-semantic-red mt-2 mb-1.5">
             {residence.overdueCount} scadut{residence.overdueCount === 1 ? 'a' : 'e'}
           </p>
           <div className="space-y-1">
             {residence.overdueItems.slice(0, 4).map(item => (
               <div key={item.id} className="flex items-baseline gap-2">
-                <span className="text-xs text-[#20302A]/30">·</span>
-                <span className="text-xs text-[#20302A] flex-1 min-w-0 truncate">{item.title}</span>
-                <span className="text-xs text-[#A32D2D] flex-shrink-0">
+                <span className="text-xs text-text-primary/30">·</span>
+                <span className="text-xs text-text-primary flex-1 min-w-0 truncate">{item.title}</span>
+                <span className="text-xs text-semantic-red flex-shrink-0">
                   {new Date(item.nextDueDate).toLocaleDateString('it-IT', {
                     day: 'numeric', month: 'short',
                   })}
@@ -253,7 +253,7 @@ function ResidenceCard({ residence }: { residence: ResidenceDetail }) {
               </div>
             ))}
             {residence.overdueItems.length > 4 && (
-              <p className="text-xs text-[#20302A]/40 mt-0.5">
+              <p className="text-xs text-text-primary/40 mt-0.5">
                 +{residence.overdueItems.length - 4} altre
               </p>
             )}
@@ -263,19 +263,19 @@ function ResidenceCard({ residence }: { residence: ResidenceDetail }) {
 
       {/* Dettaglio gap config */}
       {isAmber && (
-        <div className="px-4 pb-3 border-t border-[#E4E6E2]">
+        <div className="px-4 pb-3 border-t border-border">
           <div className="flex items-start gap-2 mt-2">
-            <AlertTriangle className="w-3.5 h-3.5 text-[#854F0B] flex-shrink-0 mt-0.5" strokeWidth={1.6} />
-            <p className="text-xs text-[#854F0B]">Nessuna unità configurata</p>
+            <AlertTriangle className="w-3.5 h-3.5 text-semantic-amber flex-shrink-0 mt-0.5" strokeWidth={1.6} />
+            <p className="text-xs text-semantic-amber">Nessuna unità configurata</p>
           </div>
         </div>
       )}
 
       {/* Footer azioni */}
-      <div className={`flex items-center gap-3 px-4 py-3 ${isRed || isAmber ? 'border-t border-[#E4E6E2]' : ''}`}>
+      <div className={`flex items-center gap-3 px-4 py-3 ${isRed || isAmber ? 'border-t border-border' : ''}`}>
         <Link
           href={`/admin/residences/${residence.id}`}
-          className="flex items-center gap-1 text-sm font-medium text-[#04342C] hover:underline"
+          className="flex items-center gap-1 text-sm font-medium text-brand-dark hover:underline"
         >
           Vai alla residenza
           <ChevronRight className="w-3.5 h-3.5" strokeWidth={1.6} />

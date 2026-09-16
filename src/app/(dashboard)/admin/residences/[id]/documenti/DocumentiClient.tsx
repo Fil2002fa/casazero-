@@ -421,11 +421,11 @@ export function DocumentiClient({
       {/* -------- Modale upload -------- */}
       {showModal && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-[#E4E6E2] p-5 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-lg space-y-4">
+          <div className="bg-white rounded-xl border border-border p-5 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-lg space-y-4">
 
             {/* Header modale */}
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-[#20302A]">Carica documenti</p>
+              <p className="text-sm font-medium text-text-primary">Carica documenti</p>
               <button
                 onClick={closeModal}
                 disabled={isUploading}

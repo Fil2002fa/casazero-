@@ -85,13 +85,13 @@ function NavContent({ role, onNavigate, brandAction }: Props & {
                   className={`flex items-center gap-3 px-3 h-11 lg:h-9 rounded-lg text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2 ${
                     isActive
                       ? 'bg-brand-dark text-white'
-                      : 'text-text-primary hover:bg-[rgb(4_52_44/0.06)]'
+                      : 'text-text-primary hover:bg-brand-dark/6'
                   }`}
                 >
                   <Icon size={18} strokeWidth={isActive ? 2.2 : 1.6} />
                   <span className="flex-1">{label}</span>
                   {badge && (
-                    <span className="text-[10px] font-medium leading-none px-1.5 py-0.5 rounded-full bg-[rgb(4_52_44/0.08)] text-text-secondary uppercase tracking-wide">
+                    <span className="text-[10px] font-medium leading-none px-1.5 py-0.5 rounded-full bg-brand-dark/8 text-text-secondary uppercase tracking-wide">
                       {badge}
                     </span>
                   )}

@@ -220,8 +220,8 @@ export function FornitoriManager({
           c'è ancora una UI che avverta di cosa sparisce insieme). */}
       {scope.kind === 'residence' && confirmDeleteId && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-[#E4E6E2] p-5 max-w-sm w-full shadow-lg space-y-3">
-            <p className="text-sm font-medium text-[#20302A]">Rimuovere questo fornitore?</p>
+          <div className="bg-white rounded-xl border border-border p-5 max-w-sm w-full shadow-lg space-y-3">
+            <p className="text-sm font-medium text-text-primary">Rimuovere questo fornitore?</p>
             <p className="text-xs text-text-secondary">L&apos;operazione non è reversibile.</p>
             {deleteError && (
               <p className="text-xs text-semantic-red bg-semantic-red-bg rounded-lg px-3 py-2">
@@ -232,14 +232,14 @@ export function FornitoriManager({
               <button
                 onClick={closeDeleteModal}
                 disabled={deletePending}
-                className="flex-1 border border-[#E4E6E2] rounded-xl py-2.5 text-sm text-text-secondary disabled:opacity-50"
+                className="flex-1 border border-border rounded-xl py-2.5 text-sm text-text-secondary disabled:opacity-50"
               >
                 Annulla
               </button>
               <button
                 onClick={handleConfirmDelete}
                 disabled={deletePending}
-                className="flex-1 bg-[#04342C] text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-50"
+                className="flex-1 bg-brand-dark text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-50"
               >
                 {deletePending ? '…' : 'Rimuovi'}
               </button>
@@ -252,8 +252,8 @@ export function FornitoriManager({
           la riga di supplier_installations, mai il fornitore. */}
       {scope.kind === 'builder' && confirmRemoveInstallation && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl border border-[#E4E6E2] p-5 max-w-sm w-full shadow-lg space-y-3">
-            <p className="text-sm font-medium text-[#20302A]">Rimuovere questo collegamento?</p>
+          <div className="bg-white rounded-xl border border-border p-5 max-w-sm w-full shadow-lg space-y-3">
+            <p className="text-sm font-medium text-text-primary">Rimuovere questo collegamento?</p>
             <p className="text-xs text-text-secondary">{confirmRemoveInstallation.label}</p>
             {removeInstallationError && (
               <p className="text-xs text-semantic-red bg-semantic-red-bg rounded-lg px-3 py-2">
@@ -264,14 +264,14 @@ export function FornitoriManager({
               <button
                 onClick={closeRemoveInstallation}
                 disabled={removeInstallationPending}
-                className="flex-1 border border-[#E4E6E2] rounded-xl py-2.5 text-sm text-text-secondary disabled:opacity-50"
+                className="flex-1 border border-border rounded-xl py-2.5 text-sm text-text-secondary disabled:opacity-50"
               >
                 Annulla
               </button>
               <button
                 onClick={handleConfirmRemoveInstallation}
                 disabled={removeInstallationPending}
-                className="flex-1 bg-[#04342C] text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-50"
+                className="flex-1 bg-brand-dark text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-50"
               >
                 {removeInstallationPending ? '…' : 'Rimuovi'}
               </button>

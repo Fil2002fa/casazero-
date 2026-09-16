@@ -143,15 +143,15 @@ export default async function AdministratorsPage() {
 
       {/* Zona A — Attenzione */}
       <section className="space-y-2">
-        <h2 className="text-sm font-medium text-[#20302A]">
+        <h2 className="text-sm font-medium text-text-primary">
           {needsAttention.length === 0
             ? 'Tutto in regola'
             : `${needsAttention.length} ${needsAttention.length === 1 ? 'amministratore richiede' : 'amministratori richiedono'} attenzione`}
         </h2>
         {needsAttention.length === 0 ? (
-          <div className="bg-[#E1F5EE] rounded-xl p-4 flex items-center gap-3">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#0F6E56] flex-shrink-0" />
-            <p className="text-sm text-[#04342C]">Nessuna azione richiesta al momento.</p>
+          <div className="bg-brand-light rounded-xl p-4 flex items-center gap-3">
+            <span className="w-2.5 h-2.5 rounded-full bg-brand-medium flex-shrink-0" />
+            <p className="text-sm text-brand-dark">Nessuna azione richiesta al momento.</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -164,15 +164,15 @@ export default async function AdministratorsPage() {
 
       {/* Zona B — Tutti gli amministratori */}
       <section className="space-y-2">
-        <h2 className="text-[10px] font-medium text-[#20302A]/50 uppercase tracking-wide">
+        <h2 className="text-[10px] font-medium text-text-primary/50 uppercase tracking-wide">
           Tutti gli amministratori
         </h2>
-        <div className="bg-white rounded-xl border border-[#E4E6E2] divide-y divide-[#E4E6E2] overflow-hidden">
+        <div className="bg-white rounded-xl border border-border divide-y divide-border overflow-hidden">
           {sorted.map(admin => (
             <RosterRow key={admin.profileId} admin={admin} />
           ))}
           {sorted.length === 0 && (
-            <p className="px-4 py-6 text-sm text-[#20302A]/50 text-center">
+            <p className="px-4 py-6 text-sm text-text-primary/50 text-center">
               Nessun amministratore assegnato.
             </p>
           )}
@@ -187,8 +187,8 @@ export default async function AdministratorsPage() {
 function StatusDot({ status }: { status: 'red' | 'amber' | 'green' }) {
   return (
     <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-      status === 'red' ? 'bg-[#A32D2D]' :
-      status === 'amber' ? 'bg-[#854F0B]' : 'bg-[#0F6E56]'
+      status === 'red' ? 'bg-semantic-red' :
+      status === 'amber' ? 'bg-semantic-amber' : 'bg-brand-medium'
     }`} />
   )
 }
@@ -196,9 +196,9 @@ function StatusDot({ status }: { status: 'red' | 'amber' | 'green' }) {
 function AttentionCard({ admin }: { admin: AdminSummary }) {
   const isRed = admin.worstStatus === 'red'
   const accentBorder = isRed ? 'border-l-[#A32D2D]' : 'border-l-[#854F0B]'
-  const bg = isRed ? 'bg-[#FCEBEB]' : 'bg-[#FAEEDA]'
-  const textPrimary = isRed ? 'text-[#A32D2D]' : 'text-[#854F0B]'
-  const textSecondary = isRed ? 'text-[#A32D2D]/70' : 'text-[#854F0B]/70'
+  const bg = isRed ? 'bg-semantic-red-bg' : 'bg-semantic-amber-bg'
+  const textPrimary = isRed ? 'text-semantic-red' : 'text-semantic-amber'
+  const textSecondary = isRed ? 'text-semantic-red/70' : 'text-semantic-amber/70'
 
   const issueLines: string[] = []
   for (const r of admin.residences) {
@@ -212,7 +212,7 @@ function AttentionCard({ admin }: { admin: AdminSummary }) {
   return (
     <Link
       href={`/admin/administrators/${admin.profileId}`}
-      className={`flex items-start gap-3 p-4 ${bg} rounded-xl border border-[#E4E6E2] border-l-4 ${accentBorder} hover:brightness-[0.97] transition-all`}
+      className={`flex items-start gap-3 p-4 ${bg} rounded-xl border border-border border-l-4 ${accentBorder} hover:brightness-[0.97] transition-all`}
     >
       <div className="flex-1 min-w-0">
         <p className={`text-sm font-medium ${textPrimary}`}>
@@ -241,14 +241,14 @@ function RosterRow({ admin }: { admin: AdminSummary }) {
   return (
     <Link
       href={`/admin/administrators/${admin.profileId}`}
-      className="flex items-center gap-3 px-4 py-3 hover:bg-[#F4F3EF] transition-colors"
+      className="flex items-center gap-3 px-4 py-3 hover:bg-background transition-colors"
     >
       <StatusDot status={admin.worstStatus} />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-[#20302A]">{admin.fullName ?? 'Amministratore'}</p>
-        <p className="text-xs text-[#20302A]/50 truncate">{residenceNames}</p>
+        <p className="text-sm font-medium text-text-primary">{admin.fullName ?? 'Amministratore'}</p>
+        <p className="text-xs text-text-primary/50 truncate">{residenceNames}</p>
       </div>
-      <ChevronRight className="w-4 h-4 text-[#20302A]/30 flex-shrink-0" strokeWidth={1.6} />
+      <ChevronRight className="w-4 h-4 text-text-primary/30 flex-shrink-0" strokeWidth={1.6} />
     </Link>
   )
 }

@@ -57,10 +57,10 @@ function AdminModal({
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
 
       {/* sheet */}
-      <div className="relative z-10 bg-white rounded-t-2xl sm:rounded-xl border border-[#E4E6E2] w-full sm:max-w-sm mx-0 sm:mx-4 max-h-[85vh] overflow-y-auto">
+      <div className="relative z-10 bg-white rounded-t-2xl sm:rounded-xl border border-border w-full sm:max-w-sm mx-0 sm:mx-4 max-h-[85vh] overflow-y-auto">
         {/* header */}
-        <div className="flex items-center justify-between px-4 py-4 border-b border-[#E4E6E2] sticky top-0 bg-white">
-          <h2 className="text-sm font-medium text-[#20302A]">
+        <div className="flex items-center justify-between px-4 py-4 border-b border-border sticky top-0 bg-white">
+          <h2 className="text-sm font-medium text-text-primary">
             {view === 'dettaglio' ? 'Amministratore' : view === 'assegnazione' ? 'Assegna amministratore' : 'Cambia amministratore'}
           </h2>
           <div
@@ -68,7 +68,7 @@ function AdminModal({
             tabIndex={0}
             onClick={onClose}
             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onClose() }}
-            className="p-1 rounded-lg text-[#20302A]/50 hover:bg-[#F4F3EF] cursor-pointer"
+            className="p-1 rounded-lg text-text-primary/50 hover:bg-background cursor-pointer"
           >
             <X className="w-4 h-4" strokeWidth={1.6} />
           </div>
@@ -80,14 +80,14 @@ function AdminModal({
             <>
               {/* Profilo */}
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-[#E1F5EE] flex items-center justify-center flex-shrink-0">
-                  <UserCheck className="w-5 h-5 text-[#0F6E56]" strokeWidth={1.6} />
+                <div className="w-10 h-10 rounded-full bg-brand-light flex items-center justify-center flex-shrink-0">
+                  <UserCheck className="w-5 h-5 text-brand-medium" strokeWidth={1.6} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-[#20302A]">
+                  <p className="text-sm font-medium text-text-primary">
                     {adminProfile.full_name ?? 'Amministratore'}
                   </p>
-                  <p className="text-xs text-[#20302A]/50">Amministratore di condominio</p>
+                  <p className="text-xs text-text-primary/50">Amministratore di condominio</p>
                 </div>
               </div>
 
@@ -95,13 +95,13 @@ function AdminModal({
               {(adminProfile.phone || emailLoading || adminEmail) && (
                 <div className="space-y-2">
                   {adminProfile.phone && (
-                    <div className="flex items-center gap-2 text-sm text-[#20302A]">
-                      <Phone className="w-3.5 h-3.5 text-[#20302A]/40 flex-shrink-0" strokeWidth={1.6} />
+                    <div className="flex items-center gap-2 text-sm text-text-primary">
+                      <Phone className="w-3.5 h-3.5 text-text-primary/40 flex-shrink-0" strokeWidth={1.6} />
                       <span>{adminProfile.phone}</span>
                     </div>
                   )}
                   {emailLoading && !adminEmail && (
-                    <div className="flex items-center gap-2 text-sm text-[#20302A]/40">
+                    <div className="flex items-center gap-2 text-sm text-text-primary/40">
                       <Mail className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={1.6} />
                       <Loader2 className="w-3 h-3 animate-spin" />
                     </div>
@@ -109,8 +109,8 @@ function AdminModal({
                   {adminEmail && (
                     // Email a capo anche a metà parola, mai troncata: su telefono non c'è il
                     // passaggio del mouse per leggerla intera. Icona allineata alla prima riga.
-                    <div className="flex items-start gap-2 text-sm text-[#20302A]">
-                      <Mail className="w-3.5 h-3.5 text-[#20302A]/40 flex-shrink-0 mt-0.5" strokeWidth={1.6} />
+                    <div className="flex items-start gap-2 text-sm text-text-primary">
+                      <Mail className="w-3.5 h-3.5 text-text-primary/40 flex-shrink-0 mt-0.5" strokeWidth={1.6} />
                       <span className="min-w-0 break-all">{adminEmail}</span>
                     </div>
                   )}
@@ -123,7 +123,7 @@ function AdminModal({
                   {adminProfile.phone && (
                     <a
                       href={`tel:${adminProfile.phone}`}
-                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-[#04342C] text-white rounded-lg text-sm font-medium"
+                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-brand-dark text-white rounded-lg text-sm font-medium"
                     >
                       <Phone className="w-3.5 h-3.5" strokeWidth={1.6} />
                       Chiama
@@ -132,7 +132,7 @@ function AdminModal({
                   {adminEmail && (
                     <a
                       href={`mailto:${adminEmail}`}
-                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-[#04342C] text-white rounded-lg text-sm font-medium"
+                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-brand-dark text-white rounded-lg text-sm font-medium"
                     >
                       <Mail className="w-3.5 h-3.5" strokeWidth={1.6} />
                       Email
@@ -142,13 +142,13 @@ function AdminModal({
               )}
 
               {/* Cambia */}
-              <div className="pt-1 border-t border-[#E4E6E2]">
+              <div className="pt-1 border-t border-border">
                 <div
                   role="button"
                   tabIndex={0}
                   onClick={() => onSetView('conferma_cambio')}
                   onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onSetView('conferma_cambio') }}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 border border-[#E4E6E2] rounded-lg text-sm text-[#20302A]/60 cursor-pointer hover:bg-[#F4F3EF] transition-colors"
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 border border-border rounded-lg text-sm text-text-primary/60 cursor-pointer hover:bg-background transition-colors"
                 >
                   <UserPlus className="w-3.5 h-3.5" strokeWidth={1.6} />
                   Cambia amministratore
@@ -158,8 +158,8 @@ function AdminModal({
           ) : view === 'conferma_cambio' ? (
             <>
               <div>
-                <p className="text-sm font-medium text-[#20302A]">Cambia amministratore?</p>
-                <p className="text-sm text-[#20302A]/60 mt-1">
+                <p className="text-sm font-medium text-text-primary">Cambia amministratore?</p>
+                <p className="text-sm text-text-primary/60 mt-1">
                   L&apos;amministratore attuale verrà rimosso. Potrai assegnarne uno nuovo subito dopo.
                 </p>
               </div>
@@ -169,7 +169,7 @@ function AdminModal({
                   tabIndex={0}
                   onClick={() => onSetView('dettaglio')}
                   onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onSetView('dettaglio') }}
-                  className="flex-1 flex items-center justify-center px-3 py-2.5 border border-[#E4E6E2] rounded-lg text-sm text-[#20302A] cursor-pointer hover:bg-[#F4F3EF] transition-colors"
+                  className="flex-1 flex items-center justify-center px-3 py-2.5 border border-border rounded-lg text-sm text-text-primary cursor-pointer hover:bg-background transition-colors"
                 >
                   Annulla
                 </div>
@@ -179,7 +179,7 @@ function AdminModal({
                   onClick={() => { if (!pending) onConfirmChange() }}
                   onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && !pending) onConfirmChange() }}
                   aria-disabled={pending}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-[#04342C] text-white rounded-lg text-sm font-medium cursor-pointer"
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-brand-dark text-white rounded-lg text-sm font-medium cursor-pointer"
                 >
                   {pending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                   Conferma
@@ -191,7 +191,7 @@ function AdminModal({
               {/* Scegli esistente */}
               {availableAdmins.length > 0 ? (
                 <div>
-                  <p className="text-[10px] font-medium text-[#20302A]/50 uppercase tracking-wide mb-2">
+                  <p className="text-[10px] font-medium text-text-primary/50 uppercase tracking-wide mb-2">
                     Profili esistenti
                   </p>
                   <div className="space-y-1">
@@ -203,35 +203,35 @@ function AdminModal({
                         onClick={() => { if (!pending) onAssign(a.id) }}
                         onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && !pending) onAssign(a.id) }}
                         aria-disabled={pending}
-                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[#F4F3EF] cursor-pointer transition-colors${pending ? ' pointer-events-none opacity-50' : ''}`}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-background cursor-pointer transition-colors${pending ? ' pointer-events-none opacity-50' : ''}`}
                       >
-                        <div className="w-7 h-7 rounded-full bg-[#E1F5EE] flex items-center justify-center flex-shrink-0">
-                          <span className="text-[10px] font-medium text-[#0F6E56]">
+                        <div className="w-7 h-7 rounded-full bg-brand-light flex items-center justify-center flex-shrink-0">
+                          <span className="text-[10px] font-medium text-brand-medium">
                             {(a.full_name ?? '?').charAt(0).toUpperCase()}
                           </span>
                         </div>
-                        <p className="flex-1 text-sm text-[#20302A]">{a.full_name ?? 'Amministratore'}</p>
-                        <ChevronLeft className="w-3.5 h-3.5 text-[#20302A]/30 rotate-180 flex-shrink-0" strokeWidth={1.6} />
+                        <p className="flex-1 text-sm text-text-primary">{a.full_name ?? 'Amministratore'}</p>
+                        <ChevronLeft className="w-3.5 h-3.5 text-text-primary/30 rotate-180 flex-shrink-0" strokeWidth={1.6} />
                       </div>
                     ))}
                   </div>
                 </div>
               ) : (
-                <p className="text-sm text-[#20302A]/50 py-1">
+                <p className="text-sm text-text-primary/50 py-1">
                   Nessun profilo admin nel sistema — usa il link di invito.
                 </p>
               )}
 
               {/* Divider */}
               <div className="flex items-center gap-3">
-                <div className="flex-1 h-px bg-[#E4E6E2]" />
-                <span className="text-xs text-[#20302A]/40">oppure</span>
-                <div className="flex-1 h-px bg-[#E4E6E2]" />
+                <div className="flex-1 h-px bg-border" />
+                <span className="text-xs text-text-primary/40">oppure</span>
+                <div className="flex-1 h-px bg-border" />
               </div>
 
               {/* Invita via link */}
               <div>
-                <p className="text-[10px] font-medium text-[#20302A]/50 uppercase tracking-wide mb-2">
+                <p className="text-[10px] font-medium text-text-primary/50 uppercase tracking-wide mb-2">
                   Invita via link
                 </p>
                 {!inviteToken ? (
@@ -241,7 +241,7 @@ function AdminModal({
                     onClick={() => { if (!pending) onGenerateInvite() }}
                     onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && !pending) onGenerateInvite() }}
                     aria-disabled={pending}
-                    className="flex items-center justify-center gap-1.5 w-full px-3 py-2.5 border border-[#E4E6E2] rounded-lg text-sm text-[#20302A] cursor-pointer hover:bg-[#F4F3EF] transition-colors"
+                    className="flex items-center justify-center gap-1.5 w-full px-3 py-2.5 border border-border rounded-lg text-sm text-text-primary cursor-pointer hover:bg-background transition-colors"
                   >
                     {pending
                       ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -251,8 +251,8 @@ function AdminModal({
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <div className="bg-[#F4F3EF] rounded-lg px-3 py-2">
-                      <p className="text-[11px] text-[#20302A]/60 font-mono break-all">{inviteUrl}</p>
+                    <div className="bg-background rounded-lg px-3 py-2">
+                      <p className="text-[11px] text-text-primary/60 font-mono break-all">{inviteUrl}</p>
                     </div>
                     <div className="flex gap-2">
                       <div
@@ -260,7 +260,7 @@ function AdminModal({
                         tabIndex={0}
                         onClick={onCopyInvite}
                         onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onCopyInvite() }}
-                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-[#04342C] text-white rounded-lg text-sm cursor-pointer"
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-brand-dark text-white rounded-lg text-sm cursor-pointer"
                       >
                         {copied
                           ? <Check className="w-3.5 h-3.5" strokeWidth={1.6} />
@@ -270,7 +270,7 @@ function AdminModal({
                       </div>
                       <a
                         href={`mailto:?subject=${encodeURIComponent('Invito CasaZero — Amministratore')}&body=${encodeURIComponent(`Sei stato invitato come amministratore di condominio su CasaZero.\n\nAttiva il tuo accesso:\n${inviteUrl}\n\nIl link scade tra 30 giorni.`)}`}
-                        className="flex items-center justify-center gap-1.5 px-3 py-2 border border-[#E4E6E2] rounded-lg text-sm text-[#20302A]"
+                        className="flex items-center justify-center gap-1.5 px-3 py-2 border border-border rounded-lg text-sm text-text-primary"
                       >
                         <Mail className="w-3.5 h-3.5" strokeWidth={1.6} />
                         Email
@@ -284,7 +284,7 @@ function AdminModal({
 
           {/* Error */}
           {serverError && (
-            <p className="text-xs text-[#A32D2D] bg-[#FCEBEB] rounded-lg px-3 py-2">
+            <p className="text-xs text-semantic-red bg-semantic-red-bg rounded-lg px-3 py-2">
               {serverError}
             </p>
           )}
