@@ -2,6 +2,8 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/admin'
+import { logActivityEvent } from '@/lib/activity-log'
 import type { CompletionMode, ObligationType } from '@/types/database'
 import { SISTEMI, type Sistema } from '@/lib/document-classification'
 
@@ -203,9 +205,11 @@ export async function setTemplateActivationForResidence(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Non autenticato' }
 
+  // full_name entra nella select perché il registro attività congela il nome
+  // dell'attore al momento dell'atto (activity-log.ts:44-58).
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, full_name')
     .eq('id', user.id)
     .single()
 
@@ -226,8 +230,50 @@ export async function setTemplateActivationForResidence(
 
     if (error) return { error: error.message }
 
+    const itemIds = (data ?? []).map(row => row.id as string)
+
+    // Un evento per ATTO, non per istanza (037_activity_events.sql:48-52):
+    // unit_id resta null perché l'archiviazione tocca istanze di più unità, e
+    // il numero di voci toccate va nel payload. Condizionato a count > 0 come
+    // il sollecito (manutenzioni/actions.ts:232): il .neq qui sopra rende una
+    // seconda conferma a zero righe, e zero righe non sono un atto. La tabella
+    // è append-only, quindi una riga "archiviata" senza nulla di archiviato
+    // resterebbe falsa per sempre.
+    if (itemIds.length > 0) {
+      const svc = createServiceClient()
+
+      // Il titolo non è in scope in questa action (la UI lo ha già dal piano):
+      // letto qui apposta per il registro, con il service client per non
+      // dipendere dalla visibilità RLS del template. Se la lettura fallisce
+      // il titolo resta null e la riga si scrive lo stesso: il registro non
+      // deve mai bloccare un atto già compiuto.
+      const { data: template, error: templateError } = await svc
+        .from('maintenance_templates')
+        .select('title')
+        .eq('id', templateId)
+        .maybeSingle()
+      if (templateError) console.error('setTemplateActivationForResidence: errore lettura titolo template', { templateId, templateError })
+
+      await logActivityEvent(svc, {
+        residenceId,
+        unitId: null,
+        eventType: 'voce_archiviata',
+        // Attore dalla sessione, mai da input: il service client bypassa le
+        // policy INSERT della 037, l'antispoofing vive in questa riga.
+        actorId: user.id,
+        actorRole: profile.role,
+        actorName: profile.full_name ?? null,
+        payload: {
+          template_id: templateId,
+          title: template?.title ?? null,
+          count: itemIds.length,
+          item_ids: itemIds,
+        },
+      })
+    }
+
     revalidatePath(`/admin/residences/${residenceId}/manutenzioni`)
-    return { count: data?.length ?? 0 }
+    return { count: itemIds.length }
   }
 
   // Inclusione: riattiva le istanze archiviate e ricalcola le scadenze da oggi,

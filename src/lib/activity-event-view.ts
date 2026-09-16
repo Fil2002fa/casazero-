@@ -96,5 +96,15 @@ export function describeActivityEvent(event: ActivityEvent): string {
     return details.length > 0 ? `${head} (${details.join(', ')})` : head
   }
 
+  if (event.event_type === 'voce_archiviata') {
+    const title = asString(event.payload.title)
+    const count = asNumber(event.payload.count)
+
+    // `count` è il numero di istanze archiviate nell'atto: la riga esiste solo
+    // se era > 0 (fornitori/actions.ts), ma il payload resta non vincolato.
+    const head = title ? `Voce «${title}» archiviata` : NEUTRAL_LABEL.voce_archiviata
+    return count !== null ? `${head} (${pluralize(count, 'istanza', 'istanze')})` : head
+  }
+
   return NEUTRAL_LABEL[event.event_type]
 }
