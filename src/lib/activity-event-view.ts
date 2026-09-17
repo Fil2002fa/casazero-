@@ -136,5 +136,13 @@ export function describeActivityEvent(event: ActivityEvent): string {
     return NEUTRAL_LABEL.invito_inviato
   }
 
+  if (event.event_type === 'invito_accettato') {
+    // `role_acquired` è il ruolo scritto su profiles all'accettazione
+    // (accept-invite.ts). Chi ha accettato è l'attore della riga, non il
+    // payload: il nome lo rende la colonna attore, qui solo l'atto.
+    const role = asString(event.payload.role_acquired)
+    return role === 'admin' ? 'Invito amministratore accettato' : NEUTRAL_LABEL.invito_accettato
+  }
+
   return NEUTRAL_LABEL[event.event_type]
 }

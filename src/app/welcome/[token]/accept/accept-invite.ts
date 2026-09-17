@@ -1,4 +1,6 @@
 import { createServiceClient } from '@/lib/supabase/admin'
+import { logActivityEvent } from '@/lib/activity-log'
+import type { UserRole } from '@/types/database'
 
 export const TEMPORARY_ERROR = 'Errore temporaneo, riprova tra poco.'
 export const ACTIVATION_ERROR = 'Errore temporaneo durante l\'attivazione, riprova tra poco.'
@@ -8,7 +10,8 @@ export const FORBIDDEN_ROLE = 'Questo account ha già un ruolo di gestione su Ca
 export type AcceptContext = {
   inviteId: string
   unitId: string | null
-  role: string
+  /** Dal DB (`invites.role`, enum `user_role`): è il ruolo che l'accettazione acquisisce. */
+  role: UserRole
   builderId: string | null
   residenceId: string | null
   residenceName: string | null
@@ -135,6 +138,45 @@ export async function activateInvite(context: AcceptContext, userId: string): Pr
   if (usedError) {
     console.error('accept: errore chiusura invito', usedError)
     return { error: ACTIVATION_ERROR }
+  }
+
+  // Registro attività: UN solo evento per l'accettazione, dopo la chiusura
+  // dell'invito (used_at) così la riga descrive un atto compiuto e non
+  // ripetibile. Nessun admin_assegnato in questo percorso anche quando
+  // l'invito è admin: l'assegnazione qui sopra è una conseguenza
+  // dell'accettazione, non un atto separato del super_admin. Il ruolo
+  // acquisito va nel payload; il token non ci va mai.
+  //
+  // Attore = chi accetta. `userId` arriva dalla sessione del chiamante
+  // (accept/actions.ts, auth.getUser), mai da input. `actor_role` è il ruolo
+  // appena scritto su profiles. Il nome viene letto ora e congelato: per gli
+  // account creati con email senza metadata è null (handle_new_user legge
+  // solo raw_user_meta_data.full_name), e la riga si scrive lo stesso.
+  if (context.residenceId) {
+    const { data: profile, error: nameError } = await admin
+      .from('profiles')
+      .select('full_name')
+      .eq('id', userId)
+      .maybeSingle()
+    if (nameError) console.error('accept: errore lettura nome per il registro', { userId, nameError })
+
+    await logActivityEvent(admin, {
+      residenceId: context.residenceId,
+      unitId: context.unitId,
+      eventType: 'invito_accettato',
+      actorId: userId,
+      actorRole: context.role,
+      actorName: profile?.full_name ?? null,
+      payload: {
+        invite_id: context.inviteId,
+        role_acquired: context.role,
+      },
+    })
+  } else {
+    // Non dovrebbe accadere: invites ha CHECK (unit_id OR residence_id) e
+    // residenceId viene risolto dall'unità. Senza residenza il registro non
+    // ha scope; l'atto resta valido e viene solo segnalato.
+    console.error('accept: invito senza residenza, evento non registrato', { inviteId: context.inviteId })
   }
 
   return null
