@@ -163,6 +163,26 @@ export async function createAdminInvite(
   const caller = await assertSuperAdmin()
   if ('error' in caller) return { error: caller.error }
 
+  // Il perimetro lo decide la RLS su residences (czero_can_access_residence),
+  // non un confronto ricopiato qui: la lettura con il client di sessione torna
+  // vuota per le residenze di un altro costruttore. Obbligatoria PRIMA di
+  // qualsiasi scrittura, perché l'insert sotto usa il service client, che la
+  // RLS non vede. Stesso pattern di requireResidenceAccess in units/actions.ts.
+  const supabase = await createClient()
+  const { data: residence, error: residenceError } = await supabase
+    .from('residences')
+    .select('id')
+    .eq('id', residenceId)
+    .maybeSingle()
+  if (residenceError) {
+    console.error('createAdminInvite: errore lettura residenza', { residenceId, residenceError })
+    return { error: 'Errore temporaneo nella verifica della residenza, riprova.' }
+  }
+  if (!residence) {
+    console.warn('createAdminInvite: residenza fuori perimetro', { residenceId })
+    return { error: 'Residenza non trovata' }
+  }
+
   const svc = createServiceClient()
   const expiresAt = new Date()
   expiresAt.setDate(expiresAt.getDate() + 30)
