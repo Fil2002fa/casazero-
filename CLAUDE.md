@@ -86,6 +86,16 @@ Non rimuovere `priority` né il dual-write finché quelle viste non migrano.
   anche quando la tabella nella subquery non ha una colonna omonima: un riferimento non
   qualificato si lega silenziosamente alla tabella sbagliata, senza errore di parsing —
   il ramo della policy risulta sempre-falso o sempre-vero e si scopre solo a runtime.
+- **Mai scartare `error` da una destrutturazione Supabase, mai collassare un
+  fallimento tecnico in un messaggio di dominio.** `const { data } = await
+  supabase...` senza `error` trasforma qualunque causa (permessi, rete, query
+  malformata, credenziali d'ambiente) nello stesso esito UI generico — chi
+  guarda lo schermo non può distinguere "non hai i permessi" da "il server ha
+  un problema". Trovata tre volte nella stessa sessione: banner "Permessi
+  insufficienti" su query `profiles` in `units/actions.ts`, e due varianti su
+  `welcome/[token]/page.tsx` (select `invites`). Destrutturare sempre `error`,
+  loggarlo lato server, e distinguere nel messaggio utente l'esito di dominio
+  (vero "non trovato"/"non autorizzato") dal fallimento tecnico ("riprova").
 
 ## Comandi
 
