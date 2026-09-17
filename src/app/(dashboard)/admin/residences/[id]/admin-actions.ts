@@ -170,10 +170,31 @@ export async function createAdminInvite(
   const { data: invite, error } = await svc
     .from('invites')
     .insert({ residence_id: residenceId, role: 'admin', expires_at: expiresAt.toISOString() })
-    .select('token')
+    .select('id, token')
     .single()
 
   if (error || !invite) return { error: error?.message ?? 'Errore generazione invito' }
+
+  // Atto condominiale: unit_id null. Nel payload va l'id dell'invito, MAI il
+  // token (è il segreto che apre l'accesso). Nessuna email parte da qui:
+  // l'invito viene solo generato, il link lo copia il super_admin.
+  await logActivityEvent(svc, {
+    residenceId,
+    unitId: null,
+    eventType: 'invito_inviato',
+    // Attore dalla sessione (assertSuperAdmin), mai da input: il service
+    // client bypassa le policy INSERT della 037, l'antispoofing vive qui.
+    actorId: caller.userId,
+    actorRole: caller.role,
+    actorName: caller.fullName,
+    payload: {
+      invite_id: invite.id as string,
+      role: 'admin',
+      count: 1,
+      expires_at: expiresAt.toISOString(),
+    },
+  })
+
   return { token: invite.token }
 }
 

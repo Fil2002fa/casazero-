@@ -44,7 +44,10 @@ export const ACTIVITY_EVENT_ICON: Record<ActivityEventType, LucideIcon> = {
  */
 const NEUTRAL_LABEL: Record<ActivityEventType, string> = {
   sollecito_inviato:      'Sollecito inviato',
-  invito_inviato:         'Invito inviato',
+  // Il tipo nel CHECK resta `invito_inviato`, ma l'atto registrato è la
+  // GENERAZIONE del link: nessuna email parte dai produttori (units/actions.ts,
+  // admin-actions.ts). Il testo non deve promettere un invio che non c'è.
+  invito_inviato:         'Invito generato',
   invito_accettato:       'Invito accettato',
   admin_assegnato:        'Amministratore assegnato',
   admin_rimosso:          'Amministratore rimosso',
@@ -118,6 +121,19 @@ export function describeActivityEvent(event: ActivityEvent): string {
   if (event.event_type === 'admin_rimosso') {
     const name = asString(event.payload.removed_name)
     return name ? `Amministratore ${name} rimosso` : NEUTRAL_LABEL.admin_rimosso
+  }
+
+  if (event.event_type === 'invito_inviato') {
+    const role = asString(event.payload.role)
+    const count = asNumber(event.payload.count)
+
+    // Tre produttori, tre forme: il singolo per unità (count 1, il soggetto
+    // "Unità X" lo dà già activityEventSubject), il massivo (una riga per
+    // atto, count > 1, condominiale) e l'invito amministratore (role admin).
+    // Sempre "generato", mai "inviato": nessuna email parte da questi atti.
+    if (role === 'admin') return 'Invito amministratore generato'
+    if (count !== null && count > 1) return pluralize(count, 'invito generato', 'inviti generati')
+    return NEUTRAL_LABEL.invito_inviato
   }
 
   return NEUTRAL_LABEL[event.event_type]

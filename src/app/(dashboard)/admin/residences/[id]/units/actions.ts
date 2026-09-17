@@ -3,9 +3,14 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/admin'
+import { logActivityEvent } from '@/lib/activity-log'
 import { unitHasNoActiveAccount } from '@/lib/unit-utils'
+import type { UserRole } from '@/types/database'
 
-type Caller = { userId: string; role: string } | { error: string }
+// `fullName` viene da `profiles.full_name` al momento dell'atto, letto lato
+// server e mai da input: è ciò che il registro attività congela come attore
+// (activity-log.ts:44-58). Stessa forma di `assertSuperAdmin` in admin-actions.ts.
+type Caller = { userId: string; role: UserRole; fullName: string | null } | { error: string }
 
 async function requireCaller(action: string, roles: string[]): Promise<Caller> {
   const supabase = await createClient()
@@ -15,7 +20,7 @@ async function requireCaller(action: string, roles: string[]): Promise<Caller> {
 
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, full_name')
     .eq('id', user.id)
     .maybeSingle()
 
@@ -32,7 +37,7 @@ async function requireCaller(action: string, roles: string[]): Promise<Caller> {
     return { error: 'Permessi insufficienti' }
   }
 
-  return { userId: user.id, role: profile.role }
+  return { userId: user.id, role: profile.role, fullName: profile.full_name ?? null }
 }
 
 // Il perimetro lo decide la RLS su residences (czero_can_access_residence), non un confronto ricopiato qui.
@@ -129,10 +134,30 @@ export async function createInvite(
       role: 'client',
       expires_at: expiresAt.toISOString(),
     })
-    .select('token')
+    .select('id, token')
     .single()
 
   if (error || !invite) return { error: error?.message ?? 'Errore generazione invito' }
+
+  // Atto di unità: unit_id valorizzato. Nel payload va l'id dell'invito, MAI
+  // il token (è il segreto che apre l'accesso, il registro è leggibile dagli
+  // admin). Nessuna email parte da qui: l'invito viene solo generato.
+  await logActivityEvent(admin, {
+    residenceId,
+    unitId,
+    eventType: 'invito_inviato',
+    // Attore dalla sessione (requireCaller), mai da input: il service client
+    // bypassa le policy INSERT della 037, l'antispoofing vive qui.
+    actorId: caller.userId,
+    actorRole: caller.role,
+    actorName: caller.fullName,
+    payload: {
+      invite_id: invite.id as string,
+      role: 'client',
+      count: 1,
+      expires_at: expiresAt.toISOString(),
+    },
+  })
 
   revalidatePath(`/admin/residences/${residenceId}/units`)
   return { token: invite.token }
@@ -205,6 +230,29 @@ export async function createBulkInvites(
 
   const { error } = await admin.from('invites').insert(rows)
   if (error) return { count: 0, skipped: unitIds.length - toInvite.length, error: error.message }
+
+  // Una riga per ATTO, non per invito (037_activity_events.sql:48-52, stessa
+  // regola dell'archiviazione): unit_id null perché l'atto attraversa più
+  // unità, `count` e `unit_ids` nel payload. L'insert è unico e atomico,
+  // quindi `count` è il numero di inviti creati davvero, non richiesti; la
+  // riga si scrive solo dopo il successo. Niente token nel payload.
+  await logActivityEvent(admin, {
+    residenceId,
+    unitId: null,
+    eventType: 'invito_inviato',
+    // Attore dalla sessione (requireCaller), mai da input: il service client
+    // bypassa le policy INSERT della 037, l'antispoofing vive qui.
+    actorId: caller.userId,
+    actorRole: caller.role,
+    actorName: caller.fullName,
+    payload: {
+      role: 'client',
+      count: toInvite.length,
+      unit_ids: toInvite,
+      skipped: unitIds.length - toInvite.length,
+      expires_at: expiresAt.toISOString(),
+    },
+  })
 
   revalidatePath(`/admin/residences/${residenceId}/units`)
   return { count: toInvite.length, skipped: unitIds.length - toInvite.length }
