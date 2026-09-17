@@ -28,6 +28,21 @@ export function formatTime(date: Date): string {
   return date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
 }
 
+/**
+ * "oggi, 16:01" · "ieri, 09:12" · "12 set" · "12 set 2025" quando l'anno è
+ * diverso da quello di `now`. Per stat-card compatte: a differenza di
+ * `dayLabel`, oltre i due giorni non ripete l'ora e non scrive l'anno corrente.
+ */
+export function lastActivityLabel(date: Date, now: Date): string {
+  const diffDays = Math.round((startOfDay(now).getTime() - startOfDay(date).getTime()) / 86_400_000)
+  if (diffDays === 0) return `oggi, ${formatTime(date)}`
+  if (diffDays === 1) return `ieri, ${formatTime(date)}`
+  const sameYear = date.getFullYear() === now.getFullYear()
+  return date.toLocaleDateString('it-IT', {
+    day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }),
+  })
+}
+
 export type DayGroup<T> = { label: string; events: T[] }
 
 /**

@@ -13,6 +13,7 @@ import {
   LIVE_STATUS_FIELDS, LIVE_STATUS_TEMPLATE_FIELDS,
 } from '@/lib/maintenance-status'
 import { unitHasNoActiveAccount } from '@/lib/unit-utils'
+import { lastActivityLabel } from '@/lib/activity-feed'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import { pluralize } from '@/lib/pluralize'
 import type { CompletionMode, ItemActivation } from '@/types/database'
@@ -265,7 +266,7 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
       { data: itemsRaw },
       { count: docCount },
       { count: completionCount },
-      { count: eventCount },
+      { data: lastEventRaw, error: lastEventError },
     ],
     managerData,
   ] = await Promise.all([
@@ -291,8 +292,11 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
         .select('id', { count: 'exact', head: true })
         .eq('residence_id', id),
       supabase.from('activity_events')
-        .select('id', { count: 'exact', head: true })
-        .eq('residence_id', id),
+        .select('created_at')
+        .eq('residence_id', id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ]),
     // Solo costruttore: fornitori (dato interno, mai all'amministratore),
     // assegnazione e lista amministratori (decisione del costruttore su se stesso).
@@ -318,6 +322,11 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
         ])
       : null,
   ])
+
+  if (lastEventError) console.error('residenza: errore lettura ultimo evento', { residenceId: id, lastEventError })
+  const lastEventLabel = lastEventRaw
+    ? `Ultima: ${lastActivityLabel(new Date(lastEventRaw.created_at), new Date())}`
+    : 'Nessuna attività'
 
   const { unitCount, unitsSenzaAccount, unitRows } = buildUnitSummary(unitsRaw)
 
@@ -351,7 +360,7 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
     { href: `/admin/residences/${id}/fascicolo`,    icon: BookOpen,  label: 'Fascicolo',      sub: completionCount ? `${completionCount} completamenti` : null },
     { href: `/admin/residences/${id}/documenti`,    icon: FileText,  label: 'Documenti',      sub: docCount ? `${docCount} file` : null },
     { href: `/admin/residences/${id}/fornitori`,    icon: Settings,  label: 'Fornitori',      sub: supplierCount ? `${supplierCount} fornitori` : null, managerOnly: true },
-    { href: `/admin/residences/${id}/attivita`,     icon: Activity,  label: 'Attività',       sub: eventCount ? pluralize(eventCount, 'evento', 'eventi') : null },
+    { href: `/admin/residences/${id}/attivita`,     icon: Activity,  label: 'Attività',       sub: lastEventLabel },
   ].filter(porta => canManage || !porta.managerOnly)
 
   // Il costruttore arriva dall'elenco residenze; l'amministratore dalla sua
