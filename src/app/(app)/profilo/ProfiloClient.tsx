@@ -63,7 +63,7 @@ export function ProfiloClient({
     if (!unit) return
     setInviteError(null)
     startTransition(async () => {
-      const res = await createFamilyInvite(unit.id, unit.residence_id)
+      const res = await createFamilyInvite(unit.id)
       if (res.error) setInviteError(res.error)
       else window.location.reload()
     })

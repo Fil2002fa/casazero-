@@ -6,8 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/admin'
 
 export async function createFamilyInvite(
-  unitId: string,
-  residenceId: string
+  unitId: string
 ): Promise<{ error?: string; token?: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -23,6 +22,22 @@ export async function createFamilyInvite(
     .single()
 
   if (!membership) return { error: 'Non sei membro di questa unità' }
+
+  // La residenza NON arriva dal client: si deriva qui dall'unità appena
+  // verificata, perché l'insert sotto usa il service client e un residence_id
+  // contraffatto renderebbe il token dell'invito leggibile (e revocabile) dal
+  // tenant sbagliato — le policy su invites matchano anche su residence_id.
+  const { data: unit, error: unitError } = await supabase
+    .from('units')
+    .select('residence_id')
+    .eq('id', unitId)
+    .maybeSingle()
+
+  if (unitError) {
+    console.error('createFamilyInvite: errore lettura unità', { unitId, unitError })
+    return { error: 'Errore temporaneo, riprova tra poco.' }
+  }
+  if (!unit) return { error: 'Unità non trovata' }
 
   const admin = createServiceClient()
 
@@ -42,7 +57,7 @@ export async function createFamilyInvite(
 
   const { data: invite, error } = await admin
     .from('invites')
-    .insert({ unit_id: unitId, residence_id: residenceId, role: 'client', expires_at: expiresAt.toISOString() })
+    .insert({ unit_id: unitId, residence_id: unit.residence_id, role: 'client', expires_at: expiresAt.toISOString() })
     .select('token')
     .single()
 
