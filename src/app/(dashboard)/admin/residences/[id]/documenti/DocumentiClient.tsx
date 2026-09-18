@@ -1103,9 +1103,9 @@ function MissingRow({
 
   return (
     <div className="border-b border-border last:border-b-0 py-2.5">
-      <div className="flex items-center gap-3">
-        <span className="flex-1 min-w-0 text-sm text-text-primary truncate">{exp.label}</span>
-        <span className="flex-shrink-0 text-xs text-text-secondary">
+      <div className="flex items-center gap-3 max-lg:flex-wrap max-lg:gap-y-1">
+        <span className="flex-1 min-w-0 max-lg:basis-full text-sm text-text-primary break-words lg:truncate">{exp.label}</span>
+        <span className="flex-shrink-0 max-lg:shrink max-lg:min-w-0 max-lg:line-clamp-2 max-lg:break-words text-xs text-text-secondary">
           {scopeLabel(exp.scope)}
           {exp.sistema && ` · ${SISTEMA_LABELS[exp.sistema]}`}
         </span>
@@ -1117,7 +1117,7 @@ function MissingRow({
           <button
             type="button"
             onClick={openForm}
-            className="flex-shrink-0 inline-flex items-center h-8 px-3 rounded-lg border border-border text-xs font-medium text-brand-medium hover:bg-background transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium"
+            className="flex-shrink-0 max-lg:ml-auto inline-flex items-center h-8 px-3 rounded-lg border border-border text-xs font-medium text-brand-medium hover:bg-background transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium"
           >
             Non applicabile
           </button>
@@ -1204,9 +1204,9 @@ function ExcludedRow({
 
   return (
     <div className="border-b border-border last:border-b-0 py-2.5 space-y-1">
-      <div className="flex items-center gap-3">
-        <span className="flex-1 min-w-0 text-sm text-text-primary truncate">{exp.label}</span>
-        <span className="flex-shrink-0 text-xs text-text-secondary">
+      <div className="flex items-center gap-3 max-lg:flex-wrap max-lg:gap-y-1">
+        <span className="flex-1 min-w-0 max-lg:basis-full text-sm text-text-primary break-words lg:truncate">{exp.label}</span>
+        <span className="flex-shrink-0 max-lg:shrink max-lg:min-w-0 max-lg:line-clamp-2 max-lg:break-words text-xs text-text-secondary">
           {scopeLabel(exp.scope)}
           {exp.sistema && ` · ${SISTEMA_LABELS[exp.sistema]}`}
         </span>
