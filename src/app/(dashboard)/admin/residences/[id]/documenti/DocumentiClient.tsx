@@ -1156,11 +1156,15 @@ function MissingRow({
           {scopeLabel(exp.scope)}
           {exp.sistema && ` · ${SISTEMA_LABELS[exp.sistema]}`}
         </span>
+        {/* Stesso aspetto del bottone "Rivedi classificazione" nelle card
+            dell'archivio (bordo, altezza, testo brand): un'azione si
+            riconosce perché somiglia alle altre azioni della pagina, non
+            per un colore o un componente in più. */}
         {canManageChecklist && !showForm && (
           <button
             type="button"
             onClick={openForm}
-            className="flex-shrink-0 text-xs text-brand-medium font-medium hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium rounded"
+            className="flex-shrink-0 inline-flex items-center h-8 px-3 rounded-lg border border-border text-xs font-medium text-brand-medium hover:bg-background transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium"
           >
             Non applicabile
           </button>
