@@ -8,6 +8,7 @@ import { createUploadUrl, confirmDocument, confirmClassification, setChecklistEx
 import type { SupplierProposalExpectation } from './actions'
 import { ALLOWED_DOCUMENT_MIME, MAX_DOCUMENT_SIZE } from '@/lib/document-upload'
 import { pluralize } from '@/lib/pluralize'
+import { formatDateIT } from '@/lib/formatDate'
 import { DateField } from '@/components/DateField'
 import {
   DOC_TYPES,
@@ -274,9 +275,10 @@ export function DocumentiClient({
   // Solo i doc_type davvero presenti tra i documenti, ordinati alfabeticamente
   // per etichetta: in una tendina si cerca per nome, non per l'ordine tecnico
   // della costante. Include sempre il tipo attualmente selezionato anche se
-  // zero documenti: un click "Vedi documenti di questo tipo" dalla checklist
-  // su una voce mancante deve poter selezionare un tipo senza risultati
-  // (lista vuota è un esito legittimo, non un select fuori dalle sue option).
+  // zero documenti (lista vuota è un esito legittimo, non un select fuori
+  // dalle sue option). Il link "Vedi documenti di questo tipo" dalla
+  // checklist, che era il caso d'uso originario, è stato rimosso col blocco
+  // Da caricare (18/09); la garanzia resta perché costa niente.
   const presentDocTypes = DOC_TYPES
     .filter(t => t === docTypeFilter || docs.some(d => d.doc_type === t))
     .sort((a, b) => DOC_TYPE_LABELS[a].localeCompare(DOC_TYPE_LABELS[b], 'it'))
@@ -745,12 +747,11 @@ export function DocumentiClient({
         </p>
       )}
 
-      {/* -------- Checklist di consegna (B4 C5a/C5b) -------- */}
-      <ChecklistSection
+      {/* -------- Da caricare + Escluse dalla consegna -------- */}
+      <MissingDocumentsSection
         residenceId={residenceId}
         checklist={checklist}
         unclassifiedCount={pendingClassification.length}
-        onFilterDocType={t => setDocTypeFilter(t)}
         markedByNames={markedByNames}
         canManageChecklist={canManageChecklist}
       />
@@ -870,98 +871,75 @@ export function DocumentiClient({
 }
 
 // I 3 scope contati (CountedScope in document-checklist.ts, non esportato:
-// 'unit' non è mai popolato in v1). Ordine e label coerenti con SCOPE_RANK
-// dell'helper (condominium, dossier_admin, residence).
+// 'unit' non è mai popolato in v1). Label = "ambito" mostrato accanto a ogni
+// voce di Da caricare ed Escluse.
 type CountedScopeKey = 'condominium' | 'dossier_admin' | 'residence'
-const SCOPE_ORDER: CountedScopeKey[] = ['condominium', 'dossier_admin', 'residence']
 const SCOPE_LABELS: Record<CountedScopeKey, string> = {
   condominium: 'Parti comuni',
   dossier_admin: 'Dossier amministratore',
   residence: 'Residenza',
 }
 
-// Checklist di consegna — read-only (B4 C5a). I numeri dei contatori
-// vengono SEMPRE da checklist.counts (reduce già fatta nell'helper, bug
-// class contatore/lista chiusa a monte): nessun ricalcolo qui.
-//
-// Fisarmonica (B4 C5a-bis): chiusa di default, un solo scope aperto alla
-// volta (stesso useState, mai due). I documenti restano il contenuto
-// principale della pagina; la checklist è supporto e non deve spingerli
-// sotto la piega.
-function ChecklistSection({
+function scopeLabel(scope: ChecklistExpectation['scope']): string {
+  return SCOPE_LABELS[scope as CountedScopeKey] ?? scope
+}
+
+// "Da caricare (N)" + "Escluse dalla consegna (N)" — sostituiscono i tre
+// riquadri a fisarmonica con frazioni e pallini (ridisegno 18/09).
+// Le liste vengono dallo STESSO array checklist.expectations dell'helper
+// (mancante = !satisfied && !notApplicable, esclusa = notApplicable): il
+// conteggio nel titolo è la lunghezza della lista mostrata, mai un secondo
+// calcolo (bug class contatore/lista). Nessuna frase di verdetto: se non
+// manca niente il blocco non compare, senza "tutto in ordine".
+// Le voci soddisfatte non hanno più una lista qui: i documenti che le
+// coprono sono in archivio, con i loro dati estratti.
+function MissingDocumentsSection({
   residenceId,
   checklist,
   unclassifiedCount,
-  onFilterDocType,
   markedByNames,
   canManageChecklist,
 }: {
   residenceId: string
   checklist: ChecklistResult
   unclassifiedCount: number
-  onFilterDocType: (docType: DocType) => void
   markedByNames: Record<string, string | null>
   canManageChecklist: boolean
 }) {
-  const [openScope, setOpenScope] = useState<CountedScopeKey | null>(null)
-  const [missingOnly, setMissingOnly] = useState(false)
+  const missing = checklist.expectations.filter(e => !e.satisfied && !e.notApplicable)
+  const excluded = checklist.expectations.filter(e => e.notApplicable)
+  const [excludedOpen, setExcludedOpen] = useState(false)
 
-  const openItems = openScope
-    ? checklist.expectations.filter(
-        e => e.scope === openScope && (!missingOnly || (!e.satisfied && !e.notApplicable))
-      )
-    : []
+  const hasNotes = unclassifiedCount > 0 || checklist.warnings.length > 0
+  if (missing.length === 0 && excluded.length === 0 && !hasNotes) return null
 
   return (
-    <section className="bg-surface rounded-xl border border-border p-4 space-y-3">
-      <h2 className="text-sm font-medium text-text-primary">Checklist di consegna</h2>
+    <div className="space-y-2">
+      {missing.length > 0 && (
+        <section className="bg-surface rounded-xl border border-border p-4 space-y-1">
+          <h2 className="text-sm font-medium text-text-primary">
+            Da caricare ({missing.length})
+          </h2>
+          <div>
+            {missing.map(exp => (
+              <MissingRow
+                key={exp.expectationKey}
+                exp={exp}
+                residenceId={residenceId}
+                canManageChecklist={canManageChecklist}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
-      <div className="flex flex-wrap gap-2">
-        {SCOPE_ORDER.map(scope => {
-          const isOpen = openScope === scope
-          const c = checklist.counts[scope]
-          return (
-            <button
-              key={scope}
-              type="button"
-              onClick={() => setOpenScope(isOpen ? null : scope)}
-              aria-expanded={isOpen}
-              className={`flex-1 min-w-[9rem] rounded-lg border px-3 py-2 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium ${
-                isOpen
-                  ? 'bg-brand-light/50 border-brand-medium/30'
-                  : 'bg-background border-transparent hover:bg-border/40'
-              }`}
-            >
-              <div className="flex items-center justify-between gap-1">
-                <p className="text-xs text-text-secondary">{SCOPE_LABELS[scope]}</p>
-                <ChevronDown
-                  className={`w-3 h-3 flex-shrink-0 text-text-secondary transition-transform ${isOpen ? 'rotate-180' : ''}`}
-                  strokeWidth={1.8}
-                />
-              </div>
-              <p className="text-sm font-medium text-text-primary mt-0.5 flex items-center gap-1.5">
-                {c.satisfied}/{c.total - c.notApplicable}
-                {c.missing > 0 && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-status-inprogress" aria-hidden="true" />
-                )}
-              </p>
-              {c.notApplicable > 0 && (
-                <p className="text-xs text-text-secondary">
-                  {pluralize(c.notApplicable, 'esclusa', 'escluse')}
-                </p>
-              )}
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Qualificano i numeri dei contatori sopra: restano visibili anche a
-          checklist chiusa (B4 C5a-bis punto 5). Avviso non classificati
-          contato dallo stesso array docs già in prop, nessuna query nuova. */}
+      {/* Qualificano la lista sopra (o la sua assenza): un documento non
+          ancora classificato può coprire una voce mancante. Contato dallo
+          stesso array docs già in prop, nessuna query nuova. */}
       {unclassifiedCount > 0 && (
         <p className="text-xs text-text-secondary bg-background rounded-lg px-3 py-2">
           {pluralize(unclassifiedCount, 'documento non ancora classificato', 'documenti non ancora classificati')}
-          {' '}— i conteggi potrebbero cambiare.
+          {' '}— l&apos;elenco potrebbe cambiare.
         </p>
       )}
       {checklist.warnings.length > 0 && (
@@ -970,95 +948,72 @@ function ChecklistSection({
         </div>
       )}
 
-      {openScope && (
-        <div className="pt-2 border-t border-border">
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <h3 className="text-xs font-medium text-text-secondary">
-              {SCOPE_LABELS[openScope]}
-            </h3>
-            <button
-              onClick={() => setMissingOnly(v => !v)}
-              aria-pressed={missingOnly}
-              className={`flex-shrink-0 rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium ${
-                missingOnly
-                  ? 'bg-status-inprogress/10 text-status-inprogress border-status-inprogress/30'
-                  : 'bg-surface text-text-secondary border-border hover:bg-background'
-              }`}
-            >
-              {missingOnly ? 'Mostra tutte' : 'Solo mancanti'}
-            </button>
-          </div>
-          {openItems.length === 0 ? (
-            <p className="text-sm text-text-secondary py-2">Nessuna voce mancante in questo gruppo.</p>
-          ) : (
-            openItems.map(exp => (
-              <ChecklistItemRow
-                key={exp.expectationKey}
-                exp={exp}
-                residenceId={residenceId}
-                onFilterDocType={onFilterDocType}
-                markedByNames={markedByNames}
-                canManageChecklist={canManageChecklist}
-              />
-            ))
+      {/* Riga compressa, subito sotto Da caricare, resa anche quando Da
+          caricare non c'è: un'esclusione è una decisione del costruttore
+          che deve restare visibile e reversibile (decisione 18/09). */}
+      {excluded.length > 0 && (
+        <section className="bg-surface rounded-xl border border-border">
+          <button
+            type="button"
+            onClick={() => setExcludedOpen(v => !v)}
+            aria-expanded={excludedOpen}
+            className="w-full flex items-center gap-2 px-4 py-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium rounded-xl"
+          >
+            <ChevronDown
+              className={`w-3.5 h-3.5 flex-shrink-0 text-text-secondary transition-transform ${excludedOpen ? 'rotate-180' : ''}`}
+              strokeWidth={1.8}
+            />
+            <span className="text-sm text-text-secondary">
+              Escluse dalla consegna ({excluded.length})
+            </span>
+          </button>
+          {excludedOpen && (
+            <div className="px-4 pb-3 pl-10">
+              {excluded.map(exp => (
+                <ExcludedRow
+                  key={exp.expectationKey}
+                  exp={exp}
+                  residenceId={residenceId}
+                  markedByNames={markedByNames}
+                  canManageChecklist={canManageChecklist}
+                />
+              ))}
+            </div>
           )}
-        </div>
+        </section>
       )}
-    </section>
+    </div>
   )
 }
 
-function ChecklistItemRow({
+// Voce mancante: nome, ambito (e impianto se la voce è impianto-specifica).
+// L'unica azione è "Non applicabile", riservata al costruttore (RLS 027,
+// super_admin-only), con motivazione obbligatoria (028): il vincolo vero è
+// server-side in setChecklistException, qui solo la disabilitazione di
+// comodo. La nota si precompila da exp.note a ogni apertura del form, non
+// solo al mount: l'action fa upsert e un form vuoto cancellerebbe una nota
+// già presente.
+function MissingRow({
   exp,
   residenceId,
-  onFilterDocType,
-  markedByNames,
   canManageChecklist,
 }: {
   exp: ChecklistExpectation
   residenceId: string
-  onFilterDocType: (docType: DocType) => void
-  markedByNames: Record<string, string | null>
   canManageChecklist: boolean
 }) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
-
-  // Eccezione checklist (B4 C5b, motivazione obbligatoria dalla revisione
-  // "audit" — 028). showForm apre il campo nota di "Segna non applicabile";
-  // precompilato da exp.note AD OGNI apertura del form (openForm sotto),
-  // non solo al mount — altrimenti riaprire il form dopo un refresh
-  // mostrerebbe un valore stantio. Precompilare è correttezza, non
-  // cortesia: setChecklistException fa upsert e sovrascrive la nota, un
-  // form vuoto su una voce con nota già presente la cancellerebbe.
-  // Niente più campo "atteso da": expected_from non è nel payload
-  // dell'action (028, IN SCOPE) — il valore legacy resta leggibile in
-  // sola lettura nel pannello info sopra, mai riscritto da qui.
   const [showForm, setShowForm] = useState(false)
   const [note, setNote] = useState(exp.note ?? '')
   const [pending, setPending] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
-
-  const status = exp.notApplicable
-    ? { label: 'Non applicabile', className: 'bg-neutral-600/7 text-neutral-600' }
-    : exp.satisfied
-    ? { label: 'Presente', className: 'bg-brand-dark/8 text-brand-dark' }
-    : { label: 'Mancante', className: 'bg-status-inprogress/8 text-status-inprogress' }
+  const trimmedNote = note.trim()
 
   function openForm() {
     setNote(exp.note ?? '')
     setActionError(null)
     setShowForm(true)
   }
-
-  function cancelForm() {
-    setShowForm(false)
-    setActionError(null)
-  }
-
-  // Disabilitazione client-side per comodità: il vincolo vero è
-  // server-side, in setChecklistException ("La motivazione è obbligatoria").
-  const trimmedNote = note.trim()
 
   async function handleConfirmException() {
     setPending(true)
@@ -1073,6 +1028,85 @@ function ChecklistItemRow({
     router.refresh()
   }
 
+  return (
+    <div className="border-b border-border last:border-b-0 py-2.5">
+      <div className="flex items-center gap-3">
+        <span className="flex-1 min-w-0 text-sm text-text-primary truncate">{exp.label}</span>
+        <span className="flex-shrink-0 text-xs text-text-secondary">
+          {scopeLabel(exp.scope)}
+          {exp.sistema && ` · ${SISTEMA_LABELS[exp.sistema]}`}
+        </span>
+        {canManageChecklist && !showForm && (
+          <button
+            type="button"
+            onClick={openForm}
+            className="flex-shrink-0 text-xs text-brand-medium font-medium hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium rounded"
+          >
+            Non applicabile
+          </button>
+        )}
+      </div>
+
+      {showForm && (
+        <div className="mt-2 space-y-2 text-xs text-text-secondary">
+          <div className="space-y-1">
+            <label htmlFor={`note-${exp.expectationKey}`} className="block">
+              Motivazione
+            </label>
+            <textarea
+              id={`note-${exp.expectationKey}`}
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              rows={2}
+              className="w-full border border-border rounded-lg px-2 py-1.5 text-xs bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
+            />
+          </div>
+          <div className="flex gap-2 pt-0.5">
+            <button
+              type="button"
+              onClick={() => { setShowForm(false); setActionError(null) }}
+              disabled={pending}
+              className="flex-1 border border-border rounded-lg py-1.5 text-text-secondary disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium"
+            >
+              Annulla
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmException}
+              disabled={pending || trimmedNote.length === 0}
+              className="flex-1 bg-brand-dark text-white rounded-lg py-1.5 font-medium disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium"
+            >
+              {pending ? 'Salvataggio…' : 'Conferma'}
+            </button>
+          </div>
+          {actionError && <p className="text-status-overdue">{actionError}</p>}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Voce esclusa: nome, ambito, motivazione PRIMA dell'attribuzione (chi
+// legge vuole sapere perché prima di chi). Fallback "dato non tracciato"
+// solo quando marcatore e data sono entrambi assenti (riga pre-028).
+// expected_from legacy in sola lettura, mai riscritto. "Annulla esclusione"
+// riservata al costruttore; motivazione e attribuzione leggibili anche
+// all'admin, perché spiegano un'assenza dalla lista Da caricare.
+function ExcludedRow({
+  exp,
+  residenceId,
+  markedByNames,
+  canManageChecklist,
+}: {
+  exp: ChecklistExpectation
+  residenceId: string
+  markedByNames: Record<string, string | null>
+  canManageChecklist: boolean
+}) {
+  const router = useRouter()
+  const [pending, setPending] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
+
   async function handleClearException() {
     setPending(true)
     setActionError(null)
@@ -1085,142 +1119,37 @@ function ChecklistItemRow({
     router.refresh()
   }
 
+  const attribution = exp.markedBy === null && exp.markedAt === null
+    ? 'Esclusa · dato non tracciato'
+    : `Esclusa da ${exp.markedBy ? (markedByNames[exp.markedBy] ?? 'utente sconosciuto') : '—'} · ${
+        exp.markedAt ? formatDateIT(exp.markedAt) : '—'
+      }`
+
   return (
-    <div className="border-b border-border last:border-b-0">
-      <button
-        onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center gap-2 py-2.5 text-left"
-      >
-        <ChevronDown
-          className={`w-3.5 h-3.5 flex-shrink-0 text-text-secondary transition-transform ${open ? 'rotate-180' : ''}`}
-          strokeWidth={1.8}
-        />
-        <span className="flex-1 text-sm text-text-primary min-w-0 truncate">{exp.label}</span>
-        <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${status.className}`}>
-          {status.label}
+    <div className="border-b border-border last:border-b-0 py-2.5 space-y-1">
+      <div className="flex items-center gap-3">
+        <span className="flex-1 min-w-0 text-sm text-text-primary truncate">{exp.label}</span>
+        <span className="flex-shrink-0 text-xs text-text-secondary">
+          {scopeLabel(exp.scope)}
+          {exp.sistema && ` · ${SISTEMA_LABELS[exp.sistema]}`}
         </span>
-      </button>
-
-      {/* Pannello SOLO INFORMATIVO in questo commit — nessuna azione di
-          scrittura (segna non applicabile / carica documento arrivano in
-          C5b/C5c). */}
-      {open && (
-        <div className="pb-3 pl-6 space-y-2 text-xs text-text-secondary">
-          <p>Tipo documento: <span className="text-text-primary">{DOC_TYPE_LABELS[exp.docType]}</span></p>
-          {exp.sistema && (
-            <p>Impianto: <span className="text-text-primary">{SISTEMA_LABELS[exp.sistema]}</span></p>
-          )}
-          <p>Ambito: <span className="text-text-primary">{SCOPE_LABELS[exp.scope as CountedScopeKey] ?? exp.scope}</span></p>
-
-          {exp.notApplicable && exp.expectedFrom && (
-            <p>Atteso da: <span className="text-text-primary">{exp.expectedFrom}</span></p>
-          )}
-
-          {exp.satisfied && exp.matchingDocuments.length > 0 && (
-            <div className="space-y-1">
-              {exp.matchingDocuments.map(doc => (
-                <p key={doc.id} className="flex items-center justify-between gap-2">
-                  <span className="text-text-primary truncate">{doc.label}</span>
-                  <span className="flex-shrink-0">{doc.reviewedBy ? 'Confermato da te' : "Classificato dall'AI"}</span>
-                </p>
-              ))}
-            </div>
-          )}
-
+      </div>
+      <div className="text-xs text-text-secondary space-y-0.5">
+        {exp.note && <p className="text-text-primary">{exp.note}</p>}
+        {exp.expectedFrom && <p>Atteso da: <span className="text-text-primary">{exp.expectedFrom}</span></p>}
+        <p>{attribution}</p>
+        {canManageChecklist && (
           <button
             type="button"
-            onClick={() => onFilterDocType(exp.docType)}
-            className="text-brand-medium font-medium hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium rounded"
+            onClick={handleClearException}
+            disabled={pending}
+            className="text-brand-medium font-medium hover:underline disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium rounded"
           >
-            Vedi documenti di questo tipo
+            {pending ? 'Attendere…' : 'Annulla esclusione'}
           </button>
-
-          {/* Eccezione checklist (B4 C5b): segna/annulla non applicabile.
-              Due stati, mai insieme. Niente conferma modale — reversibile,
-              il bottone opposto è subito accanto.
-              Le AZIONI sono riservate al costruttore (RLS 027, super_admin-only);
-              la motivazione e l'attribuzione di un'esclusione già decisa restano
-              invece leggibili anche all'admin, perché spiegano un numero che
-              vede comunque nei contatori ("N escluse"). Il blocco intero non si
-              renderizza quando non c'è né azione né informazione da mostrare,
-              per non lasciare un separatore vuoto. */}
-          {(exp.notApplicable || canManageChecklist) && (
-          <div className="pt-2 border-t border-border/60 space-y-2">
-            {exp.notApplicable ? (
-              <div className="space-y-1.5">
-                {/* Motivazione prima dell'attribuzione: chi legge vuole sapere
-                    PERCHÉ prima di sapere CHI. Fallback solo quando marcatore
-                    e data sono entrambi assenti (riga pre-028, mai backfillata) —
-                    non basarsi sul solo nome, altrimenti una data presente senza
-                    nome verrebbe scambiata per "non tracciato". */}
-                {exp.note && <p className="text-text-primary">{exp.note}</p>}
-                <p>
-                  {exp.markedBy === null && exp.markedAt === null
-                    ? 'Escluso · dato non tracciato'
-                    : `Escluso da ${exp.markedBy ? (markedByNames[exp.markedBy] ?? 'utente sconosciuto') : '—'} · ${
-                        exp.markedAt
-                          ? new Date(exp.markedAt).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })
-                          : '—'
-                      }`}
-                </p>
-                {canManageChecklist && (
-                  <button
-                    type="button"
-                    onClick={handleClearException}
-                    disabled={pending}
-                    className="text-brand-medium font-medium hover:underline disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium rounded"
-                  >
-                    {pending ? 'Attendere…' : 'Annulla non applicabile'}
-                  </button>
-                )}
-              </div>
-            ) : showForm ? (
-              <div className="space-y-2">
-                <div className="space-y-1">
-                  <label htmlFor={`note-${exp.expectationKey}`} className="block text-text-secondary">
-                    Motivazione
-                  </label>
-                  <textarea
-                    id={`note-${exp.expectationKey}`}
-                    value={note}
-                    onChange={e => setNote(e.target.value)}
-                    rows={2}
-                    className="w-full border border-border rounded-lg px-2 py-1.5 text-xs bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
-                  />
-                </div>
-                <div className="flex gap-2 pt-0.5">
-                  <button
-                    type="button"
-                    onClick={cancelForm}
-                    disabled={pending}
-                    className="flex-1 border border-border rounded-lg py-1.5 text-text-secondary disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium"
-                  >
-                    Annulla
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleConfirmException}
-                    disabled={pending || trimmedNote.length === 0}
-                    className="flex-1 bg-brand-dark text-white rounded-lg py-1.5 font-medium disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium"
-                  >
-                    {pending ? 'Salvataggio…' : 'Conferma'}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={openForm}
-                className="text-brand-medium font-medium hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium rounded"
-              >
-                Segna non applicabile
-              </button>
-            )}
-            {actionError && <p className="text-status-overdue">{actionError}</p>}
-          </div>
-          )}
-        </div>
-      )}
+        )}
+        {actionError && <p className="text-status-overdue">{actionError}</p>}
+      </div>
     </div>
   )
 }
