@@ -135,7 +135,7 @@ export default async function HomePage() {
   const photoUrl      = unit?.residences?.photo_url ?? null
 
   return (
-    <div className="p-6 space-y-6 pb-safe">
+    <div className="p-4 space-y-6 pb-safe">
       {/* Header residenza */}
       <header>
         <p className="text-xs text-text-secondary uppercase tracking-wide">{residenceName}</p>
@@ -150,11 +150,13 @@ export default async function HomePage() {
           {photoUrl ? (
             // Elemento LCP della home (misurato 4,66s con <img> nudo): next/image
             // ridimensiona/serve WebP e priority salta il lazy-loading e precarica.
+            // sizes: colonna max-w-lg (32rem) meno p-4 per lato = 480px; sotto,
+            // tutta la larghezza meno 2rem. Da ricalcolare se cambiano quei due valori.
             <Image
               src={photoUrl}
               alt={residenceName}
               fill
-              sizes="(min-width: 560px) 464px, calc(100vw - 3rem)"
+              sizes="(min-width: 560px) 480px, calc(100vw - 2rem)"
               priority
               className="object-cover"
             />
@@ -172,7 +174,7 @@ export default async function HomePage() {
 
       {/* Banner scadenze */}
       {urgentCount > 0 ? (
-        <Link href="/manutenzioni">
+        <Link href="/manutenzioni" className="block">
           <div className="bg-semantic-red-bg border border-semantic-red/20 rounded-xl px-4 py-3 flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-semantic-red">
