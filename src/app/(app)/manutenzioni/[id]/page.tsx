@@ -83,7 +83,7 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
     <div className="min-h-screen bg-background pb-24">
       {/* Header */}
       <div className="bg-surface border-b border-border px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
-        <Link href="/manutenzioni" className="text-text-secondary p-1 -ml-1 rounded-lg active:bg-background">
+        <Link href="/manutenzioni" aria-label="Torna alle manutenzioni" className="flex items-center justify-center w-11 h-11 -ml-3 -mr-2 flex-shrink-0 text-text-secondary rounded-lg active:bg-background">
           <ChevronLeft className="w-5 h-5" strokeWidth={1.6} />
         </Link>
         <div className="flex-1 min-w-0">
