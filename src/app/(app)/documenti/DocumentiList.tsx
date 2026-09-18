@@ -96,7 +96,7 @@ export function DocumentiList({ docs, uploadSlot }: { docs: DocItem[]; uploadSlo
       {/* Lista */}
       {visible.length === 0 ? (
         <div className="bg-surface rounded-xl border border-border p-8 text-center">
-          <p className="text-base text-text-secondary">
+          <p className="text-base text-text-secondary break-words">
             {term ? `Nessun risultato per "${search.trim()}".` : 'Nessun documento caricato.'}
           </p>
         </div>
