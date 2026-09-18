@@ -256,7 +256,7 @@ export function ProfiloClient({
           {/* Righe eventi */}
           <div className="divide-y divide-border">
             {PREF_ROWS.map(row => (
-              <div key={row.pushKey} className="flex items-center gap-2 py-2.5 first:pt-0">
+              <div key={row.pushKey} className="flex items-center gap-2 py-3 first:pt-0">
                 <p className="flex-1 text-base text-text-primary leading-tight">{row.label}</p>
 
                 {/* Push */}
@@ -315,6 +315,8 @@ export function ProfiloClient({
 // ── Toggle switch ────────────────────────────────────────────────────────────
 // locked = sempre ON, nessuna interazione, nessun velo (usato per email invariante)
 // disabled = salvataggio in corso su questa chiave specifica
+// Il bottone è l'area di tocco 44×44 attorno alla traccia visiva 36×20: i
+// margini negativi (-mx-1 -my-3) lasciano invariato l'ingombro nella riga.
 function Toggle({
   on,
   onToggle,
@@ -333,20 +335,29 @@ function Toggle({
       aria-checked={on}
       aria-disabled={locked || disabled}
       onClick={locked || disabled ? undefined : onToggle}
-      className={`relative inline-flex w-9 h-5 rounded-full transition-colors flex-shrink-0 focus-visible:outline-none ${
-        on ? 'bg-brand-dark' : 'bg-border'
-      } ${
+      className={`group flex items-center justify-center w-11 h-11 -mx-1 -my-3 flex-shrink-0 focus-visible:outline-none ${
         locked    ? 'cursor-default' :
-        disabled  ? 'opacity-50 cursor-not-allowed' :
-        onToggle  ? 'cursor-pointer focus-visible:ring-2 focus-visible:ring-brand-medium' :
-                    'cursor-not-allowed opacity-50'
+        disabled  ? 'cursor-not-allowed' :
+        onToggle  ? 'cursor-pointer' :
+                    'cursor-not-allowed'
       }`}
     >
       <span
-        className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
-          on ? 'translate-x-4' : 'translate-x-0.5'
+        className={`relative inline-flex w-9 h-5 rounded-full transition-colors ${
+          on ? 'bg-brand-dark' : 'bg-border'
+        } ${
+          locked    ? '' :
+          disabled  ? 'opacity-50' :
+          onToggle  ? 'group-focus-visible:ring-2 group-focus-visible:ring-brand-medium' :
+                      'opacity-50'
         }`}
-      />
+      >
+        <span
+          className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
+            on ? 'translate-x-4' : 'translate-x-0.5'
+          }`}
+        />
+      </span>
     </button>
   )
 }
