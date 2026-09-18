@@ -5,6 +5,7 @@ import { FileText, Download } from 'lucide-react'
 import { Input, Label } from '@/components/ui/Input'
 import { buttonVariants } from '@/components/ui/Button'
 import { pluralize } from '@/lib/pluralize'
+import { humanizeDocumentTitle } from '@/lib/documentTitle'
 import type { DocumentCategory } from '@/types/database'
 
 const CATEGORIES: { value: DocumentCategory; label: string; icon: string }[] = [
@@ -38,7 +39,7 @@ export function DocumentiList({ docs, uploadSlot }: { docs: DocItem[]; uploadSlo
   const visible = useMemo(
     () => docs.filter(d =>
       (category === 'all' || d.category === category) &&
-      (!term || d.title.toLocaleLowerCase('it').includes(term))
+      (!term || searchText(d).includes(term))
     ),
     [docs, category, term]
   )
@@ -126,6 +127,13 @@ export function DocumentiList({ docs, uploadSlot }: { docs: DocItem[]; uploadSlo
   )
 }
 
+// Testo in cui cerca la ricerca: il titolo com'è salvato e la sua forma
+// leggibile, come nell'archivio della dashboard, così "garanzia caldaia"
+// trova "certificato_garanzia_caldaia".
+function searchText(doc: DocItem): string {
+  return `${doc.title} ${humanizeDocumentTitle(doc.title)}`.toLocaleLowerCase('it')
+}
+
 function DocCard({ doc }: { doc: DocItem }) {
   return (
     <a
@@ -134,7 +142,7 @@ function DocCard({ doc }: { doc: DocItem }) {
     >
       <FileText className="w-5 h-5 text-neutral-400 flex-shrink-0" strokeWidth={1.6} />
       <div className="flex-1 min-w-0">
-        <p className="text-base font-medium text-text-primary truncate">{doc.title}</p>
+        <p className="text-base font-medium text-text-primary truncate">{humanizeDocumentTitle(doc.title)}</p>
         <p className="text-xs text-neutral-500 truncate">{doc.file_name} · {doc.formattedDate}</p>
       </div>
       <Download className="w-4 h-4 text-neutral-400 flex-shrink-0" strokeWidth={1.6} aria-hidden="true" />
