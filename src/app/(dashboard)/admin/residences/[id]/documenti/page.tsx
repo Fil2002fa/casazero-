@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import { FileDown } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
@@ -111,6 +112,18 @@ export default async function ResidenceDocumentiPage({
       <PageHeader
         back={{ href: `/admin/residences/${residenceId}`, label: residence.name }}
         title="Documenti"
+        actions={docs.length > 0 && (
+          // Stesso link per super_admin e admin: il gate è nella route
+          // (authorizeResidenceActor). Stile del download della pagina Fascicolo.
+          <a
+            href={`/api/documenti-xlsx?residenceId=${residenceId}`}
+            download
+            className="flex items-center gap-1.5 px-3 py-2 border border-brand-medium rounded-lg text-xs font-medium text-brand-dark flex-shrink-0"
+          >
+            <FileDown className="w-3.5 h-3.5" strokeWidth={1.8} />
+            Esporta Excel
+          </a>
+        )}
         className="mb-6"
       />
 
