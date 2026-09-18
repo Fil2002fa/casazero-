@@ -223,6 +223,23 @@ export function validityFormula(docType: string | null, fields: unknown): string
 // "Estrazione corrente" — chi decide se un documento è da estrarre
 // ------------------------------------------------------------
 
+/**
+ * Riga di document_extractions come la legge la pagina Documenti (embed
+ * 1:1 su documents, normalizzato con normalizeEmbed). `fields` è tipizzato
+ * lasco: la forma dipende da for_doc_type e si legge con FieldsByDocType
+ * solo dopo aver controllato isTypedDocType(for_doc_type). Per le righe
+ * 'saltata' contiene solo skipped_reason.
+ */
+export type DocumentExtractionRow = {
+  for_doc_type: string
+  status: ExtractionStatus
+  document_date: string | null
+  ambito: Ambito | null
+  unita_riferimento: string | null
+  valid_until: string | null
+  fields: Record<string, unknown>
+}
+
 export type ExtractionRef = { for_doc_type: string }
 export type DocumentRef = { doc_type: string | null; classification_status: string }
 

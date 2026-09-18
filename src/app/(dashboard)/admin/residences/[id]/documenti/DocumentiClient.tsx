@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { FileText, Download, Upload, X, Loader2, CheckCircle2, AlertCircle, Clock, Sparkles, ChevronDown } from 'lucide-react'
+import { FileText, Download, Upload, X, Loader2, CheckCircle2, AlertCircle, Clock, Sparkles, ChevronDown, FileSearch } from 'lucide-react'
 import type { DocumentCategory } from '@/types/database'
 import { createUploadUrl, confirmDocument, confirmClassification, setChecklistException, clearChecklistException, confirmSupplierProposal } from './actions'
 import type { SupplierProposalExpectation } from './actions'
@@ -24,6 +24,7 @@ import {
   type SupplierProposal,
 } from '@/lib/document-classification'
 import type { ChecklistResult, ChecklistExpectation } from '@/lib/document-checklist'
+import { isExtractableDocType, needsExtraction, type DocumentExtractionRow } from '@/lib/document-extraction'
 import { createClient } from '@/lib/supabase/client'
 
 // Sottoinsieme letto di extracted_metadata (jsonb): la proposta AI completa,
@@ -62,6 +63,12 @@ export type DocRow = {
   sistema: Sistema | null
   classification_confidence: number | null
   extracted_metadata: ClassificationMetadata | null
+  // Estrazione dati (040, seconda chiamata AI): null = mai estratto. Vale
+  // solo se for_doc_type coincide con doc_type (extractionIsCurrent): dopo
+  // una riclassificazione umana la riga resta ma il documento torna "da
+  // estrarre". Distinta da extracted_metadata, che è il verbale della
+  // classificazione.
+  extraction: DocumentExtractionRow | null
 }
 
 export type UnitRow = {
@@ -242,6 +249,14 @@ export function DocumentiClient({
   // documenti restano in stato neutro riprovabile (route.ts rollback a
   // 'non_classificato', mai 'fallita' per una causa che non è loro).
   const [serviceUnavailable, setServiceUnavailable] = useState(false)
+  // --- estrazione dati (batch sequenziale, seconda chiamata AI) ---
+  // Stato separato da quello della classificazione: i due batch possono
+  // girare uno dopo l'altro (la classificazione concatena l'estrazione) e
+  // ciascuno ha il proprio bottone, progresso, esito e banner di servizio.
+  const [extracting, setExtracting] = useState(false)
+  const [extractProgress, setExtractProgress] = useState<{ done: number; total: number } | null>(null)
+  const [extractFailures, setExtractFailures] = useState<number | null>(null)
+  const [extractServiceUnavailable, setExtractServiceUnavailable] = useState(false)
   const [reviewOnly, setReviewOnly] = useState(false)
   const [docTypeFilter, setDocTypeFilter] = useState<DocType | 'all'>('all')
   // 'fallita' inclusa: dopo il rollback a 'non_classificato' per gli errori di
@@ -252,6 +267,10 @@ export function DocumentiClient({
     d.classification_status === 'non_classificato' || d.classification_status === 'fallita'
   )
   const reviewCount = docs.filter(d => d.classification_status === 'da_revisionare').length
+  // Da estrarre: regola unica in document-extraction.ts (classificazione
+  // finale, tipo estraibile, nessuna estrazione corrente). Stessa lista per
+  // il contatore del bottone e per il batch — mai due calcoli (bug class).
+  const pendingExtraction = docs.filter(d => needsExtraction(d, d.extraction))
   // Solo i doc_type davvero presenti tra i documenti, ordinati alfabeticamente
   // per etichetta: in una tendina si cerca per nome, non per l'ordine tecnico
   // della costante. Include sempre il tipo attualmente selezionato anche se
@@ -362,6 +381,10 @@ export function DocumentiClient({
     setServiceUnavailable(false)
 
     let failures = 0
+    // Documenti usciti dalla classificazione con tipo finale ed estraibile:
+    // l'estrazione parte da sola su questi, per id esatto (mai indovinati
+    // da un refresh dei props), a batch concluso.
+    const toExtract: { id: string; title: string }[] = []
     for (const [i, doc] of targets.entries()) {
       try {
         const res = await fetch('/api/classify-document', {
@@ -372,6 +395,9 @@ export function DocumentiClient({
         const result = await res.json().catch(() => null)
         if (res.ok) {
           console.log(`[classifica] ${doc.title}:`, result)
+          if (result?.status === 'completata' && isExtractableDocType(typeof result.doc_type === 'string' ? result.doc_type : null)) {
+            toExtract.push(doc)
+          }
         } else if (result?.cause === 'service_unavailable') {
           // Il servizio è giù: proseguire il batch chiamerebbe di nuovo un
           // servizio già noto non disponibile, un errore per documento alla
@@ -395,6 +421,10 @@ export function DocumentiClient({
     setClassifyProgress(null)
     setClassifyFailures(failures > 0 ? failures : null)
     router.refresh()
+
+    if (toExtract.length > 0) {
+      void extractDocuments(toExtract)
+    }
   }
 
   // Bottone manuale: rete di sicurezza per i file che l'auto-classificazione
@@ -402,6 +432,69 @@ export function DocumentiClient({
   // per il contatore nel bottone — mai due calcoli paralleli (bug class).
   function handleClassify() {
     void classifyDocuments(pendingClassification.map(d => ({ id: d.id, title: d.title })))
+  }
+
+  // Estrazione dati: stesso disegno del batch di classificazione
+  // (sequenziale, un documento per invocazione, stop al primo errore di
+  // servizio, esito sobrio a fine batch). Chiamata dal bottone "Estrai
+  // dati", in coda alla classificazione, e dopo una conferma umana del
+  // tipo. La guardia `extracting` fa cadere una richiesta arrivata durante
+  // un batch: il documento resta in pendingExtraction e il bottone lo
+  // riprende — mai due batch in parallelo.
+  async function extractDocuments(targets: { id: string; title: string }[]) {
+    if (targets.length === 0 || extracting) return
+    setExtracting(true)
+    setExtractProgress({ done: 0, total: targets.length })
+    setExtractFailures(null)
+    setExtractServiceUnavailable(false)
+
+    let failures = 0
+    for (const [i, doc] of targets.entries()) {
+      try {
+        const res = await fetch('/api/extract-document', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ documentId: doc.id }),
+        })
+        const result = await res.json().catch(() => null)
+        if (res.ok) {
+          console.log(`[estrai] ${doc.title}:`, result)
+        } else if (result?.cause === 'service_unavailable') {
+          console.error(`[estrai] servizio non disponibile, batch interrotto a "${doc.title}":`, result?.error ?? res.statusText)
+          setExtractServiceUnavailable(true)
+          break
+        } else if (result?.cause === 'not_extractable') {
+          // Il documento è cambiato sotto (riclassificato in 'altro' o
+          // tornato in revisione nel frattempo): non è un fallimento, e
+          // al refresh non sarà più in pendingExtraction.
+          console.warn(`[estrai] ${doc.title} non estraibile:`, result?.error)
+        } else {
+          failures++
+          console.error(`[estrai] ${doc.title} senza dati:`, result?.error ?? res.statusText)
+        }
+      } catch (err) {
+        failures++
+        console.error(`[estrai] ${doc.title} senza dati:`, err)
+      }
+      setExtractProgress({ done: i + 1, total: targets.length })
+    }
+
+    setExtracting(false)
+    setExtractProgress(null)
+    setExtractFailures(failures > 0 ? failures : null)
+    router.refresh()
+  }
+
+  function handleExtract() {
+    void extractDocuments(pendingExtraction.map(d => ({ id: d.id, title: d.title })))
+  }
+
+  // Dopo la conferma umana del tipo (ReviewPanel): se il tipo confermato è
+  // estraibile, l'estrazione parte subito per quel documento. La riga
+  // precedente, se c'era, non è più corrente (for_doc_type diverso) e
+  // viene sovrascritta dalla route.
+  function handleClassificationConfirmed(doc: { id: string; title: string }, docType: DocType) {
+    if (isExtractableDocType(docType)) void extractDocuments([doc])
   }
 
   return (
@@ -415,6 +508,11 @@ export function DocumentiClient({
       {serviceUnavailable && (
         <div className="bg-neutral-600/7 border border-neutral-600/20 rounded-xl px-4 py-3 text-sm text-neutral-600">
           Classificazione automatica non disponibile al momento. Riprova più tardi con Classifica documenti.
+        </div>
+      )}
+      {extractServiceUnavailable && (
+        <div className="bg-neutral-600/7 border border-neutral-600/20 rounded-xl px-4 py-3 text-sm text-neutral-600">
+          Estrazione dei dati non disponibile al momento. Riprova più tardi con Estrai dati.
         </div>
       )}
 
@@ -609,6 +707,26 @@ export function DocumentiClient({
               : `Classifica documenti (${pendingClassification.length})`}
           </button>
         )}
+
+        {/* Rete di sicurezza per i documenti che l'estrazione automatica
+            (in coda alla classificazione / alla conferma umana) non ha
+            coperto: stessa lista (pendingExtraction) del batch. */}
+        {pendingExtraction.length > 0 && (
+          <button
+            onClick={handleExtract}
+            disabled={extracting}
+            className="flex items-center gap-2 border border-border text-text-secondary rounded-xl px-4 py-2.5 text-sm font-medium disabled:opacity-50"
+          >
+            {extracting ? (
+              <Loader2 className="w-4 h-4 animate-spin" strokeWidth={1.8} />
+            ) : (
+              <FileSearch className="w-4 h-4" strokeWidth={1.8} />
+            )}
+            {extracting && extractProgress
+              ? `Estrazione: ${extractProgress.done} di ${extractProgress.total}`
+              : `Estrai dati (${pendingExtraction.length})`}
+          </button>
+        )}
       </div>
 
       {/* Esito sobrio a fine batch: sopravvive alla chiusura della modale
@@ -618,6 +736,12 @@ export function DocumentiClient({
         <p className="text-xs text-status-inprogress">
           {pluralize(classifyFailures, 'documento non classificato', 'documenti non classificati')}
           {' '}— riprova con Classifica documenti.
+        </p>
+      )}
+      {!extracting && extractFailures !== null && extractFailures > 0 && (
+        <p className="text-xs text-status-inprogress">
+          {pluralize(extractFailures, 'documento senza dati estratti', 'documenti senza dati estratti')}
+          {' '}— riprova con Estrai dati.
         </p>
       )}
 
@@ -721,7 +845,7 @@ export function DocumentiClient({
                 Nessun documento di residenza{isFiltered ? ' per questo filtro' : ''}.
               </p>
             ) : (
-              residenceDocs.map(doc => <DocCard key={doc.id} doc={doc} supplierContext={supplierContext} />)
+              residenceDocs.map(doc => <DocCard key={doc.id} doc={doc} supplierContext={supplierContext} onClassificationConfirmed={handleClassificationConfirmed} />)
             )}
           </section>
 
@@ -734,7 +858,7 @@ export function DocumentiClient({
                   <h3 className="text-sm font-medium text-text-primary">
                     {unitMap.get(unitId)?.label ?? 'Unità'}
                   </h3>
-                  {unitDocs.map(doc => <DocCard key={doc.id} doc={doc} supplierContext={supplierContext} />)}
+                  {unitDocs.map(doc => <DocCard key={doc.id} doc={doc} supplierContext={supplierContext} onClassificationConfirmed={handleClassificationConfirmed} />)}
                 </div>
               ))}
             </section>
@@ -1180,7 +1304,13 @@ function ClassificationBadge({ doc }: { doc: DocRow }) {
   )
 }
 
-function DocCard({ doc, supplierContext }: { doc: DocRow; supplierContext: SupplierContext | null }) {
+type ClassificationConfirmedHandler = (doc: { id: string; title: string }, docType: DocType) => void
+
+function DocCard({ doc, supplierContext, onClassificationConfirmed }: {
+  doc: DocRow
+  supplierContext: SupplierContext | null
+  onClassificationConfirmed: ClassificationConfirmedHandler
+}) {
   const [reviewOpen, setReviewOpen] = useState(false)
   const formattedDate = new Date(doc.file_date ?? doc.created_at).toLocaleDateString('it-IT', {
     day: 'numeric', month: 'short', year: 'numeric',
@@ -1235,7 +1365,12 @@ function DocCard({ doc, supplierContext }: { doc: DocRow; supplierContext: Suppl
             {reviewOpen ? 'Chiudi revisione' : 'Rivedi classificazione'}
           </button>
           {reviewOpen && (
-            <ReviewPanel doc={doc} supplierContext={supplierContext} onDone={() => setReviewOpen(false)} />
+            <ReviewPanel
+              doc={doc}
+              supplierContext={supplierContext}
+              onDone={() => setReviewOpen(false)}
+              onConfirmed={docType => onClassificationConfirmed({ id: doc.id, title: doc.title }, docType)}
+            />
           )}
         </div>
       )}
@@ -1243,10 +1378,14 @@ function DocCard({ doc, supplierContext }: { doc: DocRow; supplierContext: Suppl
   )
 }
 
-function ReviewPanel({ doc, supplierContext, onDone }: {
+function ReviewPanel({ doc, supplierContext, onDone, onConfirmed }: {
   doc: DocRow
   supplierContext: SupplierContext | null
   onDone: () => void
+  // Chiamata SOLO a conferma riuscita, col tipo confermato: chi la riceve
+  // decide se far partire l'estrazione (DocumentiClient, unico proprietario
+  // dello stato di batch).
+  onConfirmed: (docType: DocType) => void
 }) {
   const router = useRouter()
   // REGOLA (non riaprire): il blocco "Proposta AI" legge SEMPRE E SOLO
@@ -1281,6 +1420,7 @@ function ReviewPanel({ doc, supplierContext, onDone }: {
     } else {
       onDone()
       router.refresh()
+      onConfirmed(selected)
     }
   }
 

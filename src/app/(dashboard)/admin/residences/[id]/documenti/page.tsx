@@ -5,6 +5,8 @@ import { PageHeader } from '@/components/PageHeader'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import { computeResidenceChecklist } from '@/lib/document-checklist'
+import { normalizeEmbed } from '@/lib/postgrest-embed'
+import type { DocumentExtractionRow } from '@/lib/document-extraction'
 import { DocumentiClient } from './DocumentiClient'
 import type { DocRow, UnitRow } from './DocumentiClient'
 import type {
@@ -40,7 +42,10 @@ export default async function ResidenceDocumentiPage({
   const [{ data: rawDocs }, { data: rawUnits }, checklist] = await Promise.all([
     supabase
       .from('documents')
-      .select('id, title, category, file_name, storage_path, file_date, unit_id, created_at, classification_status, doc_type, sistema, classification_confidence, extracted_metadata')
+      // document_extractions: embed 1:1 (040, document_id PK+FK), letto con
+      // il client di sessione — la policy SELECT delega a documents, quindi
+      // chi vede il documento vede la sua estrazione. Normalizzato sotto.
+      .select('id, title, category, file_name, storage_path, file_date, unit_id, created_at, classification_status, doc_type, sistema, classification_confidence, extracted_metadata, document_extractions(for_doc_type, status, document_date, ambito, unita_riferimento, valid_until, fields)')
       .eq('residence_id', residenceId)
       .order('created_at', { ascending: false }),
     supabase
@@ -50,6 +55,16 @@ export default async function ResidenceDocumentiPage({
       .order('label'),
     computeResidenceChecklist(supabase, residenceId),
   ])
+
+  // L'embed to-one può tornare oggetto o array di un elemento (bug class
+  // registrata, vedi postgrest-embed.ts): normalizzato qui, una volta.
+  const docs: DocRow[] = ((rawDocs ?? []) as Array<Record<string, unknown>>).map(row => {
+    const { document_extractions, ...rest } = row
+    return {
+      ...(rest as Omit<DocRow, 'extraction'>),
+      extraction: normalizeEmbed<DocumentExtractionRow>(document_extractions),
+    }
+  })
 
   // Nomi leggibili per "Escluso da {utente}" (028): solo i marked_by
   // realmente presenti tra le attese di questa residenza, non tutti i
@@ -137,7 +152,7 @@ export default async function ResidenceDocumentiPage({
 
       <DocumentiClient
         residenceId={residenceId}
-        docs={(rawDocs ?? []) as DocRow[]}
+        docs={docs}
         units={(rawUnits ?? []) as UnitRow[]}
         checklist={checklist}
         markedByNames={markedByNames}
