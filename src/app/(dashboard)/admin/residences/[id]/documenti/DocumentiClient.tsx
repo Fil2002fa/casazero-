@@ -1090,8 +1090,8 @@ function DeadlinesSection({ docs, today }: { docs: DocRow[]; today: string }) {
           <div key={entry.item.id} className="flex items-center gap-3 py-2.5 border-b border-border last:border-b-0">
             <div className="flex-1 min-w-0">
               <p className="text-sm text-text-primary truncate">{humanizeDocumentTitle(entry.item.title)}</p>
-              {entry.item.doc_type && (
-                <p className="text-xs text-text-secondary">{DOC_TYPE_LABELS[entry.item.doc_type]}</p>
+              {validitySubject(entry.item) && (
+                <p className="text-xs text-text-secondary truncate">{validitySubject(entry.item)}</p>
               )}
             </div>
             <span className="flex-shrink-0 text-xs text-text-secondary text-right">
@@ -1425,6 +1425,26 @@ function extractionFacts(doc: DocRow): string[] {
     if (formula) facts.push(`Validità: ${formula}`)
   }
   return facts
+}
+
+// Riga secondaria del blocco Scadenze: l'OGGETTO della validità, non il
+// tipo (che il titolo già dice quasi sempre): oggetto coperto per la
+// garanzia, compagnia per la polizza, unità di riferimento altrimenti;
+// il tipo documento solo se non c'è nulla di estratto da mostrare.
+function validitySubject(doc: DocRow): string | null {
+  const ext = currentExtraction(doc)
+  if (ext && isTypedDocType(doc.doc_type)) {
+    if (doc.doc_type === 'garanzia') {
+      const f = ext.fields as Partial<GaranziaFields>
+      if (f.oggetto) return f.oggetto
+    }
+    if (doc.doc_type === 'polizza_decennale') {
+      const f = ext.fields as Partial<PolizzaFields>
+      if (f.compagnia) return f.compagnia
+    }
+  }
+  if (ext?.unita_riferimento) return `Unità: ${ext.unita_riferimento}`
+  return doc.doc_type ? DOC_TYPE_LABELS[doc.doc_type] : null
 }
 
 // Testo di ricerca: titolo (grezzo e leggibile, così "garanzia caldaia"
