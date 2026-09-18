@@ -1117,7 +1117,7 @@ function MissingRow({
           <button
             type="button"
             onClick={openForm}
-            className="flex-shrink-0 max-lg:ml-auto inline-flex items-center h-8 px-3 rounded-lg border border-border text-xs font-medium text-brand-medium hover:bg-background transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium"
+            className="flex-shrink-0 max-lg:ml-auto inline-flex items-center h-8 max-lg:h-11 px-3 rounded-lg border border-border text-xs font-medium text-brand-medium hover:bg-background transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium"
           >
             Non applicabile
           </button>
@@ -1143,7 +1143,7 @@ function MissingRow({
               type="button"
               onClick={() => { setShowForm(false); setActionError(null) }}
               disabled={pending}
-              className="flex-1 border border-border rounded-lg py-1.5 text-text-secondary disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium"
+              className="flex-1 max-lg:h-11 border border-border rounded-lg py-1.5 text-text-secondary disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium"
             >
               Annulla
             </button>
@@ -1151,7 +1151,7 @@ function MissingRow({
               type="button"
               onClick={handleConfirmException}
               disabled={pending || trimmedNote.length === 0}
-              className="flex-1 bg-brand-dark text-white rounded-lg py-1.5 font-medium disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium"
+              className="flex-1 max-lg:h-11 bg-brand-dark text-white rounded-lg py-1.5 font-medium disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium"
             >
               {pending ? 'Salvataggio…' : 'Conferma'}
             </button>
@@ -1371,7 +1371,7 @@ function DocCard({ doc, supplierContext, onClassificationConfirmed }: {
         <div className="border-t border-border px-4 py-2">
           <button
             onClick={() => setReviewOpen(v => !v)}
-            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-border text-xs font-medium text-brand-medium hover:bg-background transition-colors"
+            className="inline-flex items-center gap-1.5 h-9 max-lg:h-11 px-3 rounded-lg border border-border text-xs font-medium text-brand-medium hover:bg-background transition-colors"
           >
             <ChevronDown
               className={`w-3.5 h-3.5 transition-transform ${reviewOpen ? 'rotate-180' : ''}`}
