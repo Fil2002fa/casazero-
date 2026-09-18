@@ -1345,7 +1345,11 @@ function DocCard({ doc, supplierContext, onClassificationConfirmed }: {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-text-primary break-words lg:truncate">{humanizeDocumentTitle(doc.title)}</p>
-          <p className="text-xs text-text-secondary mt-0.5 truncate">{doc.file_name} · {formattedDate}</p>
+          {/* La data non si taglia mai: solo il nome file cede spazio */}
+          <p className="flex gap-1 text-xs text-text-secondary mt-0.5">
+            <span className="truncate">{doc.file_name}</span>
+            <span className="flex-shrink-0">· {formattedDate}</span>
+          </p>
           {facts.length > 0 && (
             <p className="text-xs text-text-secondary mt-0.5">{facts.join(' · ')}</p>
           )}
