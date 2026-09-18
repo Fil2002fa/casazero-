@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { X } from 'lucide-react'
 import { cn } from '@/lib/cn'
 
 const FOCUSABLE_SELECTOR =
@@ -23,6 +24,10 @@ interface BottomSheetProps {
  *
  * Il titolo è in Source Serif 4 come le intestazioni di pagina: la sheet apre
  * un atto formale (una scrittura nel fascicolo), non un'azione di servizio.
+ *
+ * Chiudi è il primo elemento focalizzabile: riceve il focus all'apertura e
+ * apre il ciclo del Tab. Padding inferiore mai sotto 1rem, anche quando
+ * safe-area-inset-bottom vale 0.
  */
 export function BottomSheet({ open, onClose, title, subtitle, children }: BottomSheetProps) {
   const panelRef = useRef<HTMLDivElement>(null)
@@ -82,7 +87,7 @@ export function BottomSheet({ open, onClose, title, subtitle, children }: Bottom
         aria-labelledby="sheet-title"
         tabIndex={-1}
         className={cn(
-          'z-modal w-full max-w-lg rounded-t-xl bg-surface p-4 pb-safe shadow-elevated outline-none',
+          'z-modal w-full max-w-lg rounded-t-xl bg-surface p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-elevated outline-none',
           'max-h-[85vh] overflow-y-auto'
         )}
         onClick={(e) => e.stopPropagation()}
@@ -90,11 +95,21 @@ export function BottomSheet({ open, onClose, title, subtitle, children }: Bottom
         <div className="flex justify-center pb-3">
           <span className="h-1 w-10 rounded-full bg-border" aria-hidden="true" />
         </div>
-        <div className="mb-4 space-y-1">
-          <h2 id="sheet-title" className="font-serif text-[22px] font-semibold text-text-primary">
-            {title}
-          </h2>
-          {subtitle && <div className="text-sm text-text-secondary">{subtitle}</div>}
+        <div className="mb-4 flex items-start gap-3">
+          <div className="flex-1 min-w-0 space-y-1">
+            <h2 id="sheet-title" className="font-serif text-[22px] font-semibold text-text-primary break-words">
+              {title}
+            </h2>
+            {subtitle && <div className="text-sm text-text-secondary">{subtitle}</div>}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Chiudi"
+            className="flex items-center justify-center w-11 h-11 -mr-2 -mt-2 flex-shrink-0 rounded-lg text-text-secondary active:bg-background focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20"
+          >
+            <X className="w-5 h-5" strokeWidth={1.6} />
+          </button>
         </div>
         {children}
       </div>
