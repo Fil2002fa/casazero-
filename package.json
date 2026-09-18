@@ -10,7 +10,8 @@
     "verify": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1",
     "verify:features": "node --experimental-strip-types --no-warnings scripts/verify-residence-features.mjs",
     "verify:sistemi": "node --experimental-strip-types --no-warnings scripts/verify-sistemi.mjs",
-    "verify:match": "node --experimental-strip-types --no-warnings scripts/verify-supplier-match.mjs"
+    "verify:match": "node --experimental-strip-types --no-warnings scripts/verify-supplier-match.mjs",
+    "verify:extraction": "node --experimental-strip-types --no-warnings scripts/verify-extraction.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.4",
