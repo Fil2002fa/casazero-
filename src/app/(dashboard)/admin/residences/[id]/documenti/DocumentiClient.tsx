@@ -1344,7 +1344,7 @@ function DocCard({ doc, supplierContext, onClassificationConfirmed }: {
           <FileText className="w-5 h-5 text-text-secondary" strokeWidth={1.6} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-text-primary truncate">{humanizeDocumentTitle(doc.title)}</p>
+          <p className="text-sm font-medium text-text-primary break-words lg:truncate">{humanizeDocumentTitle(doc.title)}</p>
           <p className="text-xs text-text-secondary mt-0.5 truncate">{doc.file_name} · {formattedDate}</p>
           {facts.length > 0 && (
             <p className="text-xs text-text-secondary mt-0.5">{facts.join(' · ')}</p>
