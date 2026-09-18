@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import { computeResidenceChecklist } from '@/lib/document-checklist'
 import { normalizeEmbed } from '@/lib/postgrest-embed'
+import { todayISO } from '@/lib/maintenance-status'
 import type { DocumentExtractionRow } from '@/lib/document-extraction'
 import { DocumentiClient } from './DocumentiClient'
 import type { DocRow, UnitRow } from './DocumentiClient'
@@ -155,6 +156,7 @@ export default async function ResidenceDocumentiPage({
         docs={docs}
         units={(rawUnits ?? []) as UnitRow[]}
         checklist={checklist}
+        today={todayISO()}
         markedByNames={markedByNames}
         canManageChecklist={profile.role === 'super_admin'}
         canLinkSuppliers={canLinkSuppliers}

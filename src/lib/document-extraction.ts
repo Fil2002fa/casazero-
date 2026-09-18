@@ -296,3 +296,46 @@ export function upcomingDeadlines<T>(
   withDate.sort((a, b) => (a.validUntil < b.validUntil ? -1 : a.validUntil > b.validUntil ? 1 : 0))
   return withDate.slice(0, limit)
 }
+
+export type ValidityEntry<T> =
+  | { kind: 'date'; item: T; validUntil: string; expired: boolean }
+  | { kind: 'formula'; item: T; formula: string }
+
+export type ValiditySource = {
+  docType: string | null
+  validUntil: string | null
+  fields: unknown
+}
+
+/**
+ * Voci del blocco "Scadenze": prima le voci con data (ordine di
+ * upcomingDeadlines: crescente, scadute in cima), poi quelle SENZA data ma
+ * con una formula dichiarata ("10 anni dalla data di fine lavori"),
+ * nell'ordine di input; al massimo `limit` in tutto. La formula si mostra
+ * al posto della data (decisione 18/09): una polizza che non ha una data
+ * calcolabile ha comunque una validità da leggere. Un documento senza data
+ * né formula non compare. `read` restituisce null per escludere un item
+ * (es. estrazione non corrente).
+ */
+export function validityEntries<T>(
+  items: T[],
+  read: (item: T) => ValiditySource | null,
+  todayIso: string,
+  limit = 6,
+): ValidityEntry<T>[] {
+  const sources = items
+    .map(item => ({ item, src: read(item) }))
+    .filter((x): x is { item: T; src: ValiditySource } => x.src !== null)
+
+  const dated = upcomingDeadlines(sources, x => x.src.validUntil, todayIso, limit)
+    .map((d): ValidityEntry<T> => ({ kind: 'date', item: d.item.item, validUntil: d.validUntil, expired: d.expired }))
+
+  const withFormula: ValidityEntry<T>[] = []
+  for (const x of sources) {
+    if (normalizeIsoDate(x.src.validUntil) !== null) continue
+    const formula = validityFormula(x.src.docType, x.src.fields)
+    if (formula !== null) withFormula.push({ kind: 'formula', item: x.item, formula })
+  }
+
+  return [...dated, ...withFormula].slice(0, limit)
+}

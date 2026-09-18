@@ -47,7 +47,7 @@ try {
 }
 
 const {
-  computeValidUntil, validityFormula, extractionIsCurrent, needsExtraction, upcomingDeadlines,
+  computeValidUntil, validityFormula, extractionIsCurrent, needsExtraction, upcomingDeadlines, validityEntries,
   normalizeIsoDate, addYearsIso, isExtractableDocType, isTypedDocType, emptyFields,
 } = lib
 const { formatDateIT } = fmt
@@ -161,6 +161,27 @@ check('scadenze: limit personalizzato', upcomingDeadlines(docs, d => d.v, today,
 check('scadenze: lista vuota', upcomingDeadlines([], d => d.v, today), [])
 check('scadenze: parità di data conserva ordine di input',
   upcomingDeadlines([{ id: 'x', v: '2027-01-01' }, { id: 'y', v: '2027-01-01' }], d => d.v, today).map(x => x.item.id), ['x', 'y'])
+
+// --- validityEntries -------------------------------------------------------
+const src = (docType, validUntil, fields = {}) => ({ docType, validUntil, fields })
+const ventries = [
+  { id: 'polizza-formula', s: src('polizza_decennale', null, { durata_anni: 10, evento_decorrenza: 'fine lavori', decorrenza: null, scadenza: null }) },
+  { id: 'garanzia-2029', s: src('garanzia', '2029-03-10', { inizio: '2024-03-10', durata_anni: 5 }) },
+  { id: 'ape-scaduto', s: src('ape', '2025-01-01', {}) },
+  { id: 'dico-niente', s: src('dich_conformita_dm37', null, {}) },
+  { id: 'escluso', s: null },
+  { id: 'garanzia-solo-durata', s: src('garanzia', null, { inizio: null, durata_anni: 2 }) },
+  { id: 'ape-2027', s: src('ape', '2027-06-30', {}) },
+]
+const ve = validityEntries(ventries, x => x.s, today)
+check('validità: date prima (scadute in cima), poi formule, esclusi null e senza nulla',
+  ve.map(e => e.item.id), ['ape-scaduto', 'ape-2027', 'garanzia-2029', 'polizza-formula', 'garanzia-solo-durata'])
+check('validità: kind per voce', ve.map(e => e.kind), ['date', 'date', 'date', 'formula', 'formula'])
+check('validità: expired sulla data passata', ve[0].kind === 'date' && ve[0].expired, true)
+check('validità: formula polizza', ve[3].kind === 'formula' ? ve[3].formula : null, '10 anni dalla data di fine lavori')
+check('validità: formula garanzia senza inizio', ve[4].kind === 'formula' ? ve[4].formula : null, '2 anni')
+check('validità: limit tronca anche le formule', validityEntries(ventries, x => x.s, today, 4).map(e => e.item.id), ['ape-scaduto', 'ape-2027', 'garanzia-2029', 'polizza-formula'])
+check('validità: lista vuota', validityEntries([], x => x.s, today), [])
 
 // --- formatDateIT ----------------------------------------------------------
 check('formato DATE', formatDateIT('2026-09-12'), '12 set 2026')

@@ -25,7 +25,7 @@ import {
   type SupplierProposal,
 } from '@/lib/document-classification'
 import type { ChecklistResult, ChecklistExpectation } from '@/lib/document-checklist'
-import { isExtractableDocType, needsExtraction, type DocumentExtractionRow } from '@/lib/document-extraction'
+import { isExtractableDocType, needsExtraction, extractionIsCurrent, validityEntries, type DocumentExtractionRow } from '@/lib/document-extraction'
 import { createClient } from '@/lib/supabase/client'
 
 // Sottoinsieme letto di extracted_metadata (jsonb): la proposta AI completa,
@@ -183,6 +183,11 @@ interface Props {
   docs: DocRow[]
   units: UnitRow[]
   checklist: ChecklistResult
+  // 'YYYY-MM-DD' calcolato sul server (todayISO): il blocco Scadenze decide
+  // "scaduta" confrontando date, e una data letta nel client durante il
+  // render darebbe testo diverso tra server e browser a cavallo della
+  // mezzanotte — mismatch di hydration. Arriva come prop, una volta.
+  today: string
   // id profilo → full_name (028), solo i marcatori realmente presenti tra
   // le eccezioni di questa residenza. null = profilo senza full_name.
   markedByNames: Record<string, string | null>
@@ -223,7 +228,7 @@ type SupplierContext = {
 }
 
 export function DocumentiClient({
-  residenceId, docs, units, checklist, markedByNames, canManageChecklist,
+  residenceId, docs, units, checklist, today, markedByNames, canManageChecklist,
   canLinkSuppliers, suppliers, supplierInstallations, residenceName,
 }: Props) {
   const supplierContext: SupplierContext | null = canLinkSuppliers
@@ -756,6 +761,9 @@ export function DocumentiClient({
         canManageChecklist={canManageChecklist}
       />
 
+      {/* -------- Scadenze -------- */}
+      <DeadlinesSection docs={docs} today={today} />
+
       {/* -------- Ricerca + filtri (tipo a tendina · coda revisione) -------- */}
       <div className="flex flex-wrap items-center gap-2">
         <input
@@ -983,6 +991,49 @@ function MissingDocumentsSection({
         </section>
       )}
     </div>
+  )
+}
+
+// "Scadenze": le prossime sei validità per data, scadute in cima, dalle
+// estrazioni CORRENTI (for_doc_type = doc_type). Quando valid_until non è
+// calcolabile ma il documento dichiara una durata, al posto della data si
+// mostra la formula ("10 anni dalla data di fine lavori"). Date nude,
+// nessun colore di allarme, nessun verdetto (decisione 18/09): "Scaduta il"
+// è un fatto di calendario reso nello stesso colore del resto. Il blocco
+// non compare se non c'è nulla da mostrare. Il lessico scadenza/scaduta è
+// vietato sulle voci promemoria e sui badge di classificazione, non sulla
+// validità di polizze, garanzie e APE, che è linguaggio di dominio.
+function DeadlinesSection({ docs, today }: { docs: DocRow[]; today: string }) {
+  const entries = validityEntries(
+    docs,
+    d => extractionIsCurrent(d, d.extraction) && d.extraction
+      ? { docType: d.doc_type, validUntil: d.extraction.valid_until, fields: d.extraction.fields }
+      : null,
+    today,
+  )
+  if (entries.length === 0) return null
+
+  return (
+    <section className="bg-surface rounded-xl border border-border p-4 space-y-1">
+      <h2 className="text-sm font-medium text-text-primary">Scadenze</h2>
+      <div>
+        {entries.map(entry => (
+          <div key={entry.item.id} className="flex items-center gap-3 py-2.5 border-b border-border last:border-b-0">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-text-primary truncate">{entry.item.title}</p>
+              {entry.item.doc_type && (
+                <p className="text-xs text-text-secondary">{DOC_TYPE_LABELS[entry.item.doc_type]}</p>
+              )}
+            </div>
+            <span className="flex-shrink-0 text-xs text-text-secondary text-right">
+              {entry.kind === 'date'
+                ? (entry.expired ? `Scaduta il ${formatDateIT(entry.validUntil)}` : formatDateIT(entry.validUntil))
+                : entry.formula}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
   )
 }
 
