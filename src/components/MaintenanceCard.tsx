@@ -42,7 +42,7 @@ export function MaintenanceCard({ id, title, category, priority, status, nextDue
               </span>
             )}
           </div>
-          <p className="text-sm font-medium text-text-primary truncate">{title}</p>
+          <p className="text-sm font-medium text-text-primary line-clamp-2 break-words">{title}</p>
           <p className="text-xs text-text-secondary mt-0.5">{category}</p>
           {priority === 'N1' ? (
             <p className="text-xs mt-1 font-medium text-semantic-blue">

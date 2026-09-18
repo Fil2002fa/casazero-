@@ -224,7 +224,7 @@ export default async function HomePage() {
                 <CalendarClock className="w-5 h-5 text-brand-medium" strokeWidth={1.6} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-text-primary truncate">
+                <p className="text-sm font-medium text-text-primary line-clamp-2 break-words">
                   {nextItem.maintenance_templates?.title ?? '—'}
                 </p>
                 <p className="text-xs text-text-secondary mt-0.5">

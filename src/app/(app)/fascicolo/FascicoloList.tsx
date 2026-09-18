@@ -110,7 +110,7 @@ export function FascicoloList({
                   <div className="flex-1 min-w-0 bg-surface rounded-xl border border-border p-4 mb-2">
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <div className="flex-1 min-w-0">
-                        <p className="text-base font-medium text-text-primary truncate">
+                        <p className="text-base font-medium text-text-primary line-clamp-2 break-words">
                           {c.title}
                         </p>
                         <p className="text-xs text-text-secondary break-words">{c.category}</p>
