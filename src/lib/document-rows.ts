@@ -6,15 +6,18 @@
  * superfici — lo schermo e l'export Excel (api/documenti-xlsx) — e un
  * modulo 'use client' non può essere importato da una route.
  * Fonte unica: nessuna superficie ricalcola questi valori inline.
+ *
+ * Import relativi tra moduli di lib (come document-extraction.ts): lo
+ * script di verifica li carica con strip-types, che non risolve '@/'.
  */
 import type { DocumentCategory } from '@/types/database'
-import { formatDateIT } from '@/lib/formatDate'
+import { formatDateIT } from './formatDate'
 import {
   DOC_TYPE_LABELS,
   type DocType,
   type Sistema,
   type ClassificationStatus,
-} from '@/lib/document-classification'
+} from './document-classification'
 import {
   AMBITO_LABELS,
   isTypedDocType,
@@ -24,7 +27,7 @@ import {
   type GaranziaFields,
   type ApeFields,
   type PolizzaFields,
-} from '@/lib/document-extraction'
+} from './document-extraction'
 
 // Sottoinsieme letto di extracted_metadata (jsonb): la proposta AI completa,
 // oppure una nota di skip. Tutti i campi opzionali — si legge in difesa.
@@ -96,53 +99,106 @@ export function hasValidity(doc: DocRow): boolean {
   return ext.valid_until !== null || validityFormula(doc.doc_type, ext.fields) !== null
 }
 
-// Fatti estratti da mostrare in riga, come brevi voci separate da " · ".
-// Solo ciò che esiste: nessuna voce vuota, nessuna etichetta senza valore.
-// L'installatore viene dal verbale di classificazione (extracted_metadata,
-// solo DiCo), gli altri dalla riga di estrazione corrente.
-export function extractionFacts(doc: DocRow): string[] {
-  const facts: string[] = []
-  const installer = doc.doc_type === 'dich_conformita_dm37' ? doc.extracted_metadata?.ragione_sociale_installatore : null
-  if (installer) facts.push(`Installatore: ${installer}`)
+// Valori estratti di un documento, un campo per dato, già filtrati sul
+// doc_type corrente: un campo è null se il documento non è di quel tipo,
+// se l'estrazione manca o non è attuale, o se il documento non lo riporta.
+// Fonte unica per la riga a schermo (extractionFacts), il blocco Scadenze
+// (validitySubject) e l'export Excel (document-export.ts): nessuna
+// superficie rilegge fields o extracted_metadata per conto suo.
+export type DocumentFacts = {
+  installatore: string | null      // verbale di classificazione, solo DiCo
+  partitaIva: string | null        // idem, già a sole cifre: resta testo
+  ambito: string | null            // etichetta pronta ("Parti comuni", "Unità: interno 3")
+  unitaRiferimento: string | null  // testo informativo, mai una FK
+  oggetto: string | null           // garanzia
+  rilasciataDa: string | null      // garanzia
+  classeEnergetica: string | null  // APE
+  compagnia: string | null         // polizza decennale
+  numeroPolizza: string | null     // polizza decennale
+  validUntil: string | null        // ISO, calcolata all'estrazione
+  validityFormula: string | null   // solo quando validUntil è null
+}
+
+// Le stringhe estratte arrivano già ripulite (extract-document, cleanString:
+// trim, vuota → null); qui si legge in difesa, come per tutto il JSONB.
+function nonEmpty(value: unknown): string | null {
+  return typeof value === 'string' && value !== '' ? value : null
+}
+
+export function documentFacts(doc: DocRow): DocumentFacts {
+  const isDico = doc.doc_type === 'dich_conformita_dm37'
+  const facts: DocumentFacts = {
+    installatore: isDico ? nonEmpty(doc.extracted_metadata?.ragione_sociale_installatore) : null,
+    partitaIva: isDico ? nonEmpty(doc.extracted_metadata?.partita_iva_installatore) : null,
+    ambito: null,
+    unitaRiferimento: null,
+    oggetto: null,
+    rilasciataDa: null,
+    classeEnergetica: null,
+    compagnia: null,
+    numeroPolizza: null,
+    validUntil: null,
+    validityFormula: null,
+  }
 
   const ext = currentExtraction(doc)
   if (!ext) return facts
 
+  facts.unitaRiferimento = nonEmpty(ext.unita_riferimento)
   if (ext.ambito) {
-    facts.push(ext.ambito === 'unita' && ext.unita_riferimento
-      ? `${AMBITO_LABELS.unita}: ${ext.unita_riferimento}`
-      : AMBITO_LABELS[ext.ambito])
-  } else if (ext.unita_riferimento) {
-    facts.push(`Unità: ${ext.unita_riferimento}`)
+    facts.ambito = ext.ambito === 'unita' && facts.unitaRiferimento
+      ? `${AMBITO_LABELS.unita}: ${facts.unitaRiferimento}`
+      : AMBITO_LABELS[ext.ambito]
+  } else if (facts.unitaRiferimento) {
+    facts.ambito = `Unità: ${facts.unitaRiferimento}`
   }
 
   if (isTypedDocType(doc.doc_type)) {
     switch (doc.doc_type) {
       case 'garanzia': {
         const f = ext.fields as Partial<GaranziaFields>
-        if (f.oggetto) facts.push(f.oggetto)
-        if (f.rilasciata_da) facts.push(`Rilasciata da ${f.rilasciata_da}`)
+        facts.oggetto = nonEmpty(f.oggetto)
+        facts.rilasciataDa = nonEmpty(f.rilasciata_da)
         break
       }
       case 'ape': {
         const f = ext.fields as Partial<ApeFields>
-        if (f.classe_energetica) facts.push(`Classe ${f.classe_energetica}`)
+        facts.classeEnergetica = nonEmpty(f.classe_energetica)
         break
       }
       case 'polizza_decennale': {
         const f = ext.fields as Partial<PolizzaFields>
-        if (f.compagnia) facts.push(f.compagnia)
-        if (f.numero_polizza) facts.push(`Polizza n. ${f.numero_polizza}`)
+        facts.compagnia = nonEmpty(f.compagnia)
+        facts.numeroPolizza = nonEmpty(f.numero_polizza)
         break
       }
     }
   }
 
-  if (ext.valid_until) {
-    facts.push(`Valida fino al ${formatDateIT(ext.valid_until)}`)
-  } else {
-    const formula = validityFormula(doc.doc_type, ext.fields)
-    if (formula) facts.push(`Validità: ${formula}`)
+  facts.validUntil = nonEmpty(ext.valid_until)
+  facts.validityFormula = facts.validUntil ? null : validityFormula(doc.doc_type, ext.fields)
+  return facts
+}
+
+// Fatti estratti da mostrare in riga, come brevi voci separate da " · ".
+// Solo ciò che esiste: nessuna voce vuota, nessuna etichetta senza valore.
+// Ordine: installatore, ambito, campi del tipo, validità. I campi di un
+// tipo sono null per gli altri tipi, quindi l'elenco piatto rispetta
+// l'ordine per tipo.
+export function extractionFacts(doc: DocRow): string[] {
+  const f = documentFacts(doc)
+  const facts: string[] = []
+  if (f.installatore) facts.push(`Installatore: ${f.installatore}`)
+  if (f.ambito) facts.push(f.ambito)
+  if (f.oggetto) facts.push(f.oggetto)
+  if (f.rilasciataDa) facts.push(`Rilasciata da ${f.rilasciataDa}`)
+  if (f.classeEnergetica) facts.push(`Classe ${f.classeEnergetica}`)
+  if (f.compagnia) facts.push(f.compagnia)
+  if (f.numeroPolizza) facts.push(`Polizza n. ${f.numeroPolizza}`)
+  if (f.validUntil) {
+    facts.push(`Valida fino al ${formatDateIT(f.validUntil)}`)
+  } else if (f.validityFormula) {
+    facts.push(`Validità: ${f.validityFormula}`)
   }
   return facts
 }
@@ -152,17 +208,9 @@ export function extractionFacts(doc: DocRow): string[] {
 // garanzia, compagnia per la polizza, unità di riferimento altrimenti;
 // il tipo documento solo se non c'è nulla di estratto da mostrare.
 export function validitySubject(doc: DocRow): string | null {
-  const ext = currentExtraction(doc)
-  if (ext && isTypedDocType(doc.doc_type)) {
-    if (doc.doc_type === 'garanzia') {
-      const f = ext.fields as Partial<GaranziaFields>
-      if (f.oggetto) return f.oggetto
-    }
-    if (doc.doc_type === 'polizza_decennale') {
-      const f = ext.fields as Partial<PolizzaFields>
-      if (f.compagnia) return f.compagnia
-    }
-  }
-  if (ext?.unita_riferimento) return `Unità: ${ext.unita_riferimento}`
+  const f = documentFacts(doc)
+  if (f.oggetto) return f.oggetto
+  if (f.compagnia) return f.compagnia
+  if (f.unitaRiferimento) return `Unità: ${f.unitaRiferimento}`
   return doc.doc_type ? DOC_TYPE_LABELS[doc.doc_type] : null
 }
