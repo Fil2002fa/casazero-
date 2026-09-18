@@ -9,6 +9,7 @@ import type { SupplierProposalExpectation } from './actions'
 import { ALLOWED_DOCUMENT_MIME, MAX_DOCUMENT_SIZE } from '@/lib/document-upload'
 import { pluralize } from '@/lib/pluralize'
 import { formatDateIT } from '@/lib/formatDate'
+import { humanizeDocumentTitle } from '@/lib/documentTitle'
 import { DateField } from '@/components/DateField'
 import {
   DOC_TYPES,
@@ -1088,7 +1089,7 @@ function DeadlinesSection({ docs, today }: { docs: DocRow[]; today: string }) {
         {entries.map(entry => (
           <div key={entry.item.id} className="flex items-center gap-3 py-2.5 border-b border-border last:border-b-0">
             <div className="flex-1 min-w-0">
-              <p className="text-sm text-text-primary truncate">{entry.item.title}</p>
+              <p className="text-sm text-text-primary truncate">{humanizeDocumentTitle(entry.item.title)}</p>
               {entry.item.doc_type && (
                 <p className="text-xs text-text-secondary">{DOC_TYPE_LABELS[entry.item.doc_type]}</p>
               )}
@@ -1426,10 +1427,11 @@ function extractionFacts(doc: DocRow): string[] {
   return facts
 }
 
-// Testo di ricerca: titolo, nome file e i fatti estratti, in minuscolo.
-// Un solo posto che decide cosa è cercabile.
+// Testo di ricerca: titolo (grezzo e leggibile, così "garanzia caldaia"
+// trova "certificato_garanzia_caldaia"), nome file e i fatti estratti, in
+// minuscolo. Un solo posto che decide cosa è cercabile.
 function searchText(doc: DocRow): string {
-  return [doc.title, doc.file_name, ...extractionFacts(doc)].join(' ').toLowerCase()
+  return [doc.title, humanizeDocumentTitle(doc.title), doc.file_name, ...extractionFacts(doc)].join(' ').toLowerCase()
 }
 
 function DocCard({ doc, supplierContext, onClassificationConfirmed }: {
@@ -1457,7 +1459,7 @@ function DocCard({ doc, supplierContext, onClassificationConfirmed }: {
           <FileText className="w-5 h-5 text-text-secondary" strokeWidth={1.6} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-text-primary truncate">{doc.title}</p>
+          <p className="text-sm font-medium text-text-primary truncate">{humanizeDocumentTitle(doc.title)}</p>
           <p className="text-xs text-text-secondary mt-0.5 truncate">{doc.file_name} · {formattedDate}</p>
           {facts.length > 0 && (
             <p className="text-xs text-text-secondary mt-0.5">{facts.join(' · ')}</p>

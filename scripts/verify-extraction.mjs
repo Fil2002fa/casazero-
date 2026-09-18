@@ -32,11 +32,13 @@ register('./ts-resolve-hooks.mjs', import.meta.url)
 
 const SOURCE = new URL('../src/lib/document-extraction.ts', import.meta.url)
 const FORMAT = new URL('../src/lib/formatDate.ts', import.meta.url)
+const TITLE = new URL('../src/lib/documentTitle.ts', import.meta.url)
 
-let lib, fmt
+let lib, fmt, ttl
 try {
   lib = await import(SOURCE.href)
   fmt = await import(FORMAT.href)
+  ttl = await import(TITLE.href)
 } catch (err) {
   console.error(
     `\n✗ Impossibile importare i moduli: ${err.message}\n` +
@@ -51,6 +53,7 @@ const {
   normalizeIsoDate, addYearsIso, isExtractableDocType, isTypedDocType, emptyFields,
 } = lib
 const { formatDateIT } = fmt
+const { humanizeDocumentTitle } = ttl
 
 let fallimenti = 0
 let eseguiti = 0
@@ -193,6 +196,15 @@ check('undefined → vuoto', formatDateIT(undefined), '')
 check('stringa vuota → vuoto', formatDateIT(''), '')
 check('mese 13 → vuoto', formatDateIT('2026-13-01'), '')
 check('formato italiano → vuoto', formatDateIT('12/09/2026'), '')
+
+// --- humanizeDocumentTitle -------------------------------------------------
+check('titolo: underscore → spazi, prima maiuscola', humanizeDocumentTitle('certificato_garanzia_caldaia'), 'Certificato garanzia caldaia')
+check('titolo: sigle e maiuscole interne intatte', humanizeDocumentTitle('DiCo_impianto_VMC_ClimaNordest'), 'DiCo impianto VMC ClimaNordest')
+check('titolo: già con spazi', humanizeDocumentTitle('domanda b0 - b4'), 'Domanda b0 - b4')
+check('titolo: underscore multipli e spazi doppi collassati', humanizeDocumentTitle('a__b  c'), 'A b c')
+check('titolo: già maiuscolo invariato', humanizeDocumentTitle('Garanzia_copertura_CopertureFriulane'), 'Garanzia copertura CopertureFriulane')
+check('titolo: null → vuoto', humanizeDocumentTitle(null), '')
+check('titolo: solo underscore → vuoto', humanizeDocumentTitle('___'), '')
 
 // --- esito -----------------------------------------------------------------
 if (fallimenti > 0) {
