@@ -114,7 +114,7 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
         {tpl?.description && (
           <div className="bg-surface rounded-xl border border-border p-4">
             <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-1">Descrizione</p>
-            <p className="text-base text-text-primary leading-relaxed">{tpl.description}</p>
+            <p className="text-base text-text-primary leading-relaxed break-words">{tpl.description}</p>
           </div>
         )}
 
@@ -122,9 +122,9 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
         {item.warranty_info && (
           <div className="bg-brand-light rounded-xl p-4 flex gap-3">
             <ShieldCheck className="w-5 h-5 text-brand-medium flex-shrink-0 mt-0.5" strokeWidth={1.6} />
-            <div>
+            <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-brand-dark uppercase tracking-wide mb-1">Garanzia collegata</p>
-              <p className="text-base text-brand-dark leading-relaxed">{item.warranty_info}</p>
+              <p className="text-base text-brand-dark leading-relaxed break-words">{item.warranty_info}</p>
             </div>
           </div>
         )}
@@ -202,10 +202,10 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
                       )}
                     </div>
                     {comp.performed_by_name && (
-                      <p className="text-xs text-text-secondary">Eseguito da: {comp.performed_by_name}</p>
+                      <p className="text-xs text-text-secondary break-words">Eseguito da: {comp.performed_by_name}</p>
                     )}
                     {comp.notes && (
-                      <p className="text-base text-text-secondary mt-1 leading-relaxed">{comp.notes}</p>
+                      <p className="text-base text-text-secondary mt-1 leading-relaxed break-words">{comp.notes}</p>
                     )}
                   </div>
                 )
