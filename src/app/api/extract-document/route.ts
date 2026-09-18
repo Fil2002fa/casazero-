@@ -242,6 +242,11 @@ export async function POST(req: NextRequest) {
       unita_riferimento: string | null
       valid_until: string | null
       fields: Record<string, unknown>
+      // null quando nessun modello è stato chiamato (righe 'saltata'): la
+      // colonna dice con cosa sono stati prodotti i dati, non quale modello
+      // era configurato. Le 'fallita' tengono il modello: la chiamata è
+      // stata tentata, e il valore dice quale.
+      model: string | null
     }>,
     options: { keepExisting?: boolean } = {},
   ) => {
@@ -284,12 +289,12 @@ export async function POST(req: NextRequest) {
     // (contratto documentato in document-extraction.ts). keepExisting: se
     // esiste già un'estrazione buona, resta.
     if (!hasPdfMagicBytes(arrayBuffer)) {
-      await writeRow('saltata', { fields: { skipped_reason: 'tipo file non supportato per estrazione automatica' } }, { keepExisting: true })
+      await writeRow('saltata', { model: null, fields: { skipped_reason: 'tipo file non supportato per estrazione automatica' } }, { keepExisting: true })
       return NextResponse.json({ status: 'saltata', reason: 'not_a_pdf' })
     }
 
     if (arrayBuffer.byteLength > MAX_PDF_BYTES_FOR_API) {
-      await writeRow('saltata', { fields: { skipped_reason: 'PDF oltre 32MB: limite della richiesta API, estrazione automatica saltata' } }, { keepExisting: true })
+      await writeRow('saltata', { model: null, fields: { skipped_reason: 'PDF oltre 32MB: limite della richiesta API, estrazione automatica saltata' } }, { keepExisting: true })
       return NextResponse.json({ status: 'saltata', reason: 'file_too_large' })
     }
 
