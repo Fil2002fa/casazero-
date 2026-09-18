@@ -26,7 +26,8 @@ export type DocItem = {
   storage_path: string
   formattedDate: string
   // Dati estratti già scelti e composti sul server: validità, classe,
-  // oggetto, chi rilascia la garanzia, installatore. Vuoto se non ce ne sono.
+  // oggetto, chi rilascia la garanzia, installatore, compagnia. Vuoto se non
+  // ce ne sono.
   facts: string[]
 }
 
