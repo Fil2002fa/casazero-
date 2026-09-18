@@ -1,6 +1,6 @@
 export default function Loading() {
   return (
-    <div className="p-6 space-y-6 pb-safe animate-pulse">
+    <div className="p-4 space-y-6 pb-safe animate-pulse">
       <div className="h-5 w-5 bg-border rounded" />
 
       <header className="space-y-2">
