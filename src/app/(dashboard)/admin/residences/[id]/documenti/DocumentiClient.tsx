@@ -1040,14 +1040,14 @@ function DeadlinesSection({ docs, today }: { docs: DocRow[]; today: string }) {
       <h2 className="text-sm font-medium text-text-primary">Scadenze</h2>
       <div>
         {entries.map(entry => (
-          <div key={entry.item.id} className="flex items-center gap-3 py-2.5 border-b border-border last:border-b-0">
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-text-primary truncate">{humanizeDocumentTitle(entry.item.title)}</p>
+          <div key={entry.item.id} className="flex items-center gap-3 max-lg:flex-wrap max-lg:gap-y-1 py-2.5 border-b border-border last:border-b-0">
+            <div className="flex-1 min-w-0 max-lg:basis-full">
+              <p className="text-sm text-text-primary break-words lg:truncate">{humanizeDocumentTitle(entry.item.title)}</p>
               {validitySubject(entry.item) && (
-                <p className="text-xs text-text-secondary truncate">{validitySubject(entry.item)}</p>
+                <p className="text-xs text-text-secondary max-lg:line-clamp-2 max-lg:break-words lg:truncate">{validitySubject(entry.item)}</p>
               )}
             </div>
-            <span className="flex-shrink-0 text-xs text-text-secondary text-right">
+            <span className="flex-shrink-0 max-lg:shrink max-lg:min-w-0 max-lg:line-clamp-2 max-lg:break-words text-xs text-text-secondary text-right max-lg:text-left">
               {entry.kind === 'date'
                 ? (entry.expired ? `Scaduta il ${formatDateIT(entry.validUntil)}` : formatDateIT(entry.validUntil))
                 : entry.formula}
