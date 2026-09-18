@@ -131,11 +131,14 @@ export function DocumentiList({ docs, uploadSlot }: { docs: DocItem[]; uploadSlo
   )
 }
 
-// Testo in cui cerca la ricerca: il titolo com'è salvato e la sua forma
-// leggibile, come nell'archivio della dashboard, così "garanzia caldaia"
-// trova "certificato_garanzia_caldaia".
+// Testo in cui cerca la ricerca, come nell'archivio della dashboard: il
+// titolo com'è salvato, la sua forma leggibile ("garanzia caldaia" trova
+// "certificato_garanzia_caldaia") e i dati estratti mostrati in riga. Solo
+// doc.facts, già filtrati per il residente, mai tutti i dati estratti:
+// cercando una P.IVA o un numero di polizza si scoprirebbe quale documento
+// li contiene.
 function searchText(doc: DocItem): string {
-  return `${doc.title} ${humanizeDocumentTitle(doc.title)}`.toLocaleLowerCase('it')
+  return [doc.title, humanizeDocumentTitle(doc.title), ...doc.facts].join(' ').toLocaleLowerCase('it')
 }
 
 function DocCard({ doc }: { doc: DocItem }) {
