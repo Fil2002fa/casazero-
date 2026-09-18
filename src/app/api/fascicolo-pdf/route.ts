@@ -4,6 +4,7 @@ import { renderToBuffer } from '@react-pdf/renderer'
 import type { DocumentProps } from '@react-pdf/renderer'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/admin'
+import { authorizeResidenceActor } from '@/lib/document-access'
 import { FascicoloDocument } from '@/lib/pdf/FascicoloDocument'
 import type { FascicoloData, FascicoloRow } from '@/lib/pdf/FascicoloDocument'
 import { formatRegisteredBy } from '@/lib/formatRegisteredBy'
@@ -26,39 +27,11 @@ export async function GET(req: NextRequest) {
 
   const admin = createServiceClient()
 
-  const { data: profile } = await admin
-    .from('profiles')
-    .select('role, builder_id')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile || (profile.role !== 'super_admin' && profile.role !== 'admin')) {
-    return NextResponse.json({ error: 'Accesso negato' }, { status: 403 })
-  }
-
-  const { data: residence } = await admin
-    .from('residences')
-    .select('id, name, builder_id')
-    .eq('id', residenceId)
-    .single()
-
-  if (!residence) return NextResponse.json({ error: 'Residenza non trovata' }, { status: 404 })
-
-  // Gemello di src/app/api/report/route.ts:142-149 (autorizzazione admin-su-residenza
-  // dietro service client). Duplicazione consapevole: unificare in un helper condiviso
-  // in un commit dedicato, dopo la demo.
-  if (profile.role === 'super_admin') {
-    if (residence.builder_id !== profile.builder_id) {
-      return NextResponse.json({ error: 'Accesso negato' }, { status: 403 })
-    }
-  } else {
-    const { count } = await admin
-      .from('admin_assignments')
-      .select('id', { count: 'exact', head: true })
-      .eq('profile_id', user.id)
-      .eq('residence_id', residenceId)
-    if (!count || count === 0) return NextResponse.json({ error: 'Accesso negato' }, { status: 403 })
-  }
+  // Autorizzazione admin-su-residenza dietro service client: helper condiviso
+  // (document-access.ts), stessi esiti di prima più il 500 su errore tecnico.
+  const auth = await authorizeResidenceActor(admin, user.id, residenceId, '[fascicolo-pdf]')
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  const { residence } = auth
 
   // Fascicolo = fonte legale, non il piano: nessun filtro su activation_status.
   type CompletionRaw = {

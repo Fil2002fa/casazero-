@@ -100,11 +100,12 @@ export async function sollecitaItem(itemId: string): Promise<SollecitoResult> {
 
   const mode = resolveCompletionMode(item)
 
-  // Gemello di src/app/api/report/route.ts:142-149, di
-  // src/app/api/fascicolo-pdf/route.ts:50-61 e di
+  // Gemello di src/app/api/report/route.ts:142-149 e di
   // src/app/api/classify-document/route.ts:134-150 (autorizzazione
   // admin-su-residenza dietro service client). Duplicazione consapevole:
-  // unificare in un helper condiviso in un commit dedicato, dopo la demo.
+  // l'helper condiviso ora esiste (authorizeResidenceActor in
+  // src/lib/document-access.ts, già usato da fascicolo-pdf); migrare qui in
+  // un commit di sola pulizia.
   if (profile.role === 'super_admin') {
     if (item.residences?.builder_id !== profile.builder_id) return { status: 'forbidden' }
   } else if (profile.role === 'admin') {
