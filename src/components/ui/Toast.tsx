@@ -21,8 +21,9 @@ const DURATIONS: Record<ToastKind, number> = {
 type ToastPlacement = 'app' | 'dashboard'
 
 const PLACEMENT_STYLES: Record<ToastPlacement, string> = {
-  // PWA residente: basso-destra da md, basso-centro sopra la BottomNav sotto md.
-  app: 'bottom-4 right-4 max-md:bottom-20 max-md:left-1/2 max-md:right-auto max-md:-translate-x-1/2',
+  // PWA residente: basso-destra da md; sotto md basso-centro sopra la BottomNav,
+  // largo quanto il testo ma mai oltre lo schermo (come la dashboard sotto lg).
+  app: 'bottom-4 right-4 max-md:bottom-20 max-md:left-1/2 max-md:right-auto max-md:-translate-x-1/2 max-md:w-max max-md:max-w-[calc(100vw-2rem)]',
   // Dashboard: non ha BottomNav. Basso-destra da lg, accanto alla sidebar; sotto lg
   // basso-centro senza offset, largo quanto il testo ma mai oltre lo schermo.
   dashboard:
