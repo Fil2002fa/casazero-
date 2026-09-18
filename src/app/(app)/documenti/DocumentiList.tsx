@@ -85,8 +85,8 @@ export function DocumentiList({ docs, uploadSlot }: { docs: DocItem[]; uploadSlo
         )}
       </form>
 
-      {/* Filtri categoria */}
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-none">
+      {/* Filtri categoria: vanno a capo, mai nascosti fuori schermo */}
+      <div className="flex flex-wrap gap-2">
         <Chip label="Tutti" active={category === 'all'} onClick={() => setCategory('all')} />
         {CATEGORIES.map(c => (
           <Chip key={c.value} label={c.label} active={category === c.value} onClick={() => setCategory(c.value)} />
