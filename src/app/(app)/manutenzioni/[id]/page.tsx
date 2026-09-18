@@ -88,7 +88,7 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
         </Link>
         <div className="flex-1 min-w-0">
           <p className="text-sm text-text-secondary">{tpl?.category}</p>
-          <h1 className="font-serif text-[22px] font-semibold text-text-primary truncate">{tpl?.title}</h1>
+          <h1 className="font-serif text-[22px] font-semibold text-text-primary break-words">{tpl?.title}</h1>
         </div>
         <PriorityBadge priority={effectivePriority} status={status} />
       </div>
