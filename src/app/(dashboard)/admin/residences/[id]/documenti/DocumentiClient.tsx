@@ -25,7 +25,21 @@ import {
   type SupplierProposal,
 } from '@/lib/document-classification'
 import type { ChecklistResult, ChecklistExpectation } from '@/lib/document-checklist'
-import { isExtractableDocType, needsExtraction, extractionIsCurrent, validityEntries, type DocumentExtractionRow } from '@/lib/document-extraction'
+import {
+  AMBITI,
+  AMBITO_LABELS,
+  isExtractableDocType,
+  isTypedDocType,
+  needsExtraction,
+  extractionIsCurrent,
+  validityEntries,
+  validityFormula,
+  type Ambito,
+  type DocumentExtractionRow,
+  type GaranziaFields,
+  type ApeFields,
+  type PolizzaFields,
+} from '@/lib/document-extraction'
 import { createClient } from '@/lib/supabase/client'
 
 // Sottoinsieme letto di extracted_metadata (jsonb): la proposta AI completa,
@@ -265,6 +279,10 @@ export function DocumentiClient({
   const [extractServiceUnavailable, setExtractServiceUnavailable] = useState(false)
   const [reviewOnly, setReviewOnly] = useState(false)
   const [docTypeFilter, setDocTypeFilter] = useState<DocType | 'all'>('all')
+  // Filtri sui dati estratti (estrazione corrente soltanto): ambito e
+  // "con scadenza" (data calcolata o formula dichiarata).
+  const [ambitoFilter, setAmbitoFilter] = useState<Ambito | 'all'>('all')
+  const [withValidityOnly, setWithValidityOnly] = useState(false)
   // 'fallita' inclusa: dopo il rollback a 'non_classificato' per gli errori di
   // servizio (route.ts), 'fallita' significa solo "questo documento non è
   // classificabile" — un errore di contenuto/formato, non di sistema — e va
@@ -288,22 +306,32 @@ export function DocumentiClient({
     .filter(t => t === docTypeFilter || docs.some(d => d.doc_type === t))
     .sort((a, b) => DOC_TYPE_LABELS[a].localeCompare(DOC_TYPE_LABELS[b], 'it'))
 
+  // Ambiti davvero presenti tra le estrazioni correnti (stessa logica della
+  // tendina dei tipi: si filtra su ciò che c'è) e conteggio dei documenti
+  // con una validità (data o formula) per il toggle "Con scadenza".
+  const presentAmbiti = AMBITI.filter(a => a === ambitoFilter || docs.some(d => currentExtraction(d)?.ambito === a))
+  const validityCount = docs.filter(hasValidity).length
+
   // --- computed ---
   // In dashboard il filtro categoria è rimosso (asse ridondante rispetto a
   // doc_type). category resta su upload, badge card e vista PWA residente.
-  // Tipo documento, coda revisione e ricerca restano combinabili in AND.
+  // Tipo documento, coda revisione, ambito, scadenza e ricerca restano
+  // combinabili in AND.
   const isFiltered = search.trim() !== '' || reviewOnly || docTypeFilter !== 'all'
+    || ambitoFilter !== 'all' || withValidityOnly
 
   const filtered = useMemo(() => {
     let result = docs
     if (docTypeFilter !== 'all') result = result.filter(d => d.doc_type === docTypeFilter)
     if (reviewOnly) result = result.filter(d => d.classification_status === 'da_revisionare')
+    if (ambitoFilter !== 'all') result = result.filter(d => currentExtraction(d)?.ambito === ambitoFilter)
+    if (withValidityOnly) result = result.filter(hasValidity)
     if (search.trim()) {
       const q = search.toLowerCase()
-      result = result.filter(d => d.title.toLowerCase().includes(q))
+      result = result.filter(d => searchText(d).includes(q))
     }
     return result
-  }, [docs, docTypeFilter, reviewOnly, search])
+  }, [docs, docTypeFilter, reviewOnly, ambitoFilter, withValidityOnly, search])
 
   const residenceDocs = filtered.filter(d => d.unit_id === null)
 
@@ -770,7 +798,7 @@ export function DocumentiClient({
           type="search"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="Cerca documento…"
+          placeholder="Cerca per nome, installatore, compagnia, unità…"
           className="flex-1 min-w-[10rem] border border-border rounded-xl px-3 py-2 text-sm bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
         />
 
@@ -817,9 +845,49 @@ export function DocumentiClient({
           </div>
         )}
 
+        {/* Ambito dall'estrazione: tendina solo se almeno un documento ha
+            un ambito estratto, altrimenti sarebbe un filtro senza effetto. */}
+        {presentAmbiti.length > 0 && (
+          <div className="relative flex-shrink-0">
+            <select
+              value={ambitoFilter}
+              onChange={e => setAmbitoFilter(e.target.value as Ambito | 'all')}
+              aria-label="Filtra per ambito"
+              className={`appearance-none w-[160px] truncate rounded-xl border pl-3 pr-9 py-2 text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-brand-medium transition-colors ${
+                ambitoFilter !== 'all'
+                  ? 'border-brand-medium bg-brand-light/40 text-brand-dark font-medium'
+                  : 'border-border text-text-secondary'
+              }`}
+            >
+              <option value="all">Tutti gli ambiti</option>
+              {presentAmbiti.map(a => (
+                <option key={a} value={a}>{AMBITO_LABELS[a]}</option>
+              ))}
+            </select>
+            <ChevronDown
+              className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-text-secondary"
+              strokeWidth={1.8}
+            />
+          </div>
+        )}
+
+        {validityCount > 0 && (
+          <button
+            onClick={() => setWithValidityOnly(v => !v)}
+            aria-pressed={withValidityOnly}
+            className={`flex-shrink-0 rounded-xl border px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium ${
+              withValidityOnly
+                ? 'border-brand-medium bg-brand-light/40 text-brand-dark'
+                : 'bg-surface text-text-secondary border-border hover:bg-background'
+            }`}
+          >
+            Con scadenza ({validityCount})
+          </button>
+        )}
+
         {isFiltered && (
           <button
-            onClick={() => { setSearch(''); setReviewOnly(false); setDocTypeFilter('all') }}
+            onClick={() => { setSearch(''); setReviewOnly(false); setDocTypeFilter('all'); setAmbitoFilter('all'); setWithValidityOnly(false) }}
             aria-label="Azzera filtri"
             className="flex-shrink-0 border border-border rounded-xl px-3 py-2 text-sm text-text-secondary bg-surface hover:bg-background transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium"
           >
@@ -1286,15 +1354,92 @@ function ClassificationBadge({ doc }: { doc: DocRow }) {
 
 type ClassificationConfirmedHandler = (doc: { id: string; title: string }, docType: DocType) => void
 
+// Estrazione valida per il documento così com'è ORA: null se mai estratto,
+// o se la riga è di un doc_type precedente (riclassificazione umana).
+// Unica porta d'accesso ai dati estratti in questa pagina: nessun
+// componente legge doc.extraction direttamente senza passare da qui.
+function currentExtraction(doc: DocRow): DocumentExtractionRow | null {
+  return doc.extraction && extractionIsCurrent(doc, doc.extraction) ? doc.extraction : null
+}
+
+// Data mostrata in riga: la data del documento estratta, altrimenti quella
+// inserita a mano all'upload, altrimenti la data di caricamento. Un solo
+// ordine di fallback, qui, per contatore e riga.
+function displayDate(doc: DocRow): string {
+  return currentExtraction(doc)?.document_date ?? doc.file_date ?? doc.created_at
+}
+
+function hasValidity(doc: DocRow): boolean {
+  const ext = currentExtraction(doc)
+  if (!ext) return false
+  return ext.valid_until !== null || validityFormula(doc.doc_type, ext.fields) !== null
+}
+
+// Fatti estratti da mostrare in riga, come brevi voci separate da " · ".
+// Solo ciò che esiste: nessuna voce vuota, nessuna etichetta senza valore.
+// L'installatore viene dal verbale di classificazione (extracted_metadata,
+// solo DiCo), gli altri dalla riga di estrazione corrente.
+function extractionFacts(doc: DocRow): string[] {
+  const facts: string[] = []
+  const installer = doc.doc_type === 'dich_conformita_dm37' ? doc.extracted_metadata?.ragione_sociale_installatore : null
+  if (installer) facts.push(`Installatore: ${installer}`)
+
+  const ext = currentExtraction(doc)
+  if (!ext) return facts
+
+  if (ext.ambito) {
+    facts.push(ext.ambito === 'unita' && ext.unita_riferimento
+      ? `${AMBITO_LABELS.unita}: ${ext.unita_riferimento}`
+      : AMBITO_LABELS[ext.ambito])
+  } else if (ext.unita_riferimento) {
+    facts.push(`Unità: ${ext.unita_riferimento}`)
+  }
+
+  if (isTypedDocType(doc.doc_type)) {
+    switch (doc.doc_type) {
+      case 'garanzia': {
+        const f = ext.fields as Partial<GaranziaFields>
+        if (f.oggetto) facts.push(f.oggetto)
+        if (f.rilasciata_da) facts.push(`Rilasciata da ${f.rilasciata_da}`)
+        break
+      }
+      case 'ape': {
+        const f = ext.fields as Partial<ApeFields>
+        if (f.classe_energetica) facts.push(`Classe ${f.classe_energetica}`)
+        break
+      }
+      case 'polizza_decennale': {
+        const f = ext.fields as Partial<PolizzaFields>
+        if (f.compagnia) facts.push(f.compagnia)
+        if (f.numero_polizza) facts.push(`Polizza n. ${f.numero_polizza}`)
+        break
+      }
+    }
+  }
+
+  if (ext.valid_until) {
+    facts.push(`Valida fino al ${formatDateIT(ext.valid_until)}`)
+  } else {
+    const formula = validityFormula(doc.doc_type, ext.fields)
+    if (formula) facts.push(`Validità: ${formula}`)
+  }
+  return facts
+}
+
+// Testo di ricerca: titolo, nome file e i fatti estratti, in minuscolo.
+// Un solo posto che decide cosa è cercabile.
+function searchText(doc: DocRow): string {
+  return [doc.title, doc.file_name, ...extractionFacts(doc)].join(' ').toLowerCase()
+}
+
 function DocCard({ doc, supplierContext, onClassificationConfirmed }: {
   doc: DocRow
   supplierContext: SupplierContext | null
   onClassificationConfirmed: ClassificationConfirmedHandler
 }) {
   const [reviewOpen, setReviewOpen] = useState(false)
-  const formattedDate = new Date(doc.file_date ?? doc.created_at).toLocaleDateString('it-IT', {
-    day: 'numeric', month: 'short', year: 'numeric',
-  })
+  const formattedDate = formatDateIT(displayDate(doc))
+  const facts = extractionFacts(doc)
   // 'fallita' è un errore di merito dell'AI sul documento, non un errore di
   // servizio (quello rientra in 'non_classificato', vedi route.ts): l'unica
   // via d'uscita automatica sarebbe ritentare la stessa chiamata, che per
@@ -1314,6 +1459,9 @@ function DocCard({ doc, supplierContext, onClassificationConfirmed }: {
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-text-primary truncate">{doc.title}</p>
           <p className="text-xs text-text-secondary mt-0.5 truncate">{doc.file_name} · {formattedDate}</p>
+          {facts.length > 0 && (
+            <p className="text-xs text-text-secondary mt-0.5">{facts.join(' · ')}</p>
+          )}
           {/* Due assi distinti, mai fusi (legge di dominio 024): categoria a
               sinistra, stato/tipo classificazione a destra. */}
           <div className="flex flex-wrap items-center gap-1.5 mt-1">

@@ -14,9 +14,9 @@
  * farla passare da `new Date()` la sposterebbe di un giorno a ovest di UTC.
  *
  * DEBITO ANNOTATO (18/09/2026, non assorbito per decisione esplicita): nel
- * repo restano 27 `toLocaleDateString` inline in 23 file (28 al momento
- * dell'annotazione; una, la data di esclusione checklist in
- * DocumentiClient, è caduta col ridisegno del blocco Da caricare), con lo stesso
+ * repo restano 26 `toLocaleDateString` inline in 22 file (28 al momento
+ * dell'annotazione; le due di DocumentiClient sono cadute col ridisegno
+ * della pagina Documenti, che ora usa questo helper), con lo stesso
  * formato day/month short/year in quasi tutti. Non sono stati toccati: sono
  * equivalenti, non sbagliati, e riscriverli è fuori dal perimetro del blocco
  * estrazione. Questa è la fonte unica per il codice NUOVO; ogni superficie
@@ -25,8 +25,7 @@
  * page.tsx:1, (app)/manutenzioni/CompletionSheet.tsx:1, (app)/manutenzioni/
  * [id]/page.tsx:2, (app)/page.tsx:1, (app)/profilo/ProfiloClient.tsx:1,
  * admin/administrators/[id]/page.tsx:1, admin/manutenzioni/[id]/page.tsx:2,
- * admin/manutenzioni/page.tsx:1, residences/[id]/documenti/
- * DocumentiClient.tsx:1, residences/[id]/fascicolo/page.tsx:1, residences/
+ * admin/manutenzioni/page.tsx:1, residences/[id]/fascicolo/page.tsx:1, residences/
  * [id]/manutenzioni/ManutenzioniClient.tsx:2, residences/[id]/manutenzioni/
  * actions.ts:1, residences/[id]/page.tsx:1, residences/[id]/units/
  * UnitsManager.tsx:1, api/fascicolo-pdf/route.ts:1, api/report/route.ts:1,
