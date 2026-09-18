@@ -1243,7 +1243,7 @@ function TaskRow({ task }: { task: FileTask }) {
     <div className="flex items-start gap-2 text-sm">
       <span className="mt-0.5 flex-shrink-0">{icon}</span>
       <div className="min-w-0 flex-1">
-        <p className="text-text-primary truncate">{task.file.name}</p>
+        <p className="text-text-primary break-words lg:truncate">{task.file.name}</p>
         {task.status === 'errore' && task.error && (
           <p className="text-xs text-semantic-red leading-snug">{task.error}</p>
         )}
