@@ -5,11 +5,9 @@ import { PageHeader } from '@/components/PageHeader'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import { computeResidenceChecklist } from '@/lib/document-checklist'
-import { normalizeEmbed } from '@/lib/postgrest-embed'
 import { todayISO } from '@/lib/maintenance-status'
-import type { DocumentExtractionRow } from '@/lib/document-extraction'
+import { loadResidenceDocumentRows } from '@/lib/document-rows.server'
 import { DocumentiClient } from './DocumentiClient'
-import type { DocRow, UnitRow } from './DocumentiClient'
 import type {
   SupplierProposalCandidate,
   SupplierInstallationRef,
@@ -40,32 +38,13 @@ export default async function ResidenceDocumentiPage({
 
   if (!residence) notFound()
 
-  const [{ data: rawDocs }, { data: rawUnits }, checklist] = await Promise.all([
-    supabase
-      .from('documents')
-      // document_extractions: embed 1:1 (040, document_id PK+FK), letto con
-      // il client di sessione — la policy SELECT delega a documents, quindi
-      // chi vede il documento vede la sua estrazione. Normalizzato sotto.
-      .select('id, title, category, file_name, storage_path, file_date, unit_id, created_at, classification_status, doc_type, sistema, classification_confidence, extracted_metadata, document_extractions(for_doc_type, status, document_date, ambito, unita_riferimento, valid_until, fields)')
-      .eq('residence_id', residenceId)
-      .order('created_at', { ascending: false }),
-    supabase
-      .from('units')
-      .select('id, label')
-      .eq('residence_id', residenceId)
-      .order('label'),
+  // Documenti + unità dal loader condiviso con l'export Excel (client di
+  // sessione, perimetro RLS). Un errore tecnico è già nel log del server e
+  // qui rende la lista vuota, come prima dell'estrazione del loader.
+  const [{ docs, units }, checklist] = await Promise.all([
+    loadResidenceDocumentRows(supabase, residenceId),
     computeResidenceChecklist(supabase, residenceId),
   ])
-
-  // L'embed to-one può tornare oggetto o array di un elemento (bug class
-  // registrata, vedi postgrest-embed.ts): normalizzato qui, una volta.
-  const docs: DocRow[] = ((rawDocs ?? []) as Array<Record<string, unknown>>).map(row => {
-    const { document_extractions, ...rest } = row
-    return {
-      ...(rest as Omit<DocRow, 'extraction'>),
-      extraction: normalizeEmbed<DocumentExtractionRow>(document_extractions),
-    }
-  })
 
   // Nomi leggibili per "Escluso da {utente}" (028): solo i marked_by
   // realmente presenti tra le attese di questa residenza, non tutti i
@@ -154,7 +133,7 @@ export default async function ResidenceDocumentiPage({
       <DocumentiClient
         residenceId={residenceId}
         docs={docs}
-        units={(rawUnits ?? []) as UnitRow[]}
+        units={units}
         checklist={checklist}
         today={todayISO()}
         markedByNames={markedByNames}
