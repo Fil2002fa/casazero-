@@ -121,7 +121,7 @@ export function ProfiloClient({
 
             <div>
               <p className="text-xs text-text-secondary mb-1">Email</p>
-              <p className="text-base text-text-primary">{email}</p>
+              <p className="text-base text-text-primary break-all">{email}</p>
             </div>
 
             <div>
@@ -163,12 +163,12 @@ export function ProfiloClient({
                 <div className="space-y-1.5">
                   {members.map(m => (
                     <div key={m.profile_id} className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-brand-light flex items-center justify-center">
+                      <div className="w-6 h-6 rounded-full bg-brand-light flex items-center justify-center flex-shrink-0">
                         <span className="text-xs font-medium text-brand-dark">
                           {(m.full_name ?? '?').charAt(0).toUpperCase()}
                         </span>
                       </div>
-                      <p className="text-sm text-text-primary">{m.full_name ?? 'Utente'}</p>
+                      <p className="text-sm text-text-primary min-w-0 break-words">{m.full_name ?? 'Utente'}</p>
                     </div>
                   ))}
                 </div>
