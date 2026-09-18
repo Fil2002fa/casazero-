@@ -113,7 +113,7 @@ export function FascicoloList({
                         <p className="text-base font-medium text-text-primary truncate">
                           {c.title}
                         </p>
-                        <p className="text-xs text-text-secondary">{c.category}</p>
+                        <p className="text-xs text-text-secondary break-words">{c.category}</p>
                       </div>
                       <div className="flex flex-col items-end gap-1 flex-shrink-0">
                         <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
@@ -129,13 +129,13 @@ export function FascicoloList({
                     <p className="text-xs text-text-secondary">{c.dateStr}</p>
 
                     {c.performedByName && (
-                      <p className="text-xs text-text-secondary mt-0.5">
+                      <p className="text-xs text-text-secondary mt-0.5 break-words">
                         Eseguito da: <span className="text-text-primary">{c.performedByName}</span>
                       </p>
                     )}
 
                     {c.notes && (
-                      <p className="text-base text-text-secondary mt-1.5 leading-relaxed">{c.notes}</p>
+                      <p className="text-base text-text-secondary mt-1.5 leading-relaxed break-words">{c.notes}</p>
                     )}
 
                     {c.attachments.length > 0 && (
