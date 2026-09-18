@@ -77,6 +77,8 @@ const TYPED_PROPERTIES: Record<TypedDocType, Record<string, unknown>> = {
     compagnia: NULLABLE_STRING,
     numero_polizza: NULLABLE_STRING,
     decorrenza: NULLABLE_DATE,
+    durata_anni: NULLABLE_INTEGER,
+    evento_decorrenza: NULLABLE_STRING,
     scadenza: NULLABLE_DATE,
   },
 }
@@ -110,7 +112,7 @@ Campi comuni a ogni documento:
 Campi aggiuntivi, presenti nello schema solo per il tipo corrispondente:
 - garanzia: inizio (data di decorrenza della garanzia: data di installazione, posa o consegna da cui parte la copertura), durata_anni (durata come numero intero di anni; se espressa in mesi convertila solo se è un multiplo esatto di 12, altrimenti null), oggetto (che cosa è coperto: il componente, l'apparecchio o l'opera), rilasciata_da (chi rilascia la garanzia: produttore o impresa, denominazione come appare). NON calcolare la data di scadenza: viene calcolata dopo.
 - ape: classe_energetica (una tra ${CLASSI_ENERGETICHE.join(', ')}; se il documento riporta una classe non in elenco usa null), valida_fino_al (la data di validità o scadenza dell'attestato, se riportata).
-- polizza_decennale: compagnia (la compagnia assicurativa), numero_polizza (il numero o identificativo della polizza così come appare), decorrenza (data di effetto della copertura), scadenza (data di fine della copertura).
+- polizza_decennale: compagnia (la compagnia assicurativa), numero_polizza (il numero o identificativo della polizza così come appare), durata_anni (durata della copertura come numero intero di anni, es. 10), evento_decorrenza (l'evento da cui la polizza fa decorrere la copertura, come breve locuzione senza preposizione: es. "fine lavori", "ultimazione dei lavori", "collaudo statico", "emissione del certificato di collaudo"; null se la polizza indica direttamente una data), decorrenza (SOLO se la polizza riporta una data esplicita di effetto della copertura; se rimanda a un evento senza data, null), scadenza (SOLO se la polizza riporta una data esplicita di fine copertura; se dice "dieci anni da…" senza una data, null). NON calcolare né dedurre date da durata ed evento: viene fatto dopo.
 
 Nessun dato economico: non estrarre importi, premi, massimali, costi, prezzi o riferimenti a fatture, anche se presenti nel documento.
 
@@ -168,6 +170,8 @@ function normalizeTypedFields(docType: TypedDocType, v: Record<string, unknown>)
       out.compagnia = cleanString(v.compagnia)
       out.numero_polizza = cleanString(v.numero_polizza)
       out.decorrenza = normalizeIsoDate(v.decorrenza)
+      out.durata_anni = cleanPositiveInteger(v.durata_anni)
+      out.evento_decorrenza = cleanString(v.evento_decorrenza)
       out.scadenza = normalizeIsoDate(v.scadenza)
       break
   }

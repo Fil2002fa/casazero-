@@ -18,6 +18,7 @@
  * il documento (czero_can_access_unit) e resta una scelta umana all'upload.
  */
 import type { DocType } from './document-classification'
+import { pluralize } from './pluralize'
 
 // ------------------------------------------------------------
 // Stati e vocabolari
@@ -62,11 +63,23 @@ export type ApeFields = {
   valida_fino_al: string | null      // ISO
 }
 
+/**
+ * Stesso schema della garanzia (decisione 18/09): le polizze decennali reali
+ * esprimono la validità quasi sempre come "N anni da un evento" (fine lavori,
+ * collaudo, emissione del certificato), non con una data di fine. Quindi:
+ * durata_anni + evento_decorrenza (testo, l'evento di partenza così come lo
+ * nomina la polizza) sempre; decorrenza e scadenza SOLO se la polizza
+ * riporta una data esplicita. valid_until si calcola solo quando una data
+ * esiste; altrimenti resta null e il blocco Scadenze mostra la formula in
+ * chiaro (validityFormula). Nessuna deduzione da parte dell'AI.
+ */
 export type PolizzaFields = {
   compagnia: string | null
   numero_polizza: string | null
-  decorrenza: string | null          // ISO
-  scadenza: string | null            // ISO
+  decorrenza: string | null          // ISO, solo se esplicita nel documento
+  durata_anni: number | null
+  evento_decorrenza: string | null   // es. "fine lavori", "collaudo statico"
+  scadenza: string | null            // ISO, solo se esplicita nel documento
 }
 
 /**
@@ -89,7 +102,7 @@ export type FieldsByDocType = {
 export const FIELD_KEYS: { [K in TypedDocType]: readonly (keyof FieldsByDocType[K])[] } = {
   garanzia: ['inizio', 'durata_anni', 'oggetto', 'rilasciata_da'],
   ape: ['classe_energetica', 'valida_fino_al'],
-  polizza_decennale: ['compagnia', 'numero_polizza', 'decorrenza', 'scadenza'],
+  polizza_decennale: ['compagnia', 'numero_polizza', 'decorrenza', 'durata_anni', 'evento_decorrenza', 'scadenza'],
 }
 
 export function isTypedDocType(docType: string | null): docType is TypedDocType {
@@ -151,11 +164,17 @@ export function addYearsIso(iso: string, years: number): string | null {
 // valid_until — calcolata, mai chiesta all'AI
 // ------------------------------------------------------------
 
+function positiveInteger(raw: unknown): number | null {
+  return typeof raw === 'number' && Number.isInteger(raw) && raw > 0 ? raw : null
+}
+
 /**
  * garanzia: inizio + durata_anni (durata intera e positiva, altrimenti null:
  * una garanzia senza durata leggibile non ha scadenza calcolabile, non una
- * scadenza inventata). ape: valida_fino_al. polizza: scadenza. Ogni altro
- * doc_type: null. Unica regola per route (scrittura) e UI (lettura).
+ * scadenza inventata). ape: valida_fino_al. polizza: scadenza esplicita se
+ * c'è, altrimenti decorrenza esplicita + durata_anni, altrimenti null (la
+ * formula in chiaro la dà validityFormula). Ogni altro doc_type: null.
+ * Unica regola per route (scrittura) e UI (lettura).
  */
 export function computeValidUntil(docType: string | null, fields: unknown): string | null {
   if (!isTypedDocType(docType) || !fields || typeof fields !== 'object') return null
@@ -163,15 +182,41 @@ export function computeValidUntil(docType: string | null, fields: unknown): stri
   switch (docType) {
     case 'garanzia': {
       const inizio = normalizeIsoDate(f.inizio)
-      const durata = f.durata_anni
-      if (inizio === null || typeof durata !== 'number' || !Number.isInteger(durata) || durata <= 0) return null
+      const durata = positiveInteger(f.durata_anni)
+      if (inizio === null || durata === null) return null
       return addYearsIso(inizio, durata)
     }
     case 'ape':
       return normalizeIsoDate(f.valida_fino_al)
-    case 'polizza_decennale':
-      return normalizeIsoDate(f.scadenza)
+    case 'polizza_decennale': {
+      const scadenza = normalizeIsoDate(f.scadenza)
+      if (scadenza !== null) return scadenza
+      const decorrenza = normalizeIsoDate(f.decorrenza)
+      const durata = positiveInteger(f.durata_anni)
+      if (decorrenza === null || durata === null) return null
+      return addYearsIso(decorrenza, durata)
+    }
   }
+}
+
+/**
+ * Formula di validità in chiaro per il blocco Scadenze quando valid_until
+ * non è calcolabile ma il documento dichiara una durata: "10 anni dalla data
+ * di fine lavori" · "5 anni" (senza evento). null se non c'è durata, o se
+ * valid_until esiste già (in quel caso si mostra la data, non la formula).
+ * Solo garanzia e polizza hanno una durata; per gli altri tipi null.
+ */
+export function validityFormula(docType: string | null, fields: unknown): string | null {
+  if (!isTypedDocType(docType) || docType === 'ape' || !fields || typeof fields !== 'object') return null
+  if (computeValidUntil(docType, fields) !== null) return null
+  const f = fields as Record<string, unknown>
+  const durata = positiveInteger(f.durata_anni)
+  if (durata === null) return null
+  const base = pluralize(durata, 'anno', 'anni')
+  const evento = docType === 'polizza_decennale' && typeof f.evento_decorrenza === 'string' && f.evento_decorrenza.trim() !== ''
+    ? f.evento_decorrenza.trim()
+    : null
+  return evento ? `${base} dalla data di ${evento}` : base
 }
 
 // ------------------------------------------------------------

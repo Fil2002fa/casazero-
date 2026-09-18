@@ -3,7 +3,7 @@
 // Uso:  node --experimental-strip-types scripts/verify-extraction.mjs
 //       (oppure: npm run verify:extraction)
 // ------------------------------------------------------------
-// COSA GARANTISCE: che computeValidUntil, extractionIsCurrent,
+// COSA GARANTISCE: che computeValidUntil, validityFormula, extractionIsCurrent,
 // needsExtraction, upcomingDeadlines, normalizeIsoDate, addYearsIso
 // (src/lib/document-extraction.ts) e formatDateIT (src/lib/formatDate.ts)
 // diano l'esito atteso su casi positivi E negativi.
@@ -25,6 +25,11 @@
 // confuso con un esito positivo.
 // ============================================================
 
+import { register } from 'node:module'
+// document-extraction.ts importa './pluralize' senza estensione: vedi
+// scripts/ts-resolve-hooks.mjs per il perché serve un hook.
+register('./ts-resolve-hooks.mjs', import.meta.url)
+
 const SOURCE = new URL('../src/lib/document-extraction.ts', import.meta.url)
 const FORMAT = new URL('../src/lib/formatDate.ts', import.meta.url)
 
@@ -42,7 +47,7 @@ try {
 }
 
 const {
-  computeValidUntil, extractionIsCurrent, needsExtraction, upcomingDeadlines,
+  computeValidUntil, validityFormula, extractionIsCurrent, needsExtraction, upcomingDeadlines,
   normalizeIsoDate, addYearsIso, isExtractableDocType, isTypedDocType, emptyFields,
 } = lib
 const { formatDateIT } = fmt
@@ -87,8 +92,23 @@ check('garanzia: durata negativa → null', computeValidUntil('garanzia', { iniz
 check('garanzia: durata stringa → null', computeValidUntil('garanzia', { inizio: '2025-06-01', durata_anni: '5' }), null)
 check('ape: valida_fino_al', computeValidUntil('ape', { classe_energetica: 'A2', valida_fino_al: '2034-01-20' }), '2034-01-20')
 check('ape: valida_fino_al invalida → null', computeValidUntil('ape', { classe_energetica: 'A2', valida_fino_al: '20/01/2034' }), null)
-check('polizza: scadenza', computeValidUntil('polizza_decennale', { decorrenza: '2024-05-01', scadenza: '2034-05-01' }), '2034-05-01')
-check('polizza: scadenza null → null (non si deduce da decorrenza)', computeValidUntil('polizza_decennale', { decorrenza: '2024-05-01', scadenza: null }), null)
+check('polizza: scadenza esplicita vince', computeValidUntil('polizza_decennale', { decorrenza: '2024-05-01', durata_anni: 10, scadenza: '2034-06-30' }), '2034-06-30')
+check('polizza: decorrenza + durata', computeValidUntil('polizza_decennale', { decorrenza: '2024-05-01', durata_anni: 10, scadenza: null }), '2034-05-01')
+check('polizza: solo durata ed evento → null (nessuna data)', computeValidUntil('polizza_decennale', { decorrenza: null, durata_anni: 10, evento_decorrenza: 'fine lavori', scadenza: null }), null)
+check('polizza: decorrenza senza durata → null', computeValidUntil('polizza_decennale', { decorrenza: '2024-05-01', durata_anni: null, scadenza: null }), null)
+check('polizza: durata non intera → null', computeValidUntil('polizza_decennale', { decorrenza: '2024-05-01', durata_anni: 10.5, scadenza: null }), null)
+
+// --- validityFormula -------------------------------------------------------
+check('formula polizza: durata + evento', validityFormula('polizza_decennale', { durata_anni: 10, evento_decorrenza: 'fine lavori', decorrenza: null, scadenza: null }), '10 anni dalla data di fine lavori')
+check('formula polizza: evento con spazi', validityFormula('polizza_decennale', { durata_anni: 10, evento_decorrenza: '  collaudo statico ', decorrenza: null, scadenza: null }), '10 anni dalla data di collaudo statico')
+check('formula polizza: solo durata', validityFormula('polizza_decennale', { durata_anni: 10, evento_decorrenza: null, decorrenza: null, scadenza: null }), '10 anni')
+check('formula polizza: 1 anno singolare', validityFormula('polizza_decennale', { durata_anni: 1, evento_decorrenza: 'collaudo', decorrenza: null, scadenza: null }), '1 anno dalla data di collaudo')
+check('formula polizza: null se valid_until calcolabile', validityFormula('polizza_decennale', { durata_anni: 10, evento_decorrenza: 'fine lavori', decorrenza: '2024-05-01', scadenza: null }), null)
+check('formula polizza: null senza durata', validityFormula('polizza_decennale', { durata_anni: null, evento_decorrenza: 'fine lavori', decorrenza: null, scadenza: null }), null)
+check('formula garanzia: durata senza inizio', validityFormula('garanzia', { inizio: null, durata_anni: 5 }), '5 anni')
+check('formula garanzia: null se inizio presente', validityFormula('garanzia', { inizio: '2024-03-10', durata_anni: 5 }), null)
+check('formula ape → null', validityFormula('ape', { classe_energetica: 'A2', valida_fino_al: null }), null)
+check('formula manuale → null', validityFormula('manuale', {}), null)
 check('dich_conformita → null', computeValidUntil('dich_conformita_dm37', {}), null)
 check('manuale → null', computeValidUntil('manuale', {}), null)
 check('altro → null', computeValidUntil('altro', {}), null)
@@ -103,7 +123,7 @@ check('garanzia tipizzata', isTypedDocType('garanzia'), true)
 check('manuale non tipizzata', isTypedDocType('manuale'), false)
 check('emptyFields garanzia', emptyFields('garanzia'), { inizio: null, durata_anni: null, oggetto: null, rilasciata_da: null })
 check('emptyFields ape', emptyFields('ape'), { classe_energetica: null, valida_fino_al: null })
-check('emptyFields polizza', emptyFields('polizza_decennale'), { compagnia: null, numero_polizza: null, decorrenza: null, scadenza: null })
+check('emptyFields polizza', emptyFields('polizza_decennale'), { compagnia: null, numero_polizza: null, decorrenza: null, durata_anni: null, evento_decorrenza: null, scadenza: null })
 
 // --- extractionIsCurrent / needsExtraction ---------------------------------
 const completata = (doc_type) => ({ doc_type, classification_status: 'completata' })
