@@ -195,7 +195,7 @@ export default async function HomePage() {
         <section className="space-y-2">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-medium text-text-primary">Da completare</h2>
-            <Link href="/manutenzioni" className="text-xs text-brand-medium">Vedi tutte</Link>
+            <Link href="/manutenzioni" className="inline-flex items-center h-11 -mt-3 -mb-2 -mr-2 px-2 text-xs text-brand-medium">Vedi tutte</Link>
           </div>
           <div className="space-y-2">
             {urgentItems.map(i => (
