@@ -4,6 +4,7 @@ import { requireProfile } from '@/lib/auth'
 import { UploadDocumentForm } from '@/components/UploadDocumentForm'
 import { displayDate } from '@/lib/document-rows'
 import { loadResidenceDocumentRows } from '@/lib/document-rows.server'
+import { residentDocumentFacts } from '@/lib/resident-document-facts'
 import type { Profile } from '@/types/database'
 import { DocumentiList, type DocItem } from './DocumentiList'
 
@@ -79,7 +80,8 @@ export default async function DocumentiPage() {
   // documento estratta, altrimenti quella inserita all'upload, altrimenti il
   // caricamento. Formattata qui sul server e passata come stringa:
   // formattarla nel client darebbe testo diverso fra Node e Safari e un
-  // mismatch di hydration.
+  // mismatch di hydration. I dati estratti arrivano già composti, e solo
+  // quelli che il residente deve vedere (residentDocumentFacts).
   const docs: DocItem[] = rows.map(doc => ({
     id: doc.id,
     title: doc.title,
@@ -89,6 +91,7 @@ export default async function DocumentiPage() {
     formattedDate: new Date(displayDate(doc)).toLocaleDateString('it-IT', {
       day: 'numeric', month: 'short', year: 'numeric',
     }),
+    facts: residentDocumentFacts(doc),
   }))
 
   return (

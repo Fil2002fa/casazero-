@@ -25,6 +25,9 @@ export type DocItem = {
   file_name: string
   storage_path: string
   formattedDate: string
+  // Dati estratti già scelti e composti sul server: validità, classe,
+  // oggetto, chi rilascia la garanzia, installatore. Vuoto se non ce ne sono.
+  facts: string[]
 }
 
 type CategoryFilter = DocumentCategory | 'all'
@@ -143,6 +146,9 @@ function DocCard({ doc }: { doc: DocItem }) {
       <FileText className="w-5 h-5 text-neutral-400 flex-shrink-0" strokeWidth={1.6} />
       <div className="flex-1 min-w-0">
         <p className="text-base font-medium text-text-primary break-words">{humanizeDocumentTitle(doc.title)}</p>
+        {doc.facts.length > 0 && (
+          <p className="text-xs text-text-secondary mt-0.5 break-words">{doc.facts.join(' · ')}</p>
+        )}
         {/* La data non si taglia mai: solo il nome file cede spazio */}
         <p className="flex gap-1 text-xs text-neutral-500">
           <span className="truncate">{doc.file_name}</span>
