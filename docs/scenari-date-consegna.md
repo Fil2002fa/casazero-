@@ -89,7 +89,7 @@ se esiste un account.
 SELECT count(*) FILTER (WHERE next_due_date IS NULL)  AS senza_data,
        count(*) FILTER (WHERE next_due_date IS NOT NULL) AS con_data
   FROM maintenance_items WHERE unit_id = '4818141d-242c-4351-8dcd-005337afeb2b';
--- Atteso: tutte senza data (9 voci di A1)
+-- Atteso: tutte senza data (8 voci di A1, di cui 2 promemoria)
 
 SELECT count(*) AS altre_unita_con_data FROM maintenance_items mi JOIN units u ON u.id = mi.unit_id
  WHERE u.residence_id = 'adf97f32-859a-493e-b145-915979f1ae09'
