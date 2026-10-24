@@ -5,6 +5,8 @@ import {
   emailMaintenanceDue,
   emailMaintenanceReminder,
 } from '@/lib/notifications'
+import { nextDueFrom } from '@/lib/maintenance-due'
+import { todayISO } from '@/lib/maintenance-status'
 
 export const runtime = 'nodejs'
 
@@ -37,7 +39,7 @@ export async function GET(req: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = todayISO()
   const results = { processed: 0, notified: 0, errors: 0 }
 
   // Tutti gli item attivi con scadenza passata o presente
@@ -70,10 +72,9 @@ export async function GET(req: NextRequest) {
       if (effectivePriority === 'N1') {
         // N1: avanza la scadenza e notifica (non diventa mai 'scaduta')
         if (item.status === 'in_attesa') {
-          const newDue = addMonths(new Date(dueDate), effectiveFreq)
           await supabase
             .from('maintenance_items')
-            .update({ next_due_date: newDue.toISOString().split('T')[0] })
+            .update({ next_due_date: nextDueFrom(dueDate, effectiveFreq) })
             .eq('id', item.id)
 
           const shouldNotify = await checkDedup(supabase, item.id, 0, 'n1_due')
@@ -132,12 +133,6 @@ export async function GET(req: NextRequest) {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
-
-function addMonths(date: Date, months: number): Date {
-  const d = new Date(date)
-  d.setMonth(d.getMonth() + months)
-  return d
-}
 
 async function checkDedup(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

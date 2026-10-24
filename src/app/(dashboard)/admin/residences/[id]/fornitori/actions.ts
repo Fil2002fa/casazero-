@@ -6,6 +6,8 @@ import { createServiceClient } from '@/lib/supabase/admin'
 import { logActivityEvent } from '@/lib/activity-log'
 import type { CompletionMode, ObligationType } from '@/types/database'
 import { SISTEMI, type Sistema } from '@/lib/document-classification'
+import { nextDueFrom } from '@/lib/maintenance-due'
+import { todayISO } from '@/lib/maintenance-status'
 
 function modeToPriority(mode: CompletionMode | null): string | null {
   if (mode === null) return null
@@ -175,9 +177,7 @@ export async function updateMaintenanceItemConfig(
     }
     updatePayload.status = 'in_attesa'
     if (freq) {
-      const nextDue = new Date()
-      nextDue.setMonth(nextDue.getMonth() + freq)
-      updatePayload.next_due_date = nextDue.toISOString().split('T')[0]
+      updatePayload.next_due_date = nextDueFrom(todayISO(), freq)
     }
   }
 
@@ -309,9 +309,7 @@ export async function setTemplateActivationForResidence(
       status: 'in_attesa',
     }
     if (freq) {
-      const nextDue = new Date()
-      nextDue.setMonth(nextDue.getMonth() + freq)
-      payload.next_due_date = nextDue.toISOString().split('T')[0]
+      payload.next_due_date = nextDueFrom(todayISO(), freq)
     }
     const { data, error } = await supabase
       .from('maintenance_items')

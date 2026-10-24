@@ -12,7 +12,8 @@
     "verify:sistemi": "node --experimental-strip-types --no-warnings scripts/verify-sistemi.mjs",
     "verify:match": "node --experimental-strip-types --no-warnings scripts/verify-supplier-match.mjs",
     "verify:extraction": "node --experimental-strip-types --no-warnings scripts/verify-extraction.mjs",
-    "verify:export": "node --experimental-strip-types --no-warnings scripts/verify-document-export.mjs"
+    "verify:export": "node --experimental-strip-types --no-warnings scripts/verify-document-export.mjs",
+    "verify:due": "node --experimental-strip-types --no-warnings scripts/verify-maintenance-due.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.4",
