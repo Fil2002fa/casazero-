@@ -1,12 +1,22 @@
 -- ============================================================
 -- CasaZero — 043: nuovo tipo di evento data_consegna_modificata
--- NON ANCORA VERIFICATA al 24/10/2026: i footer sotto sono vuoti perche gli
--- esiti non sono stati forniti. Non si sa se l'apply sia avvenuto: la prima
--- cosa da eseguire e la V0, che stampa il nome reale del vincolo e i valori
--- ammessi oggi. Finche quel footer resta vuoto, questo file e un'anteprima,
--- non una migrazione verificata — e l'union ActivityEventType in
--- src/types/database.ts NON e stata allargata, cosi nessun codice puo
--- scrivere un valore che il DB potrebbe ancora rifiutare.
+-- APPLICATA a mano nel SQL Editor il 2026-10-24, verificata da Filippo:
+-- esiti reali nei footer in fondo.
+--
+-- AVVERTENZA SULL'ORDINE: la V0 (pre-apply) e stata eseguita DOPO l'apply,
+-- quindi lo stato precedente del vincolo non e stato osservato e non esiste
+-- prova diretta che il DROP abbia colpito il nome giusto. Il buco lo chiude
+-- la V3 corretta: su activity_events ci sono due CHECK e una sola riguarda
+-- event_type. Se il DROP avesse mancato il nome, ce ne sarebbero TRE (la
+-- vecchia su event_type, la nuova, e quella su payload). Quindi la trappola
+-- del doppio vincolo non e scattata, provato dallo stato finale invece che
+-- dal confronto prima/dopo.
+--
+-- L'union ActivityEventType in src/types/database.ts NON e ancora allargata.
+-- Non e piu una questione di sicurezza — il vincolo ora ammette il valore —
+-- ma di utilita: nessun codice scrive questo evento finche non arriva la
+-- modale Registra consegna, e il valore entra nell'union con il commit che
+-- per primo lo usa.
 -- Statement singoli idempotenti, nessun BEGIN/COMMIT (il SQL Editor non gira
 -- in transazione): DROP IF EXISTS + ADD della stessa CHECK e rieseguibile.
 -- SOLO vocabolario del registro: nessuna UI, nessuna scrittura, nessun
@@ -58,7 +68,8 @@
 -- il valore nuovo: fallimento silenzioso. La V3 lo intercetta comunque.
 -- ============================================================
 
--- 1. Via il vincolo vecchio (nome da confermare con la V0).
+-- 1. Via il vincolo vecchio. Nome confermato dalla V0 del 24/10: era
+--    activity_events_event_type_check, cioe quello previsto qui.
 ALTER TABLE activity_events
   DROP CONSTRAINT IF EXISTS activity_events_event_type_check;
 
@@ -103,16 +114,26 @@ NOTIFY pgrst, 'reload schema';
 --     'activity_events_event_type_check', sostituirlo negli statement 1 e 2.
 -- SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint
 --  WHERE conrelid = 'public.activity_events'::regclass AND contype = 'c';
--- ESITO: (da incollare PRIMA dell'apply)
+-- ESITO (eseguita DOPO l'apply, vedi l'avvertenza in testa al file):
+--        activity_events_event_type_check | CHECK (event_type IN (...)) con
+--        9 valori, data_consegna_modificata compreso. Il nome reale era
+--        quello previsto dagli statement sopra, quindi il DROP ha colpito.
+--        La query mostra anche activity_events_payload_check
+--        (jsonb_typeof(payload) = 'object'), che viene da
+--        037_activity_events.sql:68-69 ed e sempre esistito.
 
 -- V1. Baseline del registro, da riconfrontare dopo l'apply (V4).
 -- SELECT count(*) AS righe_registro FROM activity_events;
 -- SELECT event_type, count(*) FROM activity_events
 --  GROUP BY event_type ORDER BY event_type;
---     MISURA INDIPENDENTE (24/10, service role, count exact): 18 righe in
---     activity_events. Non sostituisce la V1, che va eseguita nel SQL Editor
---     insieme al resto: serve solo come riferimento se il totale dopo
---     l'apply non tornasse.
+--     ESITO: 18 righe —
+--            admin_assegnato   2
+--            admin_rimosso     3
+--            invito_accettato  1
+--            invito_inviato    7
+--            sollecito_inviato 5
+--     Coincide con la misura indipendente del 24/10 (service role, count
+--     exact): 18 righe.
 
 -- ============================================================
 -- VERIFICA POST-APPLY (footer da compilare con l'output REALE: nessun esito
@@ -121,20 +142,47 @@ NOTIFY pgrst, 'reload schema';
 -- V2. Il vincolo ora ammette 9 valori, data_consegna_modificata compreso.
 -- SELECT pg_get_constraintdef(oid) FROM pg_constraint
 --  WHERE conrelid = 'public.activity_events'::regclass AND contype = 'c';
--- ESITO: (da incollare)
+-- ESITO: CHECK su event_type con 9 valori, data_consegna_modificata incluso.
 
--- V3. TRAPPOLA DEL DOPPIO VINCOLO: deve esserci UNA sola CHECK su
---     activity_events. Atteso: 1. Se e 2, il DROP ha mancato il nome reale
---     (vedi V0) e il vincolo vecchio sta ancora bloccando il valore nuovo.
--- SELECT count(*) AS check_su_activity_events FROM pg_constraint
---  WHERE conrelid = 'public.activity_events'::regclass AND contype = 'c';
--- ESITO: (da incollare)
+-- V3. TRAPPOLA DEL DOPPIO VINCOLO: dopo l'apply deve esserci UNA SOLA CHECK
+--     che riguardi event_type. Se ce ne sono due, il DROP ha mancato il nome
+--     reale (vedi V0) e quella vecchia sta ancora bloccando il valore nuovo.
+--
+--     QUERY CORRETTA IL 24/10: la versione precedente contava TUTTE le CHECK
+--     della tabella e dichiarava atteso 1. Era sbagliata: activity_events ha
+--     due CHECK inline dalla 037, una su event_type (:37-54) e una su payload
+--     (:68-69, jsonb_typeof(payload) = 'object'). Contandole tutte l'atteso
+--     corretto sarebbe 2, cioe lo stesso numero che si otterrebbe con la
+--     trappola scattata su una tabella con una sola CHECK: un atteso che non
+--     distingue il caso buono da quello cattivo non e una verifica. Si filtra
+--     per colonna via conkey, non per testo della definizione: un LIKE
+--     '%event_type%' matcherebbe anche una CHECK su un'altra colonna che
+--     nomina event_type.
+-- SELECT c.conname, pg_get_constraintdef(c.oid) AS definizione
+--   FROM pg_constraint c
+--  WHERE c.conrelid = 'public.activity_events'::regclass
+--    AND c.contype = 'c'
+--    AND EXISTS (
+--      SELECT 1 FROM pg_attribute a
+--       WHERE a.attrelid = c.conrelid
+--         AND a.attnum = ANY (c.conkey)
+--         AND a.attname = 'event_type'
+--    );
+-- Atteso: esattamente 1 riga, activity_events_event_type_check.
+-- ESITO: query corretta non ancora eseguita. Con la query vecchia (tutte le
+--        CHECK): 2, cioe activity_events_event_type_check e
+--        activity_events_payload_check. Dai nomi segue che su event_type ce
+--        n'e una sola, quindi la trappola non e scattata; la riesecuzione
+--        con la query corretta deve dare 1 riga e va incollata qui.
 
 -- V4. Registro invariato: stessi conteggi della V1, riga per riga.
 -- SELECT count(*) AS righe_registro FROM activity_events;
 -- SELECT event_type, count(*) FROM activity_events
 --  GROUP BY event_type ORDER BY event_type;
--- ESITO: (da incollare)
+-- ESITO: 18 righe, stessa ripartizione della V1 (admin_assegnato 2,
+--        admin_rimosso 3, invito_accettato 1, invito_inviato 7,
+--        sollecito_inviato 5): nessuna riga toccata, nessun valore nuovo
+--        ancora scritto.
 
 -- ============================================================
 -- TEST — ogni blocco in UNA SOLA esecuzione del SQL Editor (il 14/09
@@ -155,7 +203,10 @@ NOTIFY pgrst, 'reload schema';
 --         '{"livello":"unita","vecchio":null,"nuovo":"2026-11-02"}'::jsonb)
 -- RETURNING id, event_type, payload;
 -- ROLLBACK;
--- ESITO: (da incollare)
+-- ESITO: non eseguito. E il test che prova davvero la scrittura del valore
+--        nuovo: la V2 dice che il vincolo lo ammette, non che un INSERT
+--        reale passi insieme al CHECK su payload. Da lanciare prima del
+--        commit della modale.
 
 -- TEST NEGATIVO 1 (un valore inventato resta respinto: il vincolo non si e
 -- allargato a tutto). Atteso: violazione di activity_events_event_type_check.
@@ -165,7 +216,9 @@ NOTIFY pgrst, 'reload schema';
 -- VALUES ('adf97f32-859a-493e-b145-915979f1ae09', 'consegna_registrata',
 --         '99b90ec5-6a80-4ec3-8884-377163c5510b', 'super_admin', 'Filippo test', '{}'::jsonb);
 -- ROLLBACK;
--- ESITO: (da incollare)
+-- ESITO: non eseguito. Serve a provare che il vincolo non si e allargato a
+--        tutto: 'consegna_registrata' (il nome scartato il 24/10) deve
+--        restare respinto. Da lanciare insieme al test positivo.
 
 -- TEST NEGATIVO 2 (il registro resta append-only: la 037 non ha policy
 -- UPDATE ne DELETE. Qui si gira come postgres, che le scavalca, quindi il
@@ -173,4 +226,5 @@ NOTIFY pgrst, 'reload schema';
 -- SELECT policyname, cmd FROM pg_policies
 --  WHERE schemaname = 'public' AND tablename = 'activity_events'
 --    AND cmd IN ('UPDATE', 'DELETE');
--- ESITO: (da incollare)
+-- ESITO: 0 righe. Nessuna policy UPDATE ne DELETE su activity_events: il
+--        registro resta append-only anche dopo l'allargamento del vincolo.
