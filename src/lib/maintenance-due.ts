@@ -90,9 +90,11 @@ export function nextDueFrom(baseISO: string, frequencyMonths: number): string {
 // ---------------------------------------------------------------------------
 // Cascata della data di consegna
 // ---------------------------------------------------------------------------
-// La base di una scadenza si risolve risalendo i livelli nell'ordine
+// La base di una scadenza si risolve risalendo i livelli, e l'ordine NON e lo
+// stesso nei due ambiti:
 //
-//     voce > categoria > unita > residenza > NULL
+//   voce di unita        override voce > [unita consegnata: categoria > unita] > NULL
+//   voce di parti comuni override voce > categoria > residenza > NULL
 //
 // e questa funzione e l'UNICO posto dove quell'ordine e scritto in TypeScript.
 // La base risolta non si salva da nessuna parte (vincolo del 24/10): esiste
@@ -101,15 +103,26 @@ export function nextDueFrom(baseISO: string, frequencyMonths: number): string {
 // cascata chiude. Le RPC di creazione riproducono la stessa precedenza in SQL
 // (044): quando si cambia qui, va cambiata anche quella.
 //
-// PERCHE' UNA VOCE DI UNITA NON RICADE SULLA RESIDENZA. Per le voci di unita i
-// livelli sono voce > categoria > unita, e poi si ferma: se l'unita non ha
-// data di consegna il risultato e null, MAI la data della residenza. Il
-// livello 'residenza' appartiene alle parti comuni ("Le voci di parti comuni
-// restano sulla data della residenza", decisione del 24/10). Ricadere sulla
-// residenza rimetterebbe in piedi esattamente il difetto di partenza:
-// un'unita invenduta con le scadenze di una consegnata il giorno della fine
-// lavori. Per questo il tipo non espone nemmeno `residenceDate` sul ramo
-// 'unit' — il ritorno a quel comportamento non e scrivibile per sbaglio.
+// LA DATA DELL'UNITA E UN CANCELLO, NON UN LIVELLO DI FALLBACK (precisazione
+// del 24/10). Se l'unita non ha data di consegna, il piano di quell'unita non
+// parte: il risultato e null e nessun livello piu generico puo farlo partire,
+// nemmeno una data di categoria. Un'unita invenduta deve restare ferma anche
+// quando il costruttore fissa una data per la categoria "Termico" di tutta la
+// residenza: quella data riguarda le unita consegnate, non le altre.
+//
+// Di conseguenza la categoria sta SOPRA la data dell'unita ma SOTTO il
+// cancello: su un'unita consegnata una data di categoria la scavalca, su una
+// non consegnata non viene nemmeno letta.
+//
+// L'unica eccezione e l'override di voce, che e un atto manuale e deliberato
+// su quella singola voce: quello vince anche prima della consegna.
+//
+// Il livello 'residenza' appartiene alle parti comuni ("Le voci di parti
+// comuni restano sulla data della residenza", decisione del 24/10). Ricadere
+// sulla residenza per una voce di unita rimetterebbe in piedi il difetto di
+// partenza: un'unita invenduta con le scadenze di una consegnata il giorno
+// della fine lavori. Per questo il tipo non espone nemmeno `residenceDate`
+// sul ramo 'unit' — quel ritorno non e scrivibile per sbaglio.
 //
 // LA CASCATA GOVERNA SOLO LA PRIMA SCADENZA. Dal primo completamento in poi la
 // data la riscrive il trigger czero_recalc_due da completed_at
@@ -139,6 +152,7 @@ type DueBasisCommon = {
  * residenza. Il tipo lo impone, cosi l'invariante non dipende da chi chiama.
  */
 export type DueBasisInput =
+  // unitDate null = unita non consegnata: e il cancello, non un livello.
   | (DueBasisCommon & { scope: 'unit'; unitDate: string | null })
   | (DueBasisCommon & { scope: 'condominium'; residenceDate: string | null })
 
@@ -154,20 +168,33 @@ export type DueBasisInput =
  * salvare, qui un '' e un dato corrotto e va detto.
  */
 export function resolveDueBasis(input: DueBasisInput): DueBasis {
+  // L'override di voce e un atto manuale e deliberato su quella singola voce:
+  // vince sempre, anche su un'unita non consegnata. E l'unico modo di far
+  // partire una voce prima della consegna.
   if (input.itemOverride !== null) {
     return { date: isoDay(input.itemOverride, 'due_basis_override'), level: 'voce' }
   }
+
+  if (input.scope === 'unit') {
+    // CANCELLO, non livello di fallback: senza data di consegna il piano
+    // dell'unita non parte, e nessun livello piu generico puo farlo partire.
+    // La data di categoria non viene nemmeno letta.
+    if (input.unitDate === null) return { date: null, level: null }
+    if (input.categoryDate !== null) {
+      return {
+        date: isoDay(input.categoryDate, 'residence_category_dates.delivery_date'),
+        level: 'categoria',
+      }
+    }
+    return { date: isoDay(input.unitDate, 'units.delivery_date'), level: 'unita' }
+  }
+
+  // Parti comuni: catena piena, la residenza e il loro livello di consegna.
   if (input.categoryDate !== null) {
     return {
       date: isoDay(input.categoryDate, 'residence_category_dates.delivery_date'),
       level: 'categoria',
     }
-  }
-  if (input.scope === 'unit') {
-    // Nessun fallback sulla residenza: vedi il blocco di commento sopra.
-    return input.unitDate === null
-      ? { date: null, level: null }
-      : { date: isoDay(input.unitDate, 'units.delivery_date'), level: 'unita' }
   }
   return input.residenceDate === null
     ? { date: null, level: null }

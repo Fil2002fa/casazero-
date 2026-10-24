@@ -4,9 +4,14 @@
 //       (oppure: npm run verify:basis)
 // ------------------------------------------------------------
 // COSA GARANTISCE: che resolveDueBasis (src/lib/maintenance-due.ts) risalga i
-// livelli nell'ordine voce > categoria > unita > residenza > NULL, che
-// restituisca il livello giusto accanto alla data, e soprattutto che una voce
-// di UNITA senza data di consegna dia null e MAI la data della residenza.
+// livelli nell'ordine giusto, che restituisca il livello accanto alla data, e
+// soprattutto il CANCELLO: una voce di unita senza data di consegna da null, e
+// nessun livello piu generico puo farla partire — nemmeno una data di
+// categoria, nemmeno quella della residenza. L'unica eccezione e l'override
+// manuale di voce.
+//
+//   voce di unita        override voce > [unita consegnata: categoria > unita] > NULL
+//   voce di parti comuni override voce > categoria > residenza > NULL
 //
 // PERCHE' ESISTE: quel singolo fallback e il difetto da cui e partito tutto il
 // blocco (un'unita invenduta con le scadenze di una consegnata il giorno della
@@ -114,8 +119,16 @@ check('parti comuni: scendono fino alla data della residenza',
 // --- NULL: nessun livello ha una data -------------------------------------
 check('unita non consegnata: nessuna data, nessun livello',
   resolveDueBasis(unit()), NESSUNA)
-check('unita non consegnata ma con categoria: vince la categoria',
-  resolveDueBasis(unit({ categoryDate: D_CATEGORIA })), V(D_CATEGORIA, 'categoria'))
+// IL CANCELLO: una data di categoria NON fa partire un'unita non consegnata.
+// La categoria sta sopra la data dell'unita ma sotto il cancello.
+check('unita non consegnata + categoria: resta fermo',
+  resolveDueBasis(unit({ categoryDate: D_CATEGORIA })), NESSUNA)
+check('unita CONSEGNATA + categoria: la categoria scavalca la data unita',
+  resolveDueBasis(unit({ categoryDate: D_CATEGORIA, unitDate: D_UNITA })),
+  V(D_CATEGORIA, 'categoria'))
+check('unita non consegnata + categoria + override: vince l override',
+  resolveDueBasis(unit({ itemOverride: D_VOCE, categoryDate: D_CATEGORIA })),
+  V(D_VOCE, 'voce'))
 check('parti comuni senza data di residenza: nessuna data',
   resolveDueBasis(cond()), NESSUNA)
 check('override su unita non consegnata: vince l override',
@@ -125,7 +138,7 @@ check('override su unita non consegnata: vince l override',
 check('voce con timestamp',
   resolveDueBasis(unit({ itemOverride: '2026-01-10T23:30:00.000Z' })), V(D_VOCE, 'voce'))
 check('categoria con spazio e offset',
-  resolveDueBasis(unit({ categoryDate: '2026-02-20 10:00:00+02' })), V(D_CATEGORIA, 'categoria'))
+  resolveDueBasis(unit({ categoryDate: '2026-02-20 10:00:00+02', unitDate: D_UNITA })), V(D_CATEGORIA, 'categoria'))
 check('unita con timestamp',
   resolveDueBasis(unit({ unitDate: '2026-03-30T00:00:00Z' })), V(D_UNITA, 'unita'))
 check('residenza con timestamp',
@@ -133,11 +146,11 @@ check('residenza con timestamp',
 
 // --- date malformate: lanciano, non producono una base -------------------
 checkThrows('voce non ISO',             () => resolveDueBasis(unit({ itemOverride: '10/01/2026' })))
-checkThrows('categoria inesistente',    () => resolveDueBasis(unit({ categoryDate: '2026-02-31' })))
+checkThrows('categoria inesistente',    () => resolveDueBasis(unit({ categoryDate: '2026-02-31', unitDate: D_UNITA })))
 checkThrows('unita 29 feb non bisest.', () => resolveDueBasis(unit({ unitDate: '2026-02-29' })))
 checkThrows('residenza mese 13',        () => resolveDueBasis(cond({ residenceDate: '2026-13-01' })))
 checkThrows('voce stringa vuota',       () => resolveDueBasis(unit({ itemOverride: '' })))
-checkThrows('categoria stringa vuota',  () => resolveDueBasis(unit({ categoryDate: '' })))
+checkThrows('categoria stringa vuota',  () => resolveDueBasis(unit({ categoryDate: '', unitDate: D_UNITA })))
 checkThrows('unita stringa vuota',      () => resolveDueBasis(unit({ unitDate: '' })))
 checkThrows('residenza stringa vuota',  () => resolveDueBasis(cond({ residenceDate: '' })))
 
@@ -153,7 +166,7 @@ check('categoria valida sopra una unita corrotta',
 check('base unita + 12 mesi',
   nextDueFrom(resolveDueBasis(unit({ unitDate: '2026-03-30' })).date, 12), '2027-03-30')
 check('base categoria 31 gen + 1 mese (clamp)',
-  nextDueFrom(resolveDueBasis(unit({ categoryDate: '2026-01-31' })).date, 1), '2026-02-28')
+  nextDueFrom(resolveDueBasis(unit({ categoryDate: '2026-01-31', unitDate: D_UNITA })).date, 1), '2026-02-28')
 check('base residenza + 6 mesi',
   nextDueFrom(resolveDueBasis(cond({ residenceDate: '2026-04-15' })).date, 6), '2026-10-15')
 
@@ -173,6 +186,12 @@ check('parti comuni ignorano un unitDate di troppo',
   resolveDueBasis({ scope: 'condominium', itemOverride: null, categoryDate: null,
                     residenceDate: D_RESIDENZA, unitDate: D_UNITA }),
   V(D_RESIDENZA, 'residenza'))
+// Il cancello regge anche con tutti i livelli piu generici valorizzati e un
+// residenceDate di troppo: solo l'override puo aprirlo.
+check('unita non consegnata con categoria E residenceDate di troppo',
+  resolveDueBasis({ scope: 'unit', itemOverride: null, categoryDate: D_CATEGORIA,
+                    unitDate: null, residenceDate: D_RESIDENZA }),
+  NESSUNA)
 
 // --- data e livello concordano sempre ------------------------------------
 for (const [label, out] of [
