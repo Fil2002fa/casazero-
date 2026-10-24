@@ -2,7 +2,6 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { createServiceClient } from '@/lib/supabase/admin'
 
 export async function completeN2(
   formData: FormData
@@ -61,26 +60,15 @@ export async function completeN2(
     }
   }
 
-  // Aggiorna status e next_due_date — usa l'override di frequenza dell'item
-  // se presente, altrimenti cade sul default del template.
-  const admin = createServiceClient()
-  const { data: itemRow } = await admin
-    .from('maintenance_items')
-    .select('frequency_months, maintenance_templates(frequency_months)')
-    .eq('id', itemId)
-    .single()
-  type ItemFreq = { frequency_months: number | null; maintenance_templates: { frequency_months: number } | null }
-  const row = itemRow as unknown as ItemFreq | null
-  const freq = row?.frequency_months
-    ?? (row?.maintenance_templates as { frequency_months?: number } | null)?.frequency_months
-    ?? 12
-  const base = new Date(completedAt)
-  base.setMonth(base.getMonth() + freq)
-  const newDue = base.toISOString().split('T')[0]
-  await admin
-    .from('maintenance_items')
-    .update({ status: 'in_attesa', next_due_date: newDue })
-    .eq('id', itemId)
+  // next_due_date e status NON si riscrivono qui: li aggiorna il trigger
+  // czero_recalc_due (003_m2.sql:22-27) sull'INSERT in completions, con
+  // completed_at + COALESCE(frequenza item, frequenza template) e l'aritmetica
+  // interval di Postgres. Il percorso amministratore
+  // (admin/manutenzioni/actions.ts) si è sempre fidato solo del trigger; la
+  // copia applicativa che stava qui girava DOPO di esso e vinceva con una data
+  // diversa sui giorni di fine mese (31 gen + 1 mese: 3 mar con setMonth(),
+  // 28 feb con interval), quindi lo stesso completamento dava due date a
+  // seconda di chi lo registrava.
 
   revalidatePath('/manutenzioni')
   revalidatePath(`/manutenzioni/${itemId}`)
