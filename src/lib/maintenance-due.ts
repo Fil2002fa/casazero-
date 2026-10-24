@@ -30,6 +30,35 @@ function daysInMonth(year: number, monthIndex: number): number {
 const pad = (n: number): string => String(n).padStart(2, '0')
 
 /**
+ * Valida una data ISO 'YYYY-MM-DD' e la restituisce scomposta. Un eventuale
+ * orario viene scartato: una scadenza e una data di calendario, non un
+ * istante. Valida anche il calendario (31 feb e 29 feb non bisestile sono
+ * rifiutati), cosi `nextDueFrom` e `resolveDueBasis` non hanno due idee
+ * diverse di cosa sia una data accettabile. `label` dice al chiamante QUALE
+ * valore era malformato: senza, un errore su una cascata a quattro livelli
+ * non dice da quale colonna arriva il dato sbagliato.
+ */
+function parseISODate(value: string, label: string): { year: number; month: number; day: number } {
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ].*)?$/.exec(value)
+  if (!m) {
+    throw new Error(`${label}: data non ISO 'YYYY-MM-DD': ${JSON.stringify(value)}`)
+  }
+  const year = Number(m[1])
+  const month = Number(m[2]) // 1-based, come nella stringa
+  const day = Number(m[3])
+  if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month - 1)) {
+    throw new Error(`${label}: data inesistente nel calendario: ${value}`)
+  }
+  return { year, month, day }
+}
+
+/** La stessa data ridotta al giorno di calendario, orario scartato. */
+function isoDay(value: string, label: string): string {
+  const { year, month, day } = parseISODate(value, label)
+  return `${String(year).padStart(4, '0')}-${pad(month)}-${pad(day)}`
+}
+
+/**
  * Prossima scadenza = data base + frequenza in mesi, con la stessa semantica
  * di `date + interval 'N months'` in Postgres: se il giorno non esiste nel
  * mese di arrivo si usa l'ultimo giorno di quel mese (31 gen + 1 = 28 feb),
@@ -44,20 +73,10 @@ const pad = (n: number): string => String(n).padStart(2, '0')
  * valore finisce su una colonna che decide notifiche e stato "scaduta".
  */
 export function nextDueFrom(baseISO: string, frequencyMonths: number): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ].*)?$/.exec(baseISO)
-  if (!m) {
-    throw new Error(`nextDueFrom: data base non ISO 'YYYY-MM-DD': ${JSON.stringify(baseISO)}`)
-  }
   if (!Number.isSafeInteger(frequencyMonths)) {
     throw new Error(`nextDueFrom: frequenza non intera: ${JSON.stringify(frequencyMonths)}`)
   }
-
-  const year = Number(m[1])
-  const month = Number(m[2]) // 1-based, come nella stringa
-  const day = Number(m[3])
-  if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month - 1)) {
-    throw new Error(`nextDueFrom: data base inesistente nel calendario: ${baseISO}`)
-  }
+  const { year, month, day } = parseISODate(baseISO, 'nextDueFrom: data base')
 
   // Mesi assoluti dall'anno zero: evita i casi limite di un ciclo su +/- 12.
   const totalMonths = (year * 12) + (month - 1) + frequencyMonths
@@ -66,4 +85,91 @@ export function nextDueFrom(baseISO: string, frequencyMonths: number): string {
   const targetDay = Math.min(day, daysInMonth(targetYear, targetMonthIndex))
 
   return `${String(targetYear).padStart(4, '0')}-${pad(targetMonthIndex + 1)}-${pad(targetDay)}`
+}
+
+// ---------------------------------------------------------------------------
+// Cascata della data di consegna
+// ---------------------------------------------------------------------------
+// La base di una scadenza si risolve risalendo i livelli nell'ordine
+//
+//     voce > categoria > unita > residenza > NULL
+//
+// e questa funzione e l'UNICO posto dove quell'ordine e scritto in TypeScript.
+// La base risolta non si salva da nessuna parte (vincolo del 24/10): esiste
+// solo il tempo di un calcolo. Salvarla significherebbe tenerla sincronizzata
+// a ogni cambio di data di unita o di categoria, cioe la classe di bug che la
+// cascata chiude. Le RPC di creazione riproducono la stessa precedenza in SQL
+// (044): quando si cambia qui, va cambiata anche quella.
+//
+// PERCHE' UNA VOCE DI UNITA NON RICADE SULLA RESIDENZA. Per le voci di unita i
+// livelli sono voce > categoria > unita, e poi si ferma: se l'unita non ha
+// data di consegna il risultato e null, MAI la data della residenza. Il
+// livello 'residenza' appartiene alle parti comuni ("Le voci di parti comuni
+// restano sulla data della residenza", decisione del 24/10). Ricadere sulla
+// residenza rimetterebbe in piedi esattamente il difetto di partenza:
+// un'unita invenduta con le scadenze di una consegnata il giorno della fine
+// lavori. Per questo il tipo non espone nemmeno `residenceDate` sul ramo
+// 'unit' — il ritorno a quel comportamento non e scrivibile per sbaglio.
+//
+// LA CASCATA GOVERNA SOLO LA PRIMA SCADENZA. Dal primo completamento in poi la
+// data la riscrive il trigger czero_recalc_due da completed_at
+// (003_m2.sql:22-27): il fascicolo prende il posto del modello, e per questo
+// il ricalcolo su cambio data salta ogni voce che ha gia un completamento.
+
+/** Livello della cascata che ha fornito la data base. */
+export type DueBasisLevel = 'voce' | 'categoria' | 'unita' | 'residenza'
+
+export type DueBasis = {
+  /** Data base ISO 'YYYY-MM-DD', o null se nessun livello ne ha una. */
+  date: string | null
+  /** Quale livello l'ha fornita; null quando `date` e null. */
+  level: DueBasisLevel | null
+}
+
+type DueBasisCommon = {
+  /** maintenance_items.due_basis_override: SOLO l'override manuale di voce. */
+  itemOverride: string | null
+  /** residence_category_dates.delivery_date per la categoria di questa voce. */
+  categoryDate: string | null
+}
+
+/**
+ * L'ambito e discriminante, non un flag: una voce di parti comuni non ha una
+ * data di unita e una voce di unita non deve poter vedere quella della
+ * residenza. Il tipo lo impone, cosi l'invariante non dipende da chi chiama.
+ */
+export type DueBasisInput =
+  | (DueBasisCommon & { scope: 'unit'; unitDate: string | null })
+  | (DueBasisCommon & { scope: 'condominium'; residenceDate: string | null })
+
+/**
+ * Data base di una voce, risalendo la cascata. Restituisce anche il livello,
+ * perche le superfici devono poter dire da dove viene la data ("dalla data
+ * dell'unita", "override di voce") e l'anteprima della modale deve mostrarlo
+ * prima di confermare.
+ *
+ * Le date malformate lanciano (vedi parseISODate): una base sbagliata
+ * produrrebbe una scadenza sbagliata indistinguibile da una giusta. Una
+ * stringa vuota NON equivale a null: chi scrive normalizza a null prima di
+ * salvare, qui un '' e un dato corrotto e va detto.
+ */
+export function resolveDueBasis(input: DueBasisInput): DueBasis {
+  if (input.itemOverride !== null) {
+    return { date: isoDay(input.itemOverride, 'due_basis_override'), level: 'voce' }
+  }
+  if (input.categoryDate !== null) {
+    return {
+      date: isoDay(input.categoryDate, 'residence_category_dates.delivery_date'),
+      level: 'categoria',
+    }
+  }
+  if (input.scope === 'unit') {
+    // Nessun fallback sulla residenza: vedi il blocco di commento sopra.
+    return input.unitDate === null
+      ? { date: null, level: null }
+      : { date: isoDay(input.unitDate, 'units.delivery_date'), level: 'unita' }
+  }
+  return input.residenceDate === null
+    ? { date: null, level: null }
+    : { date: isoDay(input.residenceDate, 'residences.delivery_date'), level: 'residenza' }
 }
