@@ -64,6 +64,19 @@ export interface MaintenanceTemplate {
   created_at: string
 }
 
+/**
+ * Istanza di manutenzione per residenza/unità. `unit_id` NULL = parti comuni.
+ *
+ * I due assi del modello v2 (`completion_mode` = chi completa,
+ * `obligation_type` = vincolo) sono nullable sull'item: il valore effettivo si
+ * risolve item ?? template, via resolveCompletionMode / resolveObligationType
+ * in src/lib/maintenance-status.ts, mai leggendo la colonna da sola.
+ * `priority` è la colonna legacy tenuta in vita dal dual-write (CLAUDE.md).
+ *
+ * Le tre colonne della 011_catalogo_v2_columns.sql erano assenti da questa
+ * interfaccia: nessun chiamante la usa (il client Supabase non porta i generics
+ * del Database), quindi la desincronizzazione non dava errore di compilazione.
+ */
 export interface MaintenanceItem {
   id: string
   template_id: string
@@ -71,6 +84,9 @@ export interface MaintenanceItem {
   unit_id: string | null
   frequency_months: number | null
   priority: MaintenancePriority | null
+  completion_mode: CompletionMode | null
+  obligation_type: ObligationType | null
+  activation_status: ItemActivation
   warranty_info: string | null
   supplier_id: string | null
   next_due_date: string | null
