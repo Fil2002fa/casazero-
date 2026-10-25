@@ -7,14 +7,14 @@ import { ManutenzioniTable, type ActivityRow } from './ManutenzioniTable'
 import type { MaintenanceStatus, CompletionMode, ItemActivation, ObligationType } from '@/types/database'
 import {
   isAdminActivity, activityBucket, compareActivityUrgency, resolveObligationType,
-  formatRelativeDue, todayISO, type ActivityBucket,
+  formatRelativeDue, todayISO, AWAITING_DELIVERY_LABEL, type ActivityBucket,
 } from '@/lib/maintenance-status'
 
 export const metadata: Metadata = { title: 'Attività — Amministratore' }
 
 type SearchParams = Promise<{ filter?: string }>
 
-const BUCKETS: ActivityBucket[] = ['in_ritardo', 'in_corso', 'in_arrivo']
+const BUCKETS: ActivityBucket[] = ['in_ritardo', 'in_corso', 'in_arrivo', 'in_attesa_consegna']
 
 function isBucket(v: string | undefined): v is ActivityBucket {
   return v !== undefined && (BUCKETS as string[]).includes(v)
@@ -48,9 +48,13 @@ function formatDate(iso: string): string {
 
 /**
  * Testo della colonna scadenza, deciso dal bucket e mai dal campo status
- * salvato. Le voci in arrivo senza data non hanno testo.
+ * salvato. Una voce senza data ha il suo testo, non il vuoto: prima mostrava
+ * un trattino, che si leggeva come dato mancante invece che come stato.
  */
 function dueLabel(bucket: ActivityBucket, nextDueDate: string | null, today: string): string | null {
+  // Prima il bucket senza data: restringe l'unione, così nello switch
+  // nextDueDate è una stringa e i tre rami datati non hanno guardie doppie.
+  if (bucket === 'in_attesa_consegna') return AWAITING_DELIVERY_LABEL
   if (nextDueDate === null) return null
   switch (bucket) {
     case 'in_ritardo': return `scaduta il ${formatDate(nextDueDate)}`
@@ -109,7 +113,9 @@ export default async function AdminManutenzioniPage({ searchParams }: { searchPa
     .sort((a, b) => compareActivityUrgency(a, b, today))
     .map(i => toRow(i, today))
 
-  const counts: Record<ActivityBucket, number> = { in_ritardo: 0, in_corso: 0, in_arrivo: 0 }
+  const counts: Record<ActivityBucket, number> = {
+    in_ritardo: 0, in_corso: 0, in_arrivo: 0, in_attesa_consegna: 0,
+  }
   for (const r of rows) counts[r.bucket] += 1
 
   const visibleRows = activeFilter ? rows.filter(r => r.bucket === activeFilter) : rows
@@ -128,6 +134,12 @@ export default async function AdminManutenzioniPage({ searchParams }: { searchPa
           { key: 'in_ritardo', label: 'In ritardo', value: counts.in_ritardo, tone: 'overdue',    active: activeFilter === 'in_ritardo', href: statHref('in_ritardo', activeFilter) },
           { key: 'in_corso',   label: 'In corso',   value: counts.in_corso,   tone: 'inprogress', active: activeFilter === 'in_corso',   href: statHref('in_corso', activeFilter) },
           { key: 'in_arrivo',  label: 'In arrivo',  value: counts.in_arrivo,  tone: 'neutral',    active: activeFilter === 'in_arrivo',  href: statHref('in_arrivo', activeFilter) },
+          // Contatore mostrato solo quando c'è qualcosa dentro: su un
+          // costruttore che registra sempre la consegna resterebbe a zero per
+          // sempre, e un contatore fisso a zero è rumore, non informazione.
+          ...(counts.in_attesa_consegna > 0
+            ? [{ key: 'in_attesa_consegna', label: 'In attesa di consegna', value: counts.in_attesa_consegna, tone: 'neutral' as const, active: activeFilter === 'in_attesa_consegna', href: statHref('in_attesa_consegna', activeFilter) }]
+            : []),
         ]}
       />
 
@@ -151,6 +163,7 @@ const EMPTY_FILTER_LABELS: Record<ActivityBucket, string> = {
   in_ritardo: 'Nessuna attività in ritardo.',
   in_corso:   'Nessuna attività in corso.',
   in_arrivo:  'Nessuna attività in arrivo.',
+  in_attesa_consegna: 'Nessuna attività in attesa di consegna.',
 }
 
 function statHref(bucket: ActivityBucket, activeFilter: ActivityBucket | null): string {

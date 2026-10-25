@@ -3,12 +3,13 @@
 import { useState, useTransition } from 'react'
 import { ChevronDown, ChevronUp, Bell } from 'lucide-react'
 import { MaintenanceBadge } from '@/components/MaintenanceBadge'
+import { AwaitingDeliveryLine, AwaitingDeliveryChip } from '@/components/AwaitingDelivery'
 import { FilterCounters } from '@/components/FilterCounters'
 import { Select } from '@/components/ui/Input'
 import { ItemConfigForm } from './ItemConfigForm'
 import { setTemplateActivationForResidence } from '../fornitori/actions'
 import { sollecitaItem, type SollecitoResult } from './actions'
-import { isOverdueLive, isInCorso } from '@/lib/maintenance-status'
+import { isOverdueLive, isInCorso, isAwaitingDelivery } from '@/lib/maintenance-status'
 import type { MaintenancePriority, MaintenanceStatus, CompletionMode, ObligationType, ItemActivation } from '@/types/database'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import { formatFrequency } from '@/lib/formatFrequency'
@@ -600,6 +601,9 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
                   const inRitardo = typeItems.filter(
                     i => (isOverdueLive(i) || isInCorso(i)) && resolveAxes(i).mode !== 'promemoria'
                   ).length
+                  // Le promemoria non ci entrano: isAwaitingDelivery le esclude
+                  // già, quindi un gruppo di promemoria non mostra mai il chip.
+                  const inAttesa = typeItems.filter(isAwaitingDelivery).length
                   const freq = rep.frequency_months ?? rep.maintenance_templates?.frequency_months
                   const key = `${cat}__${title}`
                   const isExpanded = expandedTemplate === key
@@ -622,6 +626,9 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
                             <span className="text-xs text-text-secondary">{formatFrequency(freq)}</span>
                             {inRitardo > 0 && (
                               <span className="text-xs text-semantic-red font-medium">{inRitardo} in ritardo</span>
+                            )}
+                            {inAttesa > 0 && (
+                              <AwaitingDeliveryChip count={inAttesa} total={typeItems.length} />
                             )}
                           </div>
                         </div>
@@ -884,7 +891,9 @@ function UnitRow({ item, label, residenceId, suppliers, primaryName, canManagePl
             <span className={`text-xs ${overdue ? 'text-semantic-red' : 'text-text-secondary'}`}>
               {overdue ? 'Scaduta ' : 'Scade '}{formattedDue}
             </span>
-          ) : null}
+          ) : (
+            <AwaitingDeliveryLine />
+          )}
           {item.suppliers && (
             <span className="text-xs text-brand-medium">{item.suppliers.name}</span>
           )}

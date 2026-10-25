@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import { N3AdminActions } from '@/components/N3AdminActions'
 import { StatusBadge, PromemoriaBadge, TypeBadge } from '@/components/ui/Badge'
+import { AwaitingDeliveryNote } from '@/components/AwaitingDelivery'
 import type { MaintenanceStatus, CompletionMode, ItemActivation, ObligationType } from '@/types/database'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import {
@@ -142,8 +143,10 @@ export default async function AdminItemDetailPage({ params }: { params: Params }
       />
 
       <div className="space-y-4">
-        {/* Scadenza — mai per le voci promemoria: non confrontano mai date (invariante di prodotto) */}
-        {!isReminder && formattedDue && (
+        {/* Scadenza — mai per le voci promemoria: non confrontano mai date
+            (invariante di prodotto). Senza data il piano non è partito: al
+            posto del blocco scadenza va la nota di attesa consegna. */}
+        {!isReminder && (formattedDue ? (
           <div className={`rounded-xl p-3 ${
             effectiveStatus === 'scaduta'
               ? 'bg-status-overdue/8 text-status-overdue'
@@ -160,7 +163,9 @@ export default async function AdminItemDetailPage({ params }: { params: Params }
               <strong>{formattedDue}</strong>
             </span>
           </div>
-        )}
+        ) : (
+          <AwaitingDeliveryNote shell="dashboard" />
+        ))}
 
         {/* Residenza / ambito */}
         <div className="bg-surface rounded-xl border border-border p-6">

@@ -4,12 +4,13 @@ import { BookOpen, CalendarClock, ChevronRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireProfile } from '@/lib/auth'
 import { MaintenanceCard } from '@/components/MaintenanceCard'
+import { AwaitingDeliveryHomeCard } from '@/components/AwaitingDelivery'
 import { OBLIGATION_LABELS } from '@/components/MaintenanceBadge'
 import type { ObligationType } from '@/types/database'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import { pluralize } from '@/lib/pluralize'
 import {
-  isCountable, isInCorso, isOverdueLive, modeToPriority, resolveCompletionMode,
+  isCountable, isInCorso, isOverdueLive, isAwaitingDelivery, modeToPriority, resolveCompletionMode,
   resolveLiveStatus, formatRelativeDue, todayISO,
   LIVE_STATUS_FIELDS, LIVE_STATUS_TEMPLATE_FIELDS, type LiveStatusItem,
 } from '@/lib/maintenance-status'
@@ -106,6 +107,21 @@ export default async function HomePage() {
   const nextItem =
     ((rawNext ?? []) as unknown as NextItemRow[])
       .find(i => isCountable(i) && resolveCompletionMode(i) !== 'promemoria') ?? null
+
+  // Voci il cui piano non è partito: la data di consegna non è registrata.
+  // Si leggono dalla STESSA lista dei candidati urgenti (nessuna query in più:
+  // quella select non filtra per data) e servono solo a decidere se, in assenza
+  // di una prossima scadenza, il motivo è "non c'è ancora niente in programma"
+  // oppure "il piano non è partito". Sono due messaggi diversi.
+  const awaitingDelivery = ((rawUrgent ?? []) as unknown as ItemRow[]).filter(isAwaitingDelivery)
+
+  // Esiste almeno una voce con una data? Se no, il piano non è partito affatto
+  // e il banner verde "Tutto in ordine · Nessuna manutenzione in scadenza"
+  // sarebbe vero per omissione: niente è in ordine, niente è ancora iniziato.
+  // In quel caso parla solo la card neutra.
+  const hasAnyDated = ((rawUrgent ?? []) as unknown as ItemRow[]).some(
+    i => isCountable(i) && resolveCompletionMode(i) !== 'promemoria' && i.next_due_date !== null
+  )
   const nextObligation =
     (nextItem?.obligation_type ?? nextItem?.maintenance_templates?.obligation_type ?? null) as ObligationType | null
 
@@ -185,12 +201,12 @@ export default async function HomePage() {
             <span className="text-2xl font-medium text-semantic-red">{urgentCount}</span>
           </div>
         </Link>
-      ) : (
+      ) : hasAnyDated ? (
         <div className="bg-brand-light rounded-xl px-4 py-3">
           <p className="text-sm font-medium text-brand-dark">Tutto in ordine</p>
           <p className="text-xs text-brand-medium mt-0.5">Nessuna manutenzione in scadenza</p>
         </div>
-      )}
+      ) : null}
 
       {/* Prime card urgenti */}
       {urgentItems.length > 0 && (
@@ -213,6 +229,16 @@ export default async function HomePage() {
               />
             ))}
           </div>
+        </section>
+      )}
+
+      {/* Nessuna prossima scadenza perché il piano non è partito: card neutra,
+          senza conteggi e senza colori di allarme. Non è un problema da
+          risolvere da parte di chi legge, è un dato che manca a monte. */}
+      {!nextItem && awaitingDelivery.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="text-sm font-medium text-text-primary">Prossima manutenzione</h2>
+          <AwaitingDeliveryHomeCard />
         </section>
       )}
 

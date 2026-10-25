@@ -7,6 +7,7 @@ import { requireProfile } from '@/lib/auth'
 import { PriorityBadge } from '@/components/PriorityBadge'
 import { CompletionAction } from '../CompletionAction'
 import { N3AdminActions } from '@/components/N3AdminActions'
+import { AwaitingDeliveryNote } from '@/components/AwaitingDelivery'
 import {
   isOverdueLive, resolveCompletionMode, resolveLiveStatus, modeToPriority, todayISO,
   type LiveStatusItem,
@@ -94,8 +95,10 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
       </div>
 
       <div className="p-4 space-y-4">
-        {/* Scadenza — mai per le promemoria: nessun confronto data, nessun linguaggio scadenza */}
-        {formattedDue && mode !== 'promemoria' && (
+        {/* Scadenza — mai per le promemoria: nessun confronto data, nessun
+            linguaggio scadenza. Senza data il piano non è partito: al posto
+            del blocco scadenza va la nota di attesa consegna, non il vuoto. */}
+        {mode !== 'promemoria' && (formattedDue ? (
           <div className={`rounded-xl p-3 flex items-center gap-3 ${
             status === 'scaduta'
               ? 'bg-semantic-red-bg text-semantic-red'
@@ -108,7 +111,9 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
               <strong>{formattedDue}</strong>
             </span>
           </div>
-        )}
+        ) : (
+          <AwaitingDeliveryNote shell="app" />
+        ))}
 
         {/* Descrizione */}
         {tpl?.description && (

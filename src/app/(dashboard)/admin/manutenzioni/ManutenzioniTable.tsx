@@ -24,16 +24,22 @@ export type ActivityRow = {
   dueLabel: string | null
 }
 
+// 'in_attesa_consegna' prende il badge neutro 'in_attesa': non esiste uno
+// stato DB per "piano non partito" e inventarne uno qui vorrebbe dire un
+// quarto valore di MaintenanceStatus che nessuna colonna sa scrivere. La
+// distinzione la porta il testo della colonna scadenza.
 const BUCKET_BADGE: Record<ActivityBucket, MaintenanceStatus> = {
   in_ritardo: 'scaduta',
   in_corso:   'in_corso',
   in_arrivo:  'in_attesa',
+  in_attesa_consegna: 'in_attesa',
 }
 
 const BUCKET_DUE_CLASS: Record<ActivityBucket, string> = {
   in_ritardo: 'text-status-overdue',
   in_corso:   'text-status-inprogress',
   in_arrivo:  'text-text-secondary',
+  in_attesa_consegna: 'text-text-secondary',
 }
 
 export function ManutenzioniTable({ rows }: { rows: ActivityRow[] }) {

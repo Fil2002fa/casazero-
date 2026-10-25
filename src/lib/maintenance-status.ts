@@ -97,6 +97,32 @@ export function isInCorso(i: LiveStatusItem): boolean {
   return isCountable(i) && i.status === 'in_corso'
 }
 
+/** Testo unico per lo stato "senza data perche la consegna non e registrata". */
+export const AWAITING_DELIVERY_LABEL = 'In attesa di consegna'
+
+/**
+ * Voce conteggiabile il cui piano non e ancora partito: next_due_date e NULL
+ * perche manca la data di consegna (units.delivery_date per le voci di unita,
+ * residences.delivery_date per le parti comuni — vedi resolveDueBasis in
+ * src/lib/maintenance-due.ts).
+ *
+ * NON e uno stato di allarme e non e "scaduta": isOverdueLive pretende gia
+ * next_due_date non nullo, quindi le due condizioni sono disgiunte per
+ * costruzione. Le promemoria sono escluse: non hanno mai una data ne un
+ * linguaggio di scadenza, il loro rendering e sempre "Consigliata · ogni X
+ * mesi" (invariante di prodotto), quindi "in attesa di consegna" su una
+ * promemoria sarebbe una regressione di quell'invariante, non un
+ * miglioramento.
+ */
+export function isAwaitingDelivery(i: LiveStatusItem): boolean {
+  return (
+    isCountable(i) &&
+    resolveCompletionMode(i) !== 'promemoria' &&
+    i.status !== 'completata' &&
+    i.next_due_date === null
+  )
+}
+
 /**
  * Stato temporale live per un item non-promemoria (scaduta calcolata da data,
  * mai dal campo status salvato). Non usare su voci a modalità promemoria: quelle
@@ -144,13 +170,19 @@ export function countLive(items: LiveStatusItem[], today: string = todayISO()): 
 // mai contenere una promemoria, qualunque cosa dica il campo status salvato.
 // ---------------------------------------------------------------------------
 
-export type ActivityBucket = 'in_ritardo' | 'in_corso' | 'in_arrivo'
+export type ActivityBucket = 'in_ritardo' | 'in_corso' | 'in_arrivo' | 'in_attesa_consegna'
 
-/** Ordine di urgenza dei bucket: prima i ritardi, poi le prese in carico, poi il futuro. */
+/**
+ * Ordine di urgenza dei bucket: prima i ritardi, poi le prese in carico, poi
+ * il futuro, infine cio che non e ancora partito. 'in_attesa_consegna' e in
+ * coda perche non chiede niente a nessuno: non e un'attivita in arrivo, e
+ * un'attivita che non ha ancora una data.
+ */
 const ACTIVITY_BUCKET_RANK: Record<ActivityBucket, number> = {
   in_ritardo: 0,
   in_corso: 1,
   in_arrivo: 2,
+  in_attesa_consegna: 3,
 }
 
 /** Voce a carico dell'amministratore, ancora aperta. */
@@ -165,12 +197,18 @@ export function isAdminActivity(i: LiveStatusItem): boolean {
 /**
  * Bucket di urgenza di una voce già filtrata con isAdminActivity. Scaduta
  * calcolata live da next_due_date (isOverdueLive), mai dal campo status.
- * 'in_arrivo' è tutto il resto, voci senza data comprese: nessuna finestra
- * temporale, così il contatore coincide sempre con la lista.
+ * 'in_arrivo' è tutto il resto DATATO: nessuna finestra temporale, così il
+ * contatore coincide sempre con la lista.
+ *
+ * Le voci senza data stanno in 'in_attesa_consegna' e non in 'in_arrivo':
+ * un'attività "in arrivo" promette al suo destinatario che qualcosa accadrà,
+ * e una voce il cui piano non è partito non promette niente. Contarla tra le
+ * cose in arrivo gonfiava quel numero con voci che nessuno può pianificare.
  */
 export function activityBucket(i: LiveStatusItem, today: string = todayISO()): ActivityBucket {
   if (isOverdueLive(i, today)) return 'in_ritardo'
   if (isInCorso(i)) return 'in_corso'
+  if (isAwaitingDelivery(i)) return 'in_attesa_consegna'
   return 'in_arrivo'
 }
 
