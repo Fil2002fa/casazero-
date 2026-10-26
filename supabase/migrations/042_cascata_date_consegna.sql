@@ -391,6 +391,30 @@ NOTIFY pgrst, 'reload schema';
 -- ============================================================
 
 -- ------------------------------------------------------------
+-- BLOCCO 0 — VERIFICA PRELIMINARE DEGLI UUID, da lanciare PRIMA dei test:
+-- ogni fixture sopra esiste e ha le proprieta che i test presuppongono
+-- (perimetri, ruoli, assegnazione admin, categoria a catalogo, nessuna
+-- data Finiture gia presente che farebbe scattare la UNIQUE). SELECT
+-- singola, sola lettura. Serve anche ai test di 043, che usano Portello,
+-- A1 e il super_admin.
+-- ATTESO: 11 righe, tutte ok = true
+-- ------------------------------------------------------------
+-- SELECT cosa, ok FROM (VALUES
+--  ('01 Portello builder Furlan', EXISTS (SELECT 1 FROM public.residences WHERE id = 'adf97f32-859a-493e-b145-915979f1ae09' AND builder_id = '9923adbe-cfb4-47d3-b939-747bb30bcfe2')),
+--  ('02 Arcella builder Furlan', EXISTS (SELECT 1 FROM public.residences WHERE id = '37257b8c-5195-4714-9d14-5973c2032c9c' AND builder_id = '9923adbe-cfb4-47d3-b939-747bb30bcfe2')),
+--  ('03 TEST_ACCENSIONE altro builder', EXISTS (SELECT 1 FROM public.residences WHERE id = '9c719e2d-1a15-44e1-b11f-e29c067c5a42' AND builder_id <> '9923adbe-cfb4-47d3-b939-747bb30bcfe2')),
+--  ('04 unita A1 in Portello', EXISTS (SELECT 1 FROM public.units WHERE id = '4818141d-242c-4351-8dcd-005337afeb2b' AND residence_id = 'adf97f32-859a-493e-b145-915979f1ae09')),
+--  ('05 super_admin di Furlan', EXISTS (SELECT 1 FROM public.profiles WHERE id = '99b90ec5-6a80-4ec3-8884-377163c5510b' AND role = 'super_admin' AND builder_id = '9923adbe-cfb4-47d3-b939-747bb30bcfe2')),
+--  ('06 admin', EXISTS (SELECT 1 FROM public.profiles WHERE id = '7a210c85-7816-4d5f-b802-176505947469' AND role = 'admin')),
+--  ('07 admin assegnato a Portello', EXISTS (SELECT 1 FROM public.admin_assignments WHERE profile_id = '7a210c85-7816-4d5f-b802-176505947469' AND residence_id = 'adf97f32-859a-493e-b145-915979f1ae09')),
+--  ('08 admin NON assegnato ad Arcella', NOT EXISTS (SELECT 1 FROM public.admin_assignments WHERE profile_id = '7a210c85-7816-4d5f-b802-176505947469' AND residence_id = '37257b8c-5195-4714-9d14-5973c2032c9c')),
+--  ('09 voce 699aa01c di A1 in Portello', EXISTS (SELECT 1 FROM public.maintenance_items WHERE id = '699aa01c-e21d-4482-a8e4-fe35943874e6' AND unit_id = '4818141d-242c-4351-8dcd-005337afeb2b' AND residence_id = 'adf97f32-859a-493e-b145-915979f1ae09')),
+--  ('10 Finiture a catalogo', EXISTS (SELECT 1 FROM public.maintenance_templates WHERE category = 'Finiture')),
+--  ('11 nessuna data Finiture preesistente', NOT EXISTS (SELECT 1 FROM public.residence_category_dates WHERE category = 'Finiture' AND residence_id IN ('adf97f32-859a-493e-b145-915979f1ae09','37257b8c-5195-4714-9d14-5973c2032c9c','9c719e2d-1a15-44e1-b11f-e29c067c5a42')))
+-- ) AS t(cosa, ok) ORDER BY cosa;
+-- ESITO (26/10): 11/11 true.
+
+-- ------------------------------------------------------------
 -- NEGATIVO 1 — l'admin NON scrive la base della cascata, nemmeno su una
 -- voce della residenza che amministra. Senza il ramo nuovo della sezione 5
 -- la allowlist della 021 glielo permetterebbe. Se l'admin non vedesse la
