@@ -4,6 +4,8 @@
 -- esiti reali nel footer in fondo (V0-V9, tutti con l'atteso). La V0b ha
 -- confermato che il corpo vivo del guard coincideva con quello della 021,
 -- quindi la riscrittura della sezione 5 non ha cancellato nessun ramo.
+-- Test RLS (6 negativi + 5 positivi) eseguiti il 2026-10-26, tutti con
+-- l'atteso: esiti in fondo, blocchi commentati.
 -- Statement singoli idempotenti, nessun BEGIN/COMMIT (il SQL Editor non gira
 -- in transazione): rieseguibile senza effetti collaterali.
 -- SOLO modello dati + RLS + grants: nessun seed, nessuna UI, nessuna modifica
@@ -345,12 +347,25 @@ NOTIFY pgrst, 'reload schema';
 --        'finiture' minuscolo comparirebbero qui come orfane.
 
 -- ============================================================
--- TEST RLS — UUID REALI del DB demo al 24/10/2026. Ogni blocco e autonomo e
--- va eseguito in UNA SOLA esecuzione del SQL Editor: il 14/09 l'editor non ha
--- tenuto una transazione tra esecuzioni separate (un BEGIN e un ROLLBACK
--- lanciati a parte NON si parlano), quindi un blocco spezzato lascerebbe
--- scritture a meta. Ogni blocco chiude con ROLLBACK: nessuno di questi test
--- lascia righe nel DB.
+-- TEST RLS — eseguiti il 26/10/2026 nel SQL Editor, tutti con l'esito
+-- atteso. UUID reali del DB demo, riverificati il 26/10 da una SELECT
+-- preliminare (11/11 true).
+--
+-- FORMA: ogni test e UN SOLO blocco DO, non BEGIN ... ROLLBACK, ed e
+-- COMMENTATO: rilanciare questo file come migrazione non deve eseguirli.
+-- La prima stesura (24/10) li aveva come SQL vivo, con due difetti:
+--   - il SQL Editor mostra solo il risultato dell'ULTIMA istruzione
+--     (032_grants_hardening_anon.sql:76-77): un blocco che chiude con
+--     ROLLBACK mostra "No rows returned" qualunque sia l'esito, quindi
+--     NEG3, NEG4 e tutti i POSITIVI non erano leggibili;
+--   - il 14/09 l'editor non ha tenuto una transazione tra esecuzioni
+--     separate: un DO e un solo statement, una sola esecuzione per
+--     costruzione.
+-- Ogni ramo del DO termina con RAISE EXCEPTION: rollback totale sempre,
+-- anche se il test fallisce, quindi nessun test lascia righe nel DB. Il
+-- banner rosso e voluto: il verdetto e il testo dopo ESITO (OK / FALLITO /
+-- INATTESO). Il ruolo si cambia con set_config(..., true), locale alla
+-- transazione del DO.
 --
 -- ATTORI
 --   super_admin  99b90ec5-6a80-4ec3-8884-377163c5510b  pippoloro02@gmail.com
@@ -378,182 +393,276 @@ NOTIFY pgrst, 'reload schema';
 -- ------------------------------------------------------------
 -- NEGATIVO 1 — l'admin NON scrive la base della cascata, nemmeno su una
 -- voce della residenza che amministra. Senza il ramo nuovo della sezione 5
--- la allowlist della 021 glielo permetterebbe.
--- ATTESO: ERROR  colonna non modificabile dal ruolo admin: due_basis_override
+-- la allowlist della 021 glielo permetterebbe. Se l'admin non vedesse la
+-- voce (0 righe) il guard non sarebbe messo alla prova: esito INATTESO.
+-- ATTESO: ESITO 042 NEG1: OK, guard -> colonna non modificabile dal ruolo
+--         admin: due_basis_override
 -- ------------------------------------------------------------
-BEGIN;
-SET ROLE authenticated;
-SET request.jwt.claims = '{"sub":"7a210c85-7816-4d5f-b802-176505947469"}';
-UPDATE public.maintenance_items SET due_basis_override = '2026-01-01'
- WHERE id = '699aa01c-e21d-4482-a8e4-fe35943874e6';
-RESET ROLE;
-ROLLBACK;
--- ESITO: (da incollare)
+-- DO $$
+-- DECLARE n int;
+-- BEGIN
+--   PERFORM set_config('request.jwt.claims', '{"sub":"7a210c85-7816-4d5f-b802-176505947469","role":"authenticated"}', true);
+--   PERFORM set_config('role', 'authenticated', true);
+--   BEGIN
+--     UPDATE public.maintenance_items SET due_basis_override = '2026-01-01'
+--      WHERE id = '699aa01c-e21d-4482-a8e4-fe35943874e6';
+--     GET DIAGNOSTICS n = ROW_COUNT;
+--   EXCEPTION WHEN raise_exception THEN
+--     IF SQLERRM = 'colonna non modificabile dal ruolo admin: due_basis_override' THEN
+--       RAISE EXCEPTION 'ESITO 042 NEG1: OK, guard -> %', SQLERRM;
+--     END IF;
+--     RAISE EXCEPTION 'ESITO 042 NEG1: INATTESO -> %', SQLERRM;
+--   END;
+--   IF n = 0 THEN
+--     RAISE EXCEPTION 'ESITO 042 NEG1: INATTESO, 0 righe visibili all admin, guard non messo alla prova';
+--   END IF;
+--   RAISE EXCEPTION 'ESITO 042 NEG1: FALLITO, admin ha scritto due_basis_override su % righe (annullato)', n;
+-- END $$;
+-- ESITO (26/10): OK, bloccato dal guard.
 
 -- ------------------------------------------------------------
 -- NEGATIVO 2 — l'admin NON inserisce una data di categoria: nessuna policy
 -- INSERT per il suo ruolo, nemmeno sulla residenza che amministra.
--- ATTESO: ERROR  new row violates row-level security policy
+-- ATTESO: ESITO 042 NEG2: OK, RLS -> new row violates row-level security policy ...
 -- ------------------------------------------------------------
-BEGIN;
-SET ROLE authenticated;
-SET request.jwt.claims = '{"sub":"7a210c85-7816-4d5f-b802-176505947469"}';
-INSERT INTO public.residence_category_dates (residence_id, category, delivery_date)
-VALUES ('adf97f32-859a-493e-b145-915979f1ae09', 'Finiture', '2026-01-01');
-RESET ROLE;
-ROLLBACK;
--- ESITO: (da incollare)
+-- DO $$
+-- BEGIN
+--   PERFORM set_config('request.jwt.claims', '{"sub":"7a210c85-7816-4d5f-b802-176505947469","role":"authenticated"}', true);
+--   PERFORM set_config('role', 'authenticated', true);
+--   BEGIN
+--     INSERT INTO public.residence_category_dates (residence_id, category, delivery_date)
+--     VALUES ('adf97f32-859a-493e-b145-915979f1ae09', 'Finiture', '2026-01-01');
+--   EXCEPTION WHEN insufficient_privilege THEN
+--     IF SQLERRM LIKE 'new row violates row-level security policy%' THEN
+--       RAISE EXCEPTION 'ESITO 042 NEG2: OK, RLS -> %', SQLERRM;
+--     END IF;
+--     RAISE EXCEPTION 'ESITO 042 NEG2: INATTESO -> %', SQLERRM;
+--   END;
+--   RAISE EXCEPTION 'ESITO 042 NEG2: FALLITO, admin ha inserito (annullato)';
+-- END $$;
+-- ESITO (26/10): OK, new row violates row-level security policy.
 
 -- ------------------------------------------------------------
 -- NEGATIVO 3 — l'admin NON aggiorna una data di categoria che esiste gia.
 -- La riga viene creata come postgres nello stesso blocco, perche una UPDATE
 -- su zero righe non proverebbe niente: senza la riga, "0 righe aggiornate"
 -- sarebbe l'esito sia con la policy sia senza.
--- ATTESO: UPDATE 0 (la riga esiste ma la policy non la rende aggiornabile)
+-- ATTESO: ESITO 042 NEG3: OK, la riga esiste ma admin ne aggiorna 0
 -- ------------------------------------------------------------
-BEGIN;
-INSERT INTO public.residence_category_dates (residence_id, category, delivery_date)
-VALUES ('adf97f32-859a-493e-b145-915979f1ae09', 'Finiture', '2026-01-01');
-SET ROLE authenticated;
-SET request.jwt.claims = '{"sub":"7a210c85-7816-4d5f-b802-176505947469"}';
-UPDATE public.residence_category_dates SET delivery_date = '2026-02-01'
- WHERE residence_id = 'adf97f32-859a-493e-b145-915979f1ae09' AND category = 'Finiture';
-RESET ROLE;
-ROLLBACK;
--- ESITO: (da incollare)
+-- DO $$
+-- DECLARE n int;
+-- BEGIN
+--   INSERT INTO public.residence_category_dates (residence_id, category, delivery_date)
+--   VALUES ('adf97f32-859a-493e-b145-915979f1ae09', 'Finiture', '2026-01-01');
+--   PERFORM set_config('request.jwt.claims', '{"sub":"7a210c85-7816-4d5f-b802-176505947469","role":"authenticated"}', true);
+--   PERFORM set_config('role', 'authenticated', true);
+--   UPDATE public.residence_category_dates SET delivery_date = '2026-02-01'
+--    WHERE residence_id = 'adf97f32-859a-493e-b145-915979f1ae09' AND category = 'Finiture';
+--   GET DIAGNOSTICS n = ROW_COUNT;
+--   IF n = 0 THEN
+--     RAISE EXCEPTION 'ESITO 042 NEG3: OK, la riga esiste ma admin ne aggiorna 0';
+--   END IF;
+--   RAISE EXCEPTION 'ESITO 042 NEG3: FALLITO, admin ha aggiornato % righe (annullato)', n;
+-- END $$;
+-- ESITO (26/10): OK, la riga esiste ma admin ne aggiorna 0.
 
 -- ------------------------------------------------------------
 -- NEGATIVO 4 — l'admin NON legge le date di categoria di una residenza che
--- non amministra (Arcella). Stessa riga creata come postgres, stesso motivo
--- del test 3: senza la riga, "0 righe" non distinguerebbe la policy dal
--- vuoto. Poi legge Portello, dove invece la riga non c'e: deve vedere 0.
--- ATTESO: SELECT 0 righe su Arcella
+-- non amministra (Arcella). Riga creata come postgres, stesso motivo del
+-- test 3: senza la riga, "0 righe" non distinguerebbe la policy dal vuoto.
+-- ATTESO: ESITO 042 NEG4: OK, admin vede 0 righe su Arcella
 -- ------------------------------------------------------------
-BEGIN;
-INSERT INTO public.residence_category_dates (residence_id, category, delivery_date)
-VALUES ('37257b8c-5195-4714-9d14-5973c2032c9c', 'Finiture', '2026-01-01');
-SET ROLE authenticated;
-SET request.jwt.claims = '{"sub":"7a210c85-7816-4d5f-b802-176505947469"}';
-SELECT residence_id, category, delivery_date FROM public.residence_category_dates
- WHERE residence_id = '37257b8c-5195-4714-9d14-5973c2032c9c';
-RESET ROLE;
-ROLLBACK;
--- ESITO: (da incollare)
+-- DO $$
+-- DECLARE n int;
+-- BEGIN
+--   INSERT INTO public.residence_category_dates (residence_id, category, delivery_date)
+--   VALUES ('37257b8c-5195-4714-9d14-5973c2032c9c', 'Finiture', '2026-01-01');
+--   PERFORM set_config('request.jwt.claims', '{"sub":"7a210c85-7816-4d5f-b802-176505947469","role":"authenticated"}', true);
+--   PERFORM set_config('role', 'authenticated', true);
+--   SELECT count(*) INTO n FROM public.residence_category_dates
+--    WHERE residence_id = '37257b8c-5195-4714-9d14-5973c2032c9c';
+--   IF n = 0 THEN
+--     RAISE EXCEPTION 'ESITO 042 NEG4: OK, admin vede 0 righe su Arcella';
+--   END IF;
+--   RAISE EXCEPTION 'ESITO 042 NEG4: FALLITO, admin vede % righe su Arcella', n;
+-- END $$;
+-- ESITO (26/10): OK, admin vede 0 righe di Arcella.
 
 -- ------------------------------------------------------------
 -- NEGATIVO 5 — il super_admin NON scrive fuori dal proprio builder: la
 -- clausola EXISTS della policy lega residence_id a czero_user_builder_id().
 -- __TEST_ACCENSIONE__ sta sul builder "Archivio pre-demo".
--- ATTESO: ERROR  new row violates row-level security policy
+-- ATTESO: ESITO 042 NEG5: OK, RLS -> new row violates row-level security policy ...
 -- ------------------------------------------------------------
-BEGIN;
-SET ROLE authenticated;
-SET request.jwt.claims = '{"sub":"99b90ec5-6a80-4ec3-8884-377163c5510b"}';
-INSERT INTO public.residence_category_dates (residence_id, category, delivery_date)
-VALUES ('9c719e2d-1a15-44e1-b11f-e29c067c5a42', 'Finiture', '2026-01-01');
-RESET ROLE;
-ROLLBACK;
--- ESITO: (da incollare)
+-- DO $$
+-- BEGIN
+--   PERFORM set_config('request.jwt.claims', '{"sub":"99b90ec5-6a80-4ec3-8884-377163c5510b","role":"authenticated"}', true);
+--   PERFORM set_config('role', 'authenticated', true);
+--   BEGIN
+--     INSERT INTO public.residence_category_dates (residence_id, category, delivery_date)
+--     VALUES ('9c719e2d-1a15-44e1-b11f-e29c067c5a42', 'Finiture', '2026-01-01');
+--   EXCEPTION WHEN insufficient_privilege THEN
+--     IF SQLERRM LIKE 'new row violates row-level security policy%' THEN
+--       RAISE EXCEPTION 'ESITO 042 NEG5: OK, RLS -> %', SQLERRM;
+--     END IF;
+--     RAISE EXCEPTION 'ESITO 042 NEG5: INATTESO -> %', SQLERRM;
+--   END;
+--   RAISE EXCEPTION 'ESITO 042 NEG5: FALLITO, super_admin ha scritto su altro builder (annullato)';
+-- END $$;
+-- ESITO (26/10): OK, new row violates row-level security policy.
 
 -- ------------------------------------------------------------
 -- NEGATIVO 6 — la UNIQUE regge: due righe sulla stessa coppia (residenza,
 -- categoria). Gira come postgres: il vincolo non passa dalla RLS.
--- ATTESO: ERROR  duplicate key value violates unique constraint
---                "residence_category_dates_uniq"
+-- ATTESO: ESITO 042 NEG6: OK, respinto da residence_category_dates_uniq
 -- ------------------------------------------------------------
-BEGIN;
-INSERT INTO public.residence_category_dates (residence_id, category, delivery_date)
-VALUES ('adf97f32-859a-493e-b145-915979f1ae09', 'Finiture', '2026-01-01'),
-       ('adf97f32-859a-493e-b145-915979f1ae09', 'Finiture', '2026-03-01');
-ROLLBACK;
--- ESITO: (da incollare)
+-- DO $$
+-- DECLARE v_con text;
+-- BEGIN
+--   BEGIN
+--     INSERT INTO public.residence_category_dates (residence_id, category, delivery_date)
+--     VALUES ('adf97f32-859a-493e-b145-915979f1ae09', 'Finiture', '2026-01-01'),
+--            ('adf97f32-859a-493e-b145-915979f1ae09', 'Finiture', '2026-03-01');
+--   EXCEPTION WHEN unique_violation THEN
+--     GET STACKED DIAGNOSTICS v_con = CONSTRAINT_NAME;
+--     IF v_con = 'residence_category_dates_uniq' THEN
+--       RAISE EXCEPTION 'ESITO 042 NEG6: OK, respinto da %', v_con;
+--     END IF;
+--     RAISE EXCEPTION 'ESITO 042 NEG6: INATTESO, respinto da %', v_con;
+--   END;
+--   RAISE EXCEPTION 'ESITO 042 NEG6: FALLITO, due righe sulla stessa coppia (annullato)';
+-- END $$;
+-- ESITO (26/10): OK, respinto da residence_category_dates_uniq.
 
 -- ------------------------------------------------------------
 -- POSITIVO 1 — l'admin LEGGE le date di categoria della residenza che
--- amministra. E il rovescio del test 4: stessa query, residenza dentro il
--- suo perimetro, la riga deve comparire.
--- ATTESO: 1 riga  adf97f32... | Finiture | 2026-01-01
+-- amministra. E il rovescio del test 4: residenza dentro il suo perimetro,
+-- la riga deve comparire.
+-- ATTESO: ESITO 042 POS1: OK, admin vede 1 riga, data 2026-01-01
 -- ------------------------------------------------------------
-BEGIN;
-INSERT INTO public.residence_category_dates (residence_id, category, delivery_date)
-VALUES ('adf97f32-859a-493e-b145-915979f1ae09', 'Finiture', '2026-01-01');
-SET ROLE authenticated;
-SET request.jwt.claims = '{"sub":"7a210c85-7816-4d5f-b802-176505947469"}';
-SELECT residence_id, category, delivery_date FROM public.residence_category_dates
- WHERE residence_id = 'adf97f32-859a-493e-b145-915979f1ae09';
-RESET ROLE;
-ROLLBACK;
--- ESITO: (da incollare)
+-- DO $$
+-- DECLARE n int; v_date date;
+-- BEGIN
+--   INSERT INTO public.residence_category_dates (residence_id, category, delivery_date)
+--   VALUES ('adf97f32-859a-493e-b145-915979f1ae09', 'Finiture', '2026-01-01');
+--   PERFORM set_config('request.jwt.claims', '{"sub":"7a210c85-7816-4d5f-b802-176505947469","role":"authenticated"}', true);
+--   PERFORM set_config('role', 'authenticated', true);
+--   SELECT count(*), max(delivery_date) INTO n, v_date FROM public.residence_category_dates
+--    WHERE residence_id = 'adf97f32-859a-493e-b145-915979f1ae09';
+--   IF n = 1 AND v_date = '2026-01-01' THEN
+--     RAISE EXCEPTION 'ESITO 042 POS1: OK, admin vede 1 riga, data %', v_date;
+--   END IF;
+--   RAISE EXCEPTION 'ESITO 042 POS1: FALLITO, admin vede % righe, data %', n, v_date;
+-- END $$;
+-- ESITO (26/10): OK, admin vede 1 riga, data 2026-01-01.
 
 -- ------------------------------------------------------------
 -- POSITIVO 2 — il super_admin inserisce, aggiorna e cancella una data di
--- categoria sulla propria residenza. L'UPDATE restituisce anche created_at e
--- updated_at: devono essere diversi, altrimenti il trigger
--- residence_category_dates_updated_at non sta scattando.
--- ATTESO: INSERT 1 riga · UPDATE 2026-02-01 con updated_at > created_at ·
---         DELETE 1 riga
+-- categoria sulla propria residenza, e il trigger updated_at scatta.
+-- CORRETTO il 26/10: la prima stesura confrontava updated_at > created_at,
+-- che e SEMPRE falso dentro una sola transazione — NOW() e l'ora di inizio
+-- della transazione (set_updated_at, 001_schema.sql:299), quindi default e
+-- trigger scrivono lo stesso istante. Ora created_at/updated_at sono
+-- inseriti al 2000-01-01: se il trigger scatta, updated_at diventa NOW().
+-- ATTESO: ESITO 042 POS2: OK, update 2026-02-01, updated_at <ora> > 2000-01-01, delete 1
 -- ------------------------------------------------------------
-BEGIN;
-SET ROLE authenticated;
-SET request.jwt.claims = '{"sub":"99b90ec5-6a80-4ec3-8884-377163c5510b"}';
-INSERT INTO public.residence_category_dates (residence_id, category, delivery_date)
-VALUES ('adf97f32-859a-493e-b145-915979f1ae09', 'Finiture', '2026-01-01')
-RETURNING id, category, delivery_date;
-UPDATE public.residence_category_dates SET delivery_date = '2026-02-01'
- WHERE residence_id = 'adf97f32-859a-493e-b145-915979f1ae09' AND category = 'Finiture'
-RETURNING delivery_date, created_at, updated_at, updated_at > created_at AS trigger_scattato;
-DELETE FROM public.residence_category_dates
- WHERE residence_id = 'adf97f32-859a-493e-b145-915979f1ae09' AND category = 'Finiture'
-RETURNING id;
-RESET ROLE;
-ROLLBACK;
--- ESITO: (da incollare)
+-- DO $$
+-- DECLARE v_id uuid; v_date date; v_upd timestamptz; n int;
+-- BEGIN
+--   PERFORM set_config('request.jwt.claims', '{"sub":"99b90ec5-6a80-4ec3-8884-377163c5510b","role":"authenticated"}', true);
+--   PERFORM set_config('role', 'authenticated', true);
+--   INSERT INTO public.residence_category_dates (residence_id, category, delivery_date, created_at, updated_at)
+--   VALUES ('adf97f32-859a-493e-b145-915979f1ae09', 'Finiture', '2026-01-01', '2000-01-01', '2000-01-01')
+--   RETURNING id INTO v_id;
+--   UPDATE public.residence_category_dates SET delivery_date = '2026-02-01'
+--    WHERE id = v_id
+--   RETURNING delivery_date, updated_at INTO v_date, v_upd;
+--   DELETE FROM public.residence_category_dates WHERE id = v_id;
+--   GET DIAGNOSTICS n = ROW_COUNT;
+--   IF v_id IS NOT NULL AND v_date = '2026-02-01' AND v_upd > '2000-01-01' AND n = 1 THEN
+--     RAISE EXCEPTION 'ESITO 042 POS2: OK, update %, updated_at % > 2000-01-01, delete %', v_date, v_upd, n;
+--   END IF;
+--   RAISE EXCEPTION 'ESITO 042 POS2: FALLITO, id %, update %, updated_at %, delete %', v_id, v_date, v_upd, n;
+-- END $$;
+-- ESITO (26/10): OK, update 2026-02-01, updated_at 2026-10-26 19:17:08+00,
+--        delete 1.
 
 -- ------------------------------------------------------------
 -- POSITIVO 3 — il super_admin scrive l'override di voce: il ramo nuovo del
 -- guard riguarda il solo ruolo admin, non lui.
--- ATTESO: 1 riga  699aa01c... | 2026-01-01
+-- ATTESO: ESITO 042 POS3: OK, 1 riga, override 2026-01-01
 -- ------------------------------------------------------------
-BEGIN;
-SET ROLE authenticated;
-SET request.jwt.claims = '{"sub":"99b90ec5-6a80-4ec3-8884-377163c5510b"}';
-UPDATE public.maintenance_items SET due_basis_override = '2026-01-01'
- WHERE id = '699aa01c-e21d-4482-a8e4-fe35943874e6'
-RETURNING id, due_basis_override;
-RESET ROLE;
-ROLLBACK;
--- ESITO: (da incollare)
+-- DO $$
+-- DECLARE n int; v date;
+-- BEGIN
+--   PERFORM set_config('request.jwt.claims', '{"sub":"99b90ec5-6a80-4ec3-8884-377163c5510b","role":"authenticated"}', true);
+--   PERFORM set_config('role', 'authenticated', true);
+--   UPDATE public.maintenance_items SET due_basis_override = '2026-01-01'
+--    WHERE id = '699aa01c-e21d-4482-a8e4-fe35943874e6'
+--   RETURNING due_basis_override INTO v;
+--   GET DIAGNOSTICS n = ROW_COUNT;
+--   IF n = 1 AND v = '2026-01-01' THEN
+--     RAISE EXCEPTION 'ESITO 042 POS3: OK, % riga, override %', n, v;
+--   END IF;
+--   RAISE EXCEPTION 'ESITO 042 POS3: FALLITO, % righe, override %', n, v;
+-- END $$;
+-- ESITO (26/10): OK, 1 riga, override 2026-01-01.
 
 -- ------------------------------------------------------------
 -- POSITIVO 4 — scrittura senza sessione utente (service role e SQL Editor):
 -- czero_user_role() e NULL, il guard esce subito con RETURN NEW. E il
 -- percorso delle RPC di creazione e del cron.
--- ATTESO: 1 riga, nessun errore
+-- ATTESO: ESITO 042 POS4: OK, ruolo <NULL>, 1 riga, override 2026-01-01
 -- ------------------------------------------------------------
-BEGIN;
-UPDATE public.maintenance_items SET due_basis_override = '2026-01-01'
- WHERE id = '699aa01c-e21d-4482-a8e4-fe35943874e6'
-RETURNING id, due_basis_override;
-ROLLBACK;
--- ESITO: (da incollare)
+-- DO $$
+-- DECLARE n int; v date; v_role text;
+-- BEGIN
+--   v_role := public.czero_user_role()::text;
+--   UPDATE public.maintenance_items SET due_basis_override = '2026-01-01'
+--    WHERE id = '699aa01c-e21d-4482-a8e4-fe35943874e6'
+--   RETURNING due_basis_override INTO v;
+--   GET DIAGNOSTICS n = ROW_COUNT;
+--   IF v_role IS NULL AND n = 1 AND v = '2026-01-01' THEN
+--     RAISE EXCEPTION 'ESITO 042 POS4: OK, ruolo <NULL>, % riga, override %', n, v;
+--   END IF;
+--   RAISE EXCEPTION 'ESITO 042 POS4: FALLITO, ruolo %, % righe, override %', coalesce(v_role, '<NULL>'), n, v;
+-- END $$;
+-- ESITO (26/10): OK, ruolo NULL, 1 riga.
 
 -- ------------------------------------------------------------
 -- POSITIVO 5 — il guard NON si e allargato per sbaglio: l'admin continua a
 -- poter scrivere cio che la 021 gli lasciava, incluso next_due_date, sulla
 -- residenza che amministra. Se questo test fallisse, la sezione 5 avrebbe
 -- rotto updateMaintenanceItemConfig.
--- ATTESO: 1 riga, nessun errore
+-- ATTESO: ESITO 042 POS5: OK, admin aggiorna 1 riga, next_due_date <data>
 -- ------------------------------------------------------------
-BEGIN;
-SET ROLE authenticated;
-SET request.jwt.claims = '{"sub":"7a210c85-7816-4d5f-b802-176505947469"}';
-UPDATE public.maintenance_items
-   SET status = status, next_due_date = next_due_date,
-       frequency_months = frequency_months, warranty_info = warranty_info,
-       supplier_id = supplier_id, completion_mode = completion_mode,
-       obligation_type = obligation_type, priority = priority
- WHERE id = '699aa01c-e21d-4482-a8e4-fe35943874e6'
-RETURNING id, next_due_date;
-RESET ROLE;
-ROLLBACK;
--- ESITO: (da incollare)
+-- DO $$
+-- DECLARE n int; v date;
+-- BEGIN
+--   PERFORM set_config('request.jwt.claims', '{"sub":"7a210c85-7816-4d5f-b802-176505947469","role":"authenticated"}', true);
+--   PERFORM set_config('role', 'authenticated', true);
+--   UPDATE public.maintenance_items
+--      SET status = status, next_due_date = next_due_date,
+--          frequency_months = frequency_months, warranty_info = warranty_info,
+--          supplier_id = supplier_id, completion_mode = completion_mode,
+--          obligation_type = obligation_type, priority = priority
+--    WHERE id = '699aa01c-e21d-4482-a8e4-fe35943874e6'
+--   RETURNING next_due_date INTO v;
+--   GET DIAGNOSTICS n = ROW_COUNT;
+--   IF n = 1 THEN
+--     RAISE EXCEPTION 'ESITO 042 POS5: OK, admin aggiorna % riga, next_due_date %', n, v;
+--   END IF;
+--   RAISE EXCEPTION 'ESITO 042 POS5: FALLITO, admin aggiorna % righe', n;
+-- END $$;
+-- ESITO (26/10): OK, admin aggiorna 1 riga, next_due_date 2029-06-01.
+
+-- ------------------------------------------------------------
+-- CONTROLLO RESIDUI — i test non hanno lasciato righe ne override.
+-- ATTESO: 0 | 0
+-- ------------------------------------------------------------
+-- SELECT (SELECT count(*) FROM residence_category_dates) AS righe_categoria,
+--        (SELECT count(*) FROM maintenance_items
+--          WHERE due_basis_override IS NOT NULL) AS override_valorizzati;
+-- ESITO: non riportato. Il report del 26/10 lo lascia vuoto. Nessuna riga
+--        e attesa per costruzione (ogni ramo dei DO termina in RAISE), ma
+--        questa e un'argomentazione, non una misura: da eseguire e incollare.
