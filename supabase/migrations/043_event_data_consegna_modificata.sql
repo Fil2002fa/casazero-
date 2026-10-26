@@ -254,10 +254,20 @@ NOTIFY pgrst, 'reload schema';
 --        registro resta append-only anche dopo l'allargamento del vincolo.
 
 -- CONTROLLO RESIDUI (i test non hanno lasciato righe nel registro).
--- Atteso: 18 | 0
--- SELECT count(*) AS righe_registro,
---        count(*) FILTER (WHERE actor_name = 'Filippo test') AS righe_test
---   FROM activity_events;
--- ESITO: non riportato. Il report del 26/10 lo lascia vuoto. Nessuna riga
---        e attesa per costruzione (ogni ramo dei DO termina in RAISE), ma
---        questa e un'argomentazione, non una misura: da eseguire e incollare.
+-- Atteso: 0
+-- SELECT count(*) FROM activity_events
+--  WHERE event_type = 'data_consegna_modificata';
+-- ESITO (26/10): 0. Nessun evento del tipo nuovo nel registro: il test
+--        positivo, l'unico che lo scrive, e stato annullato davvero. E
+--        anche il conteggio vero oggi, perche nessun codice scrive ancora
+--        questo tipo (arriva con la modale Registra consegna).
+--
+-- QUERY SCARTATA IL 26/10 — non riusarla: la prima stesura filtrava per
+-- actor_name = 'Filippo test' contando come "righe di test" quelle con il
+-- nome usato nei test. Ma 'Filippo test' e il full_name REALE del profilo
+-- pippoloro02 (99b90ec5...), quindi la query contava anche gli eventi veri:
+-- esito 25 | 24, tutti eventi reali (inviti, assegnazioni, solleciti).
+-- Un filtro su un valore che compare anche nei dati veri non distingue il
+-- residuo di un test da un atto reale. Il tipo di evento invece si: nessun
+-- atto reale scrive ancora data_consegna_modificata. (25 e non 18 come
+-- nella V1 del 24/10: sono atti reali registrati nel frattempo.)

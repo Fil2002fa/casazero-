@@ -687,6 +687,5 @@ NOTIFY pgrst, 'reload schema';
 -- SELECT (SELECT count(*) FROM residence_category_dates) AS righe_categoria,
 --        (SELECT count(*) FROM maintenance_items
 --          WHERE due_basis_override IS NOT NULL) AS override_valorizzati;
--- ESITO: non riportato. Il report del 26/10 lo lascia vuoto. Nessuna riga
---        e attesa per costruzione (ogni ramo dei DO termina in RAISE), ma
---        questa e un'argomentazione, non una misura: da eseguire e incollare.
+-- ESITO (26/10): 0 | 0. Nessuna data di categoria e nessun override rimasti
+--        dopo gli 11 test: il rollback dei DO e misurato, non solo atteso.
