@@ -1,7 +1,8 @@
 -- ============================================================
 -- CasaZero — 043: nuovo tipo di evento data_consegna_modificata
 -- APPLICATA a mano nel SQL Editor il 2026-10-24, verificata da Filippo:
--- esiti reali nei footer in fondo.
+-- esiti reali nei footer in fondo. V3 corretta e test di scrittura eseguiti
+-- il 2026-10-26, tutti con l'atteso.
 --
 -- AVVERTENZA SULL'ORDINE: la V0 (pre-apply) e stata eseguita DOPO l'apply,
 -- quindi lo stato precedente del vincolo non e stato osservato e non esiste
@@ -169,11 +170,10 @@ NOTIFY pgrst, 'reload schema';
 --         AND a.attname = 'event_type'
 --    );
 -- Atteso: esattamente 1 riga, activity_events_event_type_check.
--- ESITO: query corretta non ancora eseguita. Con la query vecchia (tutte le
---        CHECK): 2, cioe activity_events_event_type_check e
---        activity_events_payload_check. Dai nomi segue che su event_type ce
---        n'e una sola, quindi la trappola non e scattata; la riesecuzione
---        con la query corretta deve dare 1 riga e va incollata qui.
+-- ESITO (26/10, query corretta): 1 riga, activity_events_event_type_check
+--        con 9 valori. Su event_type c'e una sola CHECK: la trappola del
+--        doppio vincolo non e scattata. (Con la query vecchia, 24/10: 2 righe,
+--        event_type_check + payload_check, coerente con questo esito.)
 
 -- V4. Registro invariato: stessi conteggi della V1, riga per riga.
 -- SELECT count(*) AS righe_registro FROM activity_events;
@@ -185,40 +185,64 @@ NOTIFY pgrst, 'reload schema';
 --        ancora scritto.
 
 -- ============================================================
--- TEST — ogni blocco in UNA SOLA esecuzione del SQL Editor (il 14/09
--- l'editor non ha tenuto una transazione tra esecuzioni separate). Gli UUID
--- sono quelli reali del DB demo al 24/10: residenza Portello
--- adf97f32-859a-493e-b145-915979f1ae09, sua unita A1
+-- TEST — eseguiti il 26/10 nel SQL Editor, UUID reali del DB demo
+-- (riverificati il 26/10 da una SELECT preliminare: 11/11 true). Residenza
+-- Portello adf97f32-859a-493e-b145-915979f1ae09, sua unita A1
 -- 4818141d-242c-4351-8dcd-005337afeb2b, super_admin pippoloro02
--- 99b90ec5-6a80-4ec3-8884-377163c5510b. Ogni blocco chiude con ROLLBACK:
--- nessun test lascia righe nel registro, che e append-only.
+-- 99b90ec5-6a80-4ec3-8884-377163c5510b.
+--
+-- FORMA: ogni test e UN SOLO blocco DO, non BEGIN ... ROLLBACK. Due motivi:
+--   - il SQL Editor mostra solo il risultato dell'ULTIMA istruzione
+--     (032_grants_hardening_anon.sql:76-77): un blocco che chiude con
+--     ROLLBACK mostra "No rows returned" qualunque sia l'esito, quindi un
+--     test positivo non e leggibile;
+--   - il 14/09 l'editor non ha tenuto una transazione tra esecuzioni
+--     separate: un DO e un solo statement, una sola esecuzione per
+--     costruzione.
+-- Ogni ramo del DO termina con RAISE EXCEPTION: rollback totale sempre,
+-- anche se il test fallisce, quindi nessun test lascia righe nel registro,
+-- che e append-only. Il banner rosso e voluto: il verdetto e il testo dopo
+-- ESITO (OK / FALLITO / INATTESO).
 -- ============================================================
 -- TEST POSITIVO (il valore nuovo passa, col payload del contratto).
--- Atteso: 1 riga inserita, poi rollback.
--- BEGIN;
--- INSERT INTO public.activity_events
---   (residence_id, unit_id, event_type, actor_id, actor_role, actor_name, payload)
--- VALUES ('adf97f32-859a-493e-b145-915979f1ae09', '4818141d-242c-4351-8dcd-005337afeb2b', 'data_consegna_modificata',
---         '99b90ec5-6a80-4ec3-8884-377163c5510b', 'super_admin', 'Filippo test',
---         '{"livello":"unita","vecchio":null,"nuovo":"2026-11-02"}'::jsonb)
--- RETURNING id, event_type, payload;
--- ROLLBACK;
--- ESITO: non eseguito. E il test che prova davvero la scrittura del valore
---        nuovo: la V2 dice che il vincolo lo ammette, non che un INSERT
---        reale passi insieme al CHECK su payload. Da lanciare prima del
---        commit della modale.
+-- Atteso: ESITO 043 POSITIVO: OK, riga <uuid> inserita con payload {...}
+-- DO $$
+-- DECLARE v_id uuid; v_payload jsonb;
+-- BEGIN
+--   INSERT INTO public.activity_events
+--     (residence_id, unit_id, event_type, actor_id, actor_role, actor_name, payload)
+--   VALUES ('adf97f32-859a-493e-b145-915979f1ae09', '4818141d-242c-4351-8dcd-005337afeb2b', 'data_consegna_modificata',
+--           '99b90ec5-6a80-4ec3-8884-377163c5510b', 'super_admin', 'Filippo test',
+--           '{"livello":"unita","vecchio":null,"nuovo":"2026-11-02"}'::jsonb)
+--   RETURNING id, payload INTO v_id, v_payload;
+--   RAISE EXCEPTION 'ESITO 043 POSITIVO: OK, riga % inserita con payload %, annullata', v_id, v_payload;
+-- END $$;
+-- ESITO (26/10): OK, riga 84d447d6-1581-440c-8423-e6e82b3bcfc2 inserita e
+--        annullata. Un INSERT reale di data_consegna_modificata passa
+--        insieme al CHECK su payload: le RPC possono scrivere questo evento.
 
 -- TEST NEGATIVO 1 (un valore inventato resta respinto: il vincolo non si e
--- allargato a tutto). Atteso: violazione di activity_events_event_type_check.
--- BEGIN;
--- INSERT INTO public.activity_events
---   (residence_id, event_type, actor_id, actor_role, actor_name, payload)
--- VALUES ('adf97f32-859a-493e-b145-915979f1ae09', 'consegna_registrata',
---         '99b90ec5-6a80-4ec3-8884-377163c5510b', 'super_admin', 'Filippo test', '{}'::jsonb);
--- ROLLBACK;
--- ESITO: non eseguito. Serve a provare che il vincolo non si e allargato a
---        tutto: 'consegna_registrata' (il nome scartato il 24/10) deve
---        restare respinto. Da lanciare insieme al test positivo.
+-- allargato a tutto).
+-- Atteso: ESITO 043 NEG1: OK, respinto da activity_events_event_type_check
+-- DO $$
+-- DECLARE v_con text;
+-- BEGIN
+--   BEGIN
+--     INSERT INTO public.activity_events
+--       (residence_id, event_type, actor_id, actor_role, actor_name, payload)
+--     VALUES ('adf97f32-859a-493e-b145-915979f1ae09', 'consegna_registrata',
+--             '99b90ec5-6a80-4ec3-8884-377163c5510b', 'super_admin', 'Filippo test', '{}'::jsonb);
+--   EXCEPTION WHEN check_violation THEN
+--     GET STACKED DIAGNOSTICS v_con = CONSTRAINT_NAME;
+--     IF v_con = 'activity_events_event_type_check' THEN
+--       RAISE EXCEPTION 'ESITO 043 NEG1: OK, respinto da %', v_con;
+--     END IF;
+--     RAISE EXCEPTION 'ESITO 043 NEG1: INATTESO, respinto da un altro vincolo: %', v_con;
+--   END;
+--   RAISE EXCEPTION 'ESITO 043 NEG1: FALLITO, consegna_registrata e passato (annullato)';
+-- END $$;
+-- ESITO (26/10): OK, respinto da activity_events_event_type_check.
+--        'consegna_registrata' (il nome scartato il 24/10) resta fuori.
 
 -- TEST NEGATIVO 2 (il registro resta append-only: la 037 non ha policy
 -- UPDATE ne DELETE. Qui si gira come postgres, che le scavalca, quindi il
@@ -228,3 +252,12 @@ NOTIFY pgrst, 'reload schema';
 --    AND cmd IN ('UPDATE', 'DELETE');
 -- ESITO: 0 righe. Nessuna policy UPDATE ne DELETE su activity_events: il
 --        registro resta append-only anche dopo l'allargamento del vincolo.
+
+-- CONTROLLO RESIDUI (i test non hanno lasciato righe nel registro).
+-- Atteso: 18 | 0
+-- SELECT count(*) AS righe_registro,
+--        count(*) FILTER (WHERE actor_name = 'Filippo test') AS righe_test
+--   FROM activity_events;
+-- ESITO: non riportato. Il report del 26/10 lo lascia vuoto. Nessuna riga
+--        e attesa per costruzione (ogni ramo dei DO termina in RAISE), ma
+--        questa e un'argomentazione, non una misura: da eseguire e incollare.
