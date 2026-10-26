@@ -5,40 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/admin'
 import { logActivityEvent } from '@/lib/activity-log'
 import { unitHasNoActiveAccount } from '@/lib/unit-utils'
-import type { UserRole } from '@/types/database'
-
-// `fullName` viene da `profiles.full_name` al momento dell'atto, letto lato
-// server e mai da input: è ciò che il registro attività congela come attore
-// (activity-log.ts:44-58). Stessa forma di `assertSuperAdmin` in admin-actions.ts.
-type Caller = { userId: string; role: UserRole; fullName: string | null } | { error: string }
-
-async function requireCaller(action: string, roles: string[]): Promise<Caller> {
-  const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-  if (authError) console.error(`${action}: errore lettura sessione`, authError)
-  if (!user) return { error: 'Non autenticato' }
-
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('role, full_name')
-    .eq('id', user.id)
-    .maybeSingle()
-
-  if (profileError) {
-    console.error(`${action}: errore lettura profilo`, { userId: user.id, profileError })
-    return { error: 'Errore temporaneo nella verifica dei permessi, riprova.' }
-  }
-  if (!profile) {
-    console.error(`${action}: profilo non leggibile`, { userId: user.id })
-    return { error: 'Profilo non leggibile per questo account, esci e rientra.' }
-  }
-  if (!roles.includes(profile.role)) {
-    console.warn(`${action}: ruolo non ammesso`, { userId: user.id, role: profile.role })
-    return { error: 'Permessi insufficienti' }
-  }
-
-  return { userId: user.id, role: profile.role, fullName: profile.full_name ?? null }
-}
+import { requireCaller } from '@/lib/require-caller'
 
 // Il perimetro lo decide la RLS su residences (czero_can_access_residence), non un confronto ricopiato qui.
 async function requireResidenceAccess(action: string, residenceId: string): Promise<{ error: string } | null> {

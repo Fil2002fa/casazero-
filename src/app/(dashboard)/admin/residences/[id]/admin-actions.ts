@@ -10,7 +10,7 @@ import type { UserRole } from '@/types/database'
 // sessione: è ciò che il registro attività congela come attore
 // (activity-log.ts:44-58). `fullName` viene da `profiles.full_name` al
 // momento dell'atto, mai da input del client. Stessa forma di `requireCaller`
-// in units/actions.ts:8.
+// in src/lib/require-caller.ts.
 type SuperAdminCaller =
   | { userId: string; role: UserRole; fullName: string | null }
   | { error: string }
