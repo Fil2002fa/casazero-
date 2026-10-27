@@ -1,12 +1,13 @@
 'use client'
 
 import { useState, useTransition, useMemo } from 'react'
-import { Plus, Trash2, UserPlus, Copy, Check, MessageCircle, Mail, Pencil, X, Loader2 } from 'lucide-react'
+import { Plus, Trash2, UserPlus, Copy, Check, MessageCircle, Mail, Pencil, X, Loader2, CalendarCheck } from 'lucide-react'
 import { createUnit, createInvite, revokeInvite, updateUnitLabel, createBulkInvites } from './actions'
 import { unitHasNoActiveAccount, unitLifecycleStatus } from '@/lib/unit-utils'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import { useToast } from '@/components/ui/Toast'
 import { UnitLifecycleBadge } from '@/components/UnitLifecycleBadge'
+import { RegistraConsegnaModal } from './RegistraConsegnaModal'
 
 type MemberRow = { profile_id: string; is_primary: boolean; profiles: { full_name: string | null } | null }
 type InviteRow = { id: string; token: string; expires_at: string; used_at: string | null }
@@ -30,6 +31,8 @@ export function UnitsManager({
   const [editingUnitId, setEditingUnitId] = useState<string | null>(null)
   const [editLabel, setEditLabel] = useState('')
   const [filterSenzaAccount, setFilterSenzaAccount] = useState(initialFilter === 'senza_account')
+  const [deliveryUnitId, setDeliveryUnitId] = useState<string | null>(null)
+  const deliveryUnit = deliveryUnitId ? units.find(u => u.id === deliveryUnitId) ?? null : null
 
   const displayUnits = filterSenzaAccount
     ? units.filter(u => unitHasNoActiveAccount(u.rawMembers))
@@ -375,13 +378,20 @@ export function UnitsManager({
                 )}
 
                 {/* Azioni */}
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <button
                     onClick={() => handleGenerateInvite(unit.id)}
                     disabled={pending}
                     className="flex items-center gap-1.5 px-3 py-2 border border-border rounded-lg text-xs text-text-primary bg-surface"
                   >
                     {pending ? '…' : <><UserPlus className="w-3.5 h-3.5" /> Genera invito</>}
+                  </button>
+                  <button
+                    onClick={() => setDeliveryUnitId(unit.id)}
+                    disabled={pending}
+                    className="flex items-center gap-1.5 px-3 py-2 border border-border rounded-lg text-xs text-text-primary bg-surface"
+                  >
+                    <CalendarCheck className="w-3.5 h-3.5" /> Registra consegna
                   </button>
                   {activeInvites.length === 0 && usedInvites.length === 0 && unit.members.length === 0 && (
                     <p className="self-center text-xs text-text-secondary">
@@ -394,6 +404,16 @@ export function UnitsManager({
           </div>
         )
       })}
+
+      {deliveryUnit && (
+        <RegistraConsegnaModal
+          key={deliveryUnit.id}
+          unit={deliveryUnit}
+          hasNoActiveAccount={unitHasNoActiveAccount(deliveryUnit.rawMembers)}
+          onClose={() => setDeliveryUnitId(null)}
+          onInvite={() => { setExpandedUnit(deliveryUnit.id); handleGenerateInvite(deliveryUnit.id) }}
+        />
+      )}
     </div>
   )
 }
