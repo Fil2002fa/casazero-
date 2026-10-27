@@ -289,4 +289,6 @@ NOTIFY pgrst, 'reload schema';
 -- "La data e stata cambiata da qualcun altro: ricarica la pagina.", e
 -- pg_stat_activity (usename = 'authenticator') non ha query active su
 -- czero_register_delivery.
--- ESITO: _____ (da compilare dopo il commit della mappa PT409)
+-- ESITO (27/10, dopo c8c954f): OK. Due schede su teolo: la seconda conferma
+--        mostra in pochi secondi "La data e stata cambiata da qualcun altro:
+--        ricarica la pagina.", pg_stat_activity pulito dopo il conflitto.
