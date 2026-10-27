@@ -11,6 +11,7 @@ import { formatDateIT } from '@/lib/formatDate'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import { pluralize } from '@/lib/pluralize'
 import { createInvite, getDeliveryPreview, registerDelivery, type DeliveryPreview } from './actions'
+import { DeliveryPreviewWarnings } from './DeliveryPreviewWarnings'
 import { InviteLinkCard } from './InviteLinkCard'
 
 // Passi interni alla stessa modale: una modale non apre mai un'altra modale,
@@ -293,19 +294,7 @@ export function RegistraConsegnaModal({
                   {pluralize(plan.riepilogo.ricalcolate, 'voce ricalcolata', 'voci ricalcolate')}
                 </p>
 
-                {plan.riepilogo.gia_scadute > 0 && (
-                  <p className="rounded-lg bg-semantic-amber-bg px-3 py-2 text-semantic-amber">
-                    {pluralize(plan.riepilogo.gia_scadute, 'voce nasce', 'voci nascono')} già{' '}
-                    {plan.riepilogo.gia_scadute === 1 ? 'scaduta' : 'scadute'}: la nuova scadenza è precedente a oggi.
-                  </p>
-                )}
-                {plan.riepilogo.saltate.nel_fascicolo > 0 && (
-                  <p className="rounded-lg bg-semantic-amber-bg px-3 py-2 text-semantic-amber">
-                    {pluralize(plan.riepilogo.saltate.nel_fascicolo, 'voce resta invariata', 'voci restano invariate')}:{' '}
-                    {plan.riepilogo.saltate.nel_fascicolo === 1 ? 'ha' : 'hanno'} già interventi registrati nel
-                    fascicolo, quindi la scadenza non dipende dalla consegna.
-                  </p>
-                )}
+                <DeliveryPreviewWarnings riepilogo={plan.riepilogo} />
 
                 {plan.riepilogo.ricalcolate > 0 && (
                   <ul className="max-h-64 overflow-y-auto divide-y divide-border rounded-lg border border-border">
