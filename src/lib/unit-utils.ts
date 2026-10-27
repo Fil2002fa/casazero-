@@ -15,6 +15,30 @@ export type UnitLifecycle =
   | { stato: 'consegnata_senza_residente' }
   | { stato: 'residente_attivo' }
 
+// Stato del residente per la card della pagina Unità: unica fonte per il
+// testo a destra (schermo grande) e per la coda della riga (schermo piccolo).
+// Non consegnata: niente da dire, salvo l'incoerenza "residente già attivo".
+export type UnitResidentStatus =
+  | { stato: 'nessuno' }
+  | { stato: 'da_invitare' }
+  | { stato: 'invito_inviato' }
+  | { stato: 'residente'; nome: string | null }
+  | { stato: 'residente_gia_attivo' }
+
+export function unitResidentStatus(input: {
+  deliveryDate: string | null
+  members: { ended_at: string | null }[]
+  hasActiveInvite: boolean
+  residentName: string | null
+}): UnitResidentStatus {
+  const noAccount = unitHasNoActiveAccount(input.members)
+  if (unitNotDelivered(input.deliveryDate)) {
+    return noAccount ? { stato: 'nessuno' } : { stato: 'residente_gia_attivo' }
+  }
+  if (!noAccount) return { stato: 'residente', nome: input.residentName }
+  return input.hasActiveInvite ? { stato: 'invito_inviato' } : { stato: 'da_invitare' }
+}
+
 export function unitLifecycleStatus(
   deliveryDate: string | null,
   members: { ended_at: string | null }[],

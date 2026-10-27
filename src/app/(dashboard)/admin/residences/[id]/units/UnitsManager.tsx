@@ -1,17 +1,63 @@
 'use client'
 
 import { useState, useTransition, useMemo } from 'react'
-import { Plus, Trash2, UserPlus, Copy, Check, MessageCircle, Mail, Pencil, X, Loader2, CalendarCheck } from 'lucide-react'
+import { Plus, UserPlus, Check, Pencil, X, Loader2, CalendarCheck } from 'lucide-react'
 import { createUnit, createInvite, revokeInvite, updateUnitLabel, createBulkInvites } from './actions'
-import { unitHasNoActiveAccount, unitLifecycleStatus } from '@/lib/unit-utils'
+import { unitHasNoActiveAccount, unitNotDelivered, unitResidentStatus, type UnitResidentStatus } from '@/lib/unit-utils'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
+import { pluralize } from '@/lib/pluralize'
+import { formatDateIT } from '@/lib/formatDate'
+import { InviteLinkCard } from './InviteLinkCard'
 import { useToast } from '@/components/ui/Toast'
-import { UnitLifecycleBadge } from '@/components/UnitLifecycleBadge'
 import { RegistraConsegnaModal } from './RegistraConsegnaModal'
 
 type MemberRow = { profile_id: string; is_primary: boolean; profiles: { full_name: string | null } | null }
 type InviteRow = { id: string; token: string; expires_at: string; used_at: string | null }
 type UnitRow = { id: string; label: string; floor: number | null; deliveryDate: string | null; members: MemberRow[]; rawMembers: { ended_at: string | null }[]; invites: InviteRow[] }
+
+// Stato del residente come testo colorato, senza pillola. Sotto md segue
+// "Piano · consegna" sulla stessa riga, preceduto da " · "; da md va a destra
+// (ml-auto) e il separatore sparisce. Colore solo sul testo dello stato.
+const RESIDENT_STATUS_COLOR: Record<Exclude<UnitResidentStatus['stato'], 'nessuno'>, string> = {
+  da_invitare:          'text-semantic-amber',
+  invito_inviato:       'text-text-secondary',
+  residente:            'text-brand-medium',
+  residente_gia_attivo: 'text-semantic-amber',
+}
+
+function ResidentStatusText({ status }: { status: UnitResidentStatus }) {
+  if (status.stato === 'nessuno') return null
+  const text =
+    status.stato === 'da_invitare' ? 'Da invitare'
+    : status.stato === 'invito_inviato' ? 'Invito inviato'
+    : status.stato === 'residente' ? `Residente: ${status.nome ?? 'attivo'}`
+    : 'Residente già attivo'
+  return (
+    <span className="text-xs md:text-sm md:ml-auto md:shrink-0">
+      <span className="text-text-secondary md:hidden">· </span>
+      <span className={RESIDENT_STATUS_COLOR[status.stato]}>{text}</span>
+    </span>
+  )
+}
+
+// Invito attivo = non usato e non scaduto: stessa definizione del server
+// (createInvite, createBulkInvites, revoca in registerDelivery).
+function activeInvitesOf(unit: { invites: InviteRow[] }): InviteRow[] {
+  return unit.invites.filter(i => !i.used_at && new Date(i.expires_at) > new Date())
+}
+
+function bulkInviteMessage(r: { count: number; skipped: number; notDelivered: number }): string {
+  const head = r.count > 0 ? `Inviti generati per ${r.count} unità` : 'Nessun nuovo invito generato'
+  const notes: string[] = []
+  if (r.notDelivered > 0) {
+    notes.push(`${pluralize(r.notDelivered, 'unità saltata', 'unità saltate')} perché non ${r.notDelivered === 1 ? 'consegnata' : 'consegnate'}`)
+  }
+  const other = r.skipped - r.notDelivered
+  if (other > 0) {
+    notes.push(`${pluralize(other, 'unità saltata', 'unità saltate')} perché ${other === 1 ? 'ha' : 'hanno'} già un account o un invito attivo`)
+  }
+  return notes.length > 0 ? `${head}; ${notes.join('; ')}.` : `${head}.`
+}
 
 export function UnitsManager({
   residenceId, units, appUrl, initialFilter,
@@ -44,11 +90,11 @@ export function UnitsManager({
   )
 
   const bulkTargets = useMemo(
-    () => unitsSenzaAccount.filter(u =>
-      u.invites.filter(i => !i.used_at && new Date(i.expires_at) > new Date()).length === 0
-    ),
+    () => unitsSenzaAccount.filter(u => activeInvitesOf(u).length === 0),
     [unitsSenzaAccount]
   )
+  // Il numero sul bottone conta solo le unità che riceveranno davvero l'invito.
+  const bulkDeliveredCount = bulkTargets.filter(u => !unitNotDelivered(u.deliveryDate)).length
 
   function handleAddUnit() {
     if (!newUnitLabel.trim()) return
@@ -77,7 +123,7 @@ export function UnitsManager({
         if (res.error) {
           setLocalError(res.error)
         } else {
-          showToast('success', 'Invito generato.')
+          showToast('success', res.existing ? 'Esiste già un invito attivo: è quello mostrato.' : 'Invito generato.')
         }
       } catch {
         setLocalError('Errore imprevisto, ricarica la pagina')
@@ -120,24 +166,18 @@ export function UnitsManager({
     setLocalError(null)
     startTransition(async () => {
       try {
+        // Si mandano anche le non consegnate: è il server a saltarle e contarle,
+        // così il riepilogo dice quante sono rimaste fuori e perché.
         const res = await createBulkInvites(bulkTargets.map(u => u.id), residenceId)
         if (res.error) {
           setLocalError(res.error)
-        } else if (res.count === 0) {
-          showToast('success', 'Nessuna nuova unità da invitare: tutte hanno già un account o un invito attivo.')
         } else {
-          showToast('success', `Inviti generati per ${res.count} unità.`)
+          showToast('success', bulkInviteMessage(res))
         }
       } catch {
         setLocalError('Errore imprevisto, ricarica la pagina')
       }
     })
-  }
-
-  function copyInviteUrl(token: string) {
-    const url = `${appUrl}/welcome/${token}`
-    navigator.clipboard.writeText(url)
-    showToast('success', 'Link copiato.')
   }
 
   return (
@@ -150,11 +190,11 @@ export function UnitsManager({
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={handleBulkInvite}
-            disabled={pending || bulkTargets.length === 0}
+            disabled={pending || bulkDeliveredCount === 0}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-semantic-amber text-white rounded-lg text-xs font-medium disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
           >
             {pending && <Loader2 className="w-3 h-3 animate-spin" />}
-            Genera inviti per tutte le unità{bulkTargets.length > 0 ? ` (${bulkTargets.length})` : ''}
+            Invita le unità consegnate{bulkDeliveredCount > 0 ? ` (${bulkDeliveredCount})` : ''}
           </button>
           <button
             onClick={() => setShowNewUnitForm(!showNewUnitForm)}
@@ -224,9 +264,9 @@ export function UnitsManager({
 
       {/* Lista unità */}
       {displayUnits.map(unit => {
-        const activeInvites = unit.invites.filter(i => !i.used_at && new Date(i.expires_at) > new Date())
-        const usedInvites = unit.invites.filter(i => i.used_at)
+        const activeInvites = activeInvitesOf(unit)
         const isExpanded = expandedUnit === unit.id
+        const notDelivered = unitNotDelivered(unit.deliveryDate)
 
         return (
           <div key={unit.id} className="bg-surface rounded-xl border border-border overflow-hidden">
@@ -238,9 +278,12 @@ export function UnitsManager({
               onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && editingUnitId !== unit.id) setExpandedUnit(isExpanded ? null : unit.id) }}
               className="w-full flex items-center justify-between p-4 text-left cursor-pointer"
             >
-              <div className="flex-1 min-w-0">
+              {/* Una sola struttura per le due larghezze. Sotto md: nome a tutta
+                  riga, sotto "Piano · consegna · stato residente". Da md: tutto
+                  su una riga, lo stato residente spinto a destra (ml-auto). */}
+              <div className="flex-1 min-w-0 flex flex-wrap md:flex-nowrap items-baseline gap-x-1 md:gap-x-3 gap-y-0.5">
                 {editingUnitId === unit.id ? (
-                  <div onClick={e => e.stopPropagation()} className="flex items-center gap-1.5 mb-1">
+                  <div onClick={e => e.stopPropagation()} className="basis-full md:basis-auto flex items-center gap-1.5 mb-1">
                     <input
                       value={editLabel}
                       onChange={e => setEditLabel(e.target.value)}
@@ -267,8 +310,8 @@ export function UnitsManager({
                     </button>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-sm font-medium text-text-primary">{formatUnitLabel(unit.label, unit.floor)}</p>
+                  <div className="basis-full md:basis-auto shrink-0 flex items-center gap-1.5">
+                    <p className="text-sm md:text-[15px] font-medium text-text-primary">{formatUnitLabel(unit.label, unit.floor)}</p>
                     <button
                       onClick={e => { e.stopPropagation(); setEditingUnitId(unit.id); setEditLabel(unit.label) }}
                       className="p-0.5 rounded text-text-secondary hover:text-text-primary transition-colors"
@@ -277,29 +320,23 @@ export function UnitsManager({
                     </button>
                   </div>
                 )}
-                <p className="text-xs text-text-secondary mt-0.5">
+                <p className="text-xs text-text-secondary">
                   {unit.floor ? `Piano ${unit.floor} · ` : ''}
-                  {unit.members.length > 0
-                    ? unit.members.map((m, i) => (
-                        <span key={m.profile_id}>
-                          {i > 0 && ', '}
-                          <span className={m.is_primary ? 'font-medium text-text-primary' : ''}>
-                            {m.profiles?.full_name ?? 'Utente'}
-                          </span>
-                        </span>
-                      ))
-                    : 'Nessun residente'}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <UnitLifecycleBadge lifecycle={unitLifecycleStatus(unit.deliveryDate, unit.rawMembers)} />
-                {activeInvites.length > 0 && (
-                  <span className="text-xs bg-semantic-amber-bg text-semantic-amber px-2 py-0.5 rounded-full">
-                    {activeInvites.length} invito/i attivo/i
+                  {/* Da md la consegna pesa come dato principale; il piano resta secondario. */}
+                  <span className="md:text-sm md:text-text-primary">
+                    {notDelivered ? 'Non consegnata' : `Consegnata il ${formatDateIT(unit.deliveryDate)}`}
                   </span>
-                )}
-                <span className="text-text-secondary text-xs">{isExpanded ? '▲' : '▼'}</span>
+                </p>
+                <ResidentStatusText
+                  status={unitResidentStatus({
+                    deliveryDate: unit.deliveryDate,
+                    members: unit.rawMembers,
+                    hasActiveInvite: activeInvites.length > 0,
+                    residentName: unit.members[0]?.profiles?.full_name ?? null,
+                  })}
+                />
               </div>
+              <span className="ml-3 shrink-0 text-text-secondary text-xs">{isExpanded ? '▲' : '▼'}</span>
             </div>
 
             {/* Contenuto espanso */}
@@ -322,81 +359,60 @@ export function UnitsManager({
                   </div>
                 )}
 
-                {/* Inviti attivi */}
-                {activeInvites.length > 0 && (
+                {/* Inviti attivi. Un'unità non consegnata non ha inviti attivi:
+                    la sezione non si mostra nemmeno se il DB ne ha di residui. */}
+                {!notDelivered && activeInvites.length > 0 && (
                   <div>
                     <p className="text-xs font-medium text-text-secondary mb-2">Inviti attivi</p>
                     <div className="space-y-3">
-                      {activeInvites.map(inv => {
-                        const url = `${appUrl}/welcome/${inv.token}`
-                        return (
-                          <div key={inv.id} className="bg-background rounded-lg p-3 space-y-2">
-                            <p className="text-xs text-text-primary break-all">{url}</p>
-                            <p className="text-xs text-text-secondary">
-                              Scade il {new Date(inv.expires_at).toLocaleDateString('it-IT')}
-                            </p>
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                onClick={() => copyInviteUrl(inv.token)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 border border-border text-text-primary bg-surface rounded-lg text-xs"
-                              >
-                                <Copy className="w-3 h-3" />
-                                Copia link
-                              </button>
-                              <a
-                                href={`https://wa.me/?text=${encodeURIComponent(`Benvenuto in CasaZero! Attiva il tuo accesso da qui: ${url}`)}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-dark text-white rounded-lg text-xs"
-                              >
-                                <MessageCircle className="w-3 h-3" />
-                                WhatsApp
-                              </a>
-                              <button
-                                onClick={() => {
-                                  window.location.href = `mailto:?subject=${encodeURIComponent('Il tuo invito a CasaZero')}&body=${encodeURIComponent(`Benvenuto in CasaZero.\n\nAttiva il tuo accesso da questo link:\n${url}\n\nA presto.`)}`
-                                }}
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-dark text-white rounded-lg text-xs"
-                              >
-                                <Mail className="w-3 h-3" />
-                                Email
-                              </button>
-                              <button
-                                onClick={() => handleRevokeInvite(inv.id)}
-                                disabled={pending}
-                                className="flex items-center gap-1.5 px-3 py-1.5 border border-semantic-red/30 text-semantic-red rounded-lg text-xs"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                                Revoca
-                              </button>
-                            </div>
-                          </div>
-                        )
-                      })}
+                      {activeInvites.map(inv => (
+                        <InviteLinkCard
+                          key={inv.id}
+                          url={`${appUrl}/welcome/${inv.token}`}
+                          expiresAt={inv.expires_at}
+                          onRevoke={() => handleRevokeInvite(inv.id)}
+                          revokeDisabled={pending}
+                        />
+                      ))}
                     </div>
                   </div>
                 )}
 
                 {/* Azioni */}
                 <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => handleGenerateInvite(unit.id)}
-                    disabled={pending}
-                    className="flex items-center gap-1.5 px-3 py-2 border border-border rounded-lg text-xs text-text-primary bg-surface"
-                  >
-                    {pending ? '…' : <><UserPlus className="w-3.5 h-3.5" /> Genera invito</>}
-                  </button>
-                  <button
-                    onClick={() => setDeliveryUnitId(unit.id)}
-                    disabled={pending}
-                    className="flex items-center gap-1.5 px-3 py-2 border border-border rounded-lg text-xs text-text-primary bg-surface"
-                  >
-                    <CalendarCheck className="w-3.5 h-3.5" /> Registra consegna
-                  </button>
-                  {activeInvites.length === 0 && usedInvites.length === 0 && unit.members.length === 0 && (
-                    <p className="self-center text-xs text-text-secondary">
-                      Nessun invito — generane uno
-                    </p>
+                  {/* Consegna prima dell'invito: da non consegnata, registrare la
+                      consegna è l'azione principale e viene per prima. */}
+                  {notDelivered && (
+                    <button
+                      onClick={() => setDeliveryUnitId(unit.id)}
+                      disabled={pending}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-brand-dark text-white rounded-lg text-xs font-medium disabled:opacity-40"
+                    >
+                      <CalendarCheck className="w-3.5 h-3.5" /> Registra consegna
+                    </button>
+                  )}
+                  {/* Un invito attivo si mostra (sopra), mai un secondo: il bottone
+                      esiste solo senza inviti attivi. */}
+                  {(notDelivered || activeInvites.length === 0) && (
+                    <button
+                      onClick={() => handleGenerateInvite(unit.id)}
+                      disabled={pending || notDelivered}
+                      className="flex items-center gap-1.5 px-3 py-2 border border-border rounded-lg text-xs text-text-primary bg-surface disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {pending ? '…' : <><UserPlus className="w-3.5 h-3.5" /> Genera invito</>}
+                    </button>
+                  )}
+                  {!notDelivered && (
+                    <button
+                      onClick={() => setDeliveryUnitId(unit.id)}
+                      disabled={pending}
+                      className="flex items-center gap-1.5 px-3 py-2 border border-border rounded-lg text-xs text-text-primary bg-surface"
+                    >
+                      <CalendarCheck className="w-3.5 h-3.5" /> Modifica data di consegna
+                    </button>
+                  )}
+                  {notDelivered && (
+                    <p className="self-center text-xs text-text-secondary">Registra prima la consegna</p>
                   )}
                 </div>
               </div>
@@ -409,9 +425,11 @@ export function UnitsManager({
         <RegistraConsegnaModal
           key={deliveryUnit.id}
           unit={deliveryUnit}
+          residenceId={residenceId}
+          appUrl={appUrl}
           hasNoActiveAccount={unitHasNoActiveAccount(deliveryUnit.rawMembers)}
+          activeInviteCount={activeInvitesOf(deliveryUnit).length}
           onClose={() => setDeliveryUnitId(null)}
-          onInvite={() => { setExpandedUnit(deliveryUnit.id); handleGenerateInvite(deliveryUnit.id) }}
         />
       )}
     </div>

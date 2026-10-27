@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/admin'
 import { logActivityEvent } from '@/lib/activity-log'
-import { unitHasNoActiveAccount } from '@/lib/unit-utils'
+import { unitHasNoActiveAccount, unitNotDelivered } from '@/lib/unit-utils'
 import { requireCaller } from '@/lib/require-caller'
 import { nextDueFrom } from '@/lib/maintenance-due'
 import { planDeliveryRecalc, type DeliveryRecalcItem, type DeliveryRecalcSummary } from '@/lib/delivery-recalc'
@@ -63,7 +63,7 @@ async function requireUnitsInResidence(
   action: string,
   residenceId: string,
   unitIds: string[]
-): Promise<{ error: string } | null> {
+): Promise<{ error: string } | { units: { id: string; delivery_date: string | null }[] }> {
   const denied = await requireResidenceAccess(action, residenceId)
   if (denied) return denied
 
@@ -71,7 +71,7 @@ async function requireUnitsInResidence(
   const supabase = await createClient()
   const { data: units, error } = await supabase
     .from('units')
-    .select('id')
+    .select('id, delivery_date')
     .eq('residence_id', residenceId)
     .in('id', wanted)
 
@@ -83,20 +83,42 @@ async function requireUnitsInResidence(
     console.warn(`${action}: unità fuori residenza`, { residenceId, requested: wanted.length, found: units?.length ?? 0 })
     return { error: 'Unità non trovata in questa residenza' }
   }
-  return null
+  return { units: (units ?? []).map(u => ({ id: u.id as string, delivery_date: u.delivery_date as string | null })) }
 }
 
+const NOT_DELIVERED_INVITE_ERROR = 'Registra prima la consegna dell\'unità: l\'invito si genera solo per unità consegnate.'
+
+/**
+ * Invito per un'unità: se ne esiste già uno attivo (non usato, non scaduto)
+ * restituisce quello, mai un secondo. L'unità deve essere consegnata.
+ */
 export async function createInvite(
   unitId: string,
   residenceId: string
-): Promise<{ error?: string; token?: string }> {
+): Promise<{ error?: string; token?: string; expiresAt?: string; existing?: boolean }> {
   const caller = await requireCaller('createInvite', ['super_admin'])
   if ('error' in caller) return { error: caller.error }
 
-  const denied = await requireUnitsInResidence('createInvite', residenceId, [unitId])
-  if (denied) return denied
+  const checked = await requireUnitsInResidence('createInvite', residenceId, [unitId])
+  if ('error' in checked) return checked
+  if (unitNotDelivered(checked.units[0]?.delivery_date ?? null)) return { error: NOT_DELIVERED_INVITE_ERROR }
 
   const admin = createServiceClient()
+
+  const { data: active, error: activeError } = await admin
+    .from('invites')
+    .select('token, expires_at')
+    .eq('unit_id', unitId)
+    .is('used_at', null)
+    .gt('expires_at', new Date().toISOString())
+    .order('expires_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (activeError) {
+    console.error('createInvite: errore lettura inviti attivi', { unitId, activeError })
+    return { error: 'Errore temporaneo nella verifica degli inviti esistenti, riprova.' }
+  }
+  if (active) return { token: active.token as string, expiresAt: active.expires_at as string, existing: true }
 
   const expiresAt = new Date()
   expiresAt.setDate(expiresAt.getDate() + 30)
@@ -135,20 +157,25 @@ export async function createInvite(
   })
 
   revalidatePath(`/admin/residences/${residenceId}/units`)
-  return { token: invite.token }
+  return { token: invite.token, expiresAt: expiresAt.toISOString(), existing: false }
 }
 
 export async function createBulkInvites(
   unitIds: string[],
   residenceId: string
-): Promise<{ count: number; skipped: number; error?: string }> {
-  if (unitIds.length === 0) return { count: 0, skipped: 0 }
+): Promise<{ count: number; skipped: number; notDelivered: number; error?: string }> {
+  if (unitIds.length === 0) return { count: 0, skipped: 0, notDelivered: 0 }
 
   const caller = await requireCaller('createBulkInvites', ['super_admin'])
-  if ('error' in caller) return { count: 0, skipped: 0, error: caller.error }
+  if ('error' in caller) return { count: 0, skipped: 0, notDelivered: 0, error: caller.error }
 
-  const denied = await requireUnitsInResidence('createBulkInvites', residenceId, unitIds)
-  if (denied) return { count: 0, skipped: 0, error: denied.error }
+  const checked = await requireUnitsInResidence('createBulkInvites', residenceId, unitIds)
+  if ('error' in checked) return { count: 0, skipped: 0, notDelivered: 0, error: checked.error }
+
+  // Consegna prima dell'invito: le unità non consegnate si saltano qui,
+  // qualunque cosa abbia filtrato il chiamante, e si contano a parte.
+  const notDeliveredIds = new Set(checked.units.filter(u => unitNotDelivered(u.delivery_date)).map(u => u.id))
+  const notDelivered = unitIds.filter(id => notDeliveredIds.has(id)).length
 
   const admin = createServiceClient()
   const now = new Date().toISOString()
@@ -163,7 +190,7 @@ export async function createBulkInvites(
 
   if (existingError) {
     console.error('createBulkInvites: errore lettura inviti esistenti', { residenceId, existingError })
-    return { count: 0, skipped: 0, error: 'Errore temporaneo nella verifica degli inviti esistenti, riprova.' }
+    return { count: 0, skipped: 0, notDelivered: 0, error: 'Errore temporaneo nella verifica degli inviti esistenti, riprova.' }
   }
 
   const alreadyInvited = new Set((existing ?? []).map(i => i.unit_id as string))
@@ -177,7 +204,7 @@ export async function createBulkInvites(
 
   if (memberError) {
     console.error('createBulkInvites: errore lettura membri unità', { residenceId, memberError })
-    return { count: 0, skipped: 0, error: 'Errore temporaneo nella verifica degli account esistenti, riprova.' }
+    return { count: 0, skipped: 0, notDelivered: 0, error: 'Errore temporaneo nella verifica degli account esistenti, riprova.' }
   }
 
   const membersByUnit = new Map<string, { ended_at: string | null }[]>()
@@ -188,10 +215,10 @@ export async function createBulkInvites(
   }
 
   const toInvite = unitIds.filter(id =>
-    !alreadyInvited.has(id) && unitHasNoActiveAccount(membersByUnit.get(id) ?? [])
+    !notDeliveredIds.has(id) && !alreadyInvited.has(id) && unitHasNoActiveAccount(membersByUnit.get(id) ?? [])
   )
 
-  if (toInvite.length === 0) return { count: 0, skipped: unitIds.length }
+  if (toInvite.length === 0) return { count: 0, skipped: unitIds.length, notDelivered }
 
   const expiresAt = new Date()
   expiresAt.setDate(expiresAt.getDate() + 30)
@@ -204,7 +231,7 @@ export async function createBulkInvites(
   }))
 
   const { error } = await admin.from('invites').insert(rows)
-  if (error) return { count: 0, skipped: unitIds.length - toInvite.length, error: error.message }
+  if (error) return { count: 0, skipped: unitIds.length - toInvite.length, notDelivered, error: error.message }
 
   // Una riga per ATTO, non per invito (037_activity_events.sql:48-52, stessa
   // regola dell'archiviazione): unit_id null perché l'atto attraversa più
@@ -230,7 +257,7 @@ export async function createBulkInvites(
   })
 
   revalidatePath(`/admin/residences/${residenceId}/units`)
-  return { count: toInvite.length, skipped: unitIds.length - toInvite.length }
+  return { count: toInvite.length, skipped: unitIds.length - toInvite.length, notDelivered }
 }
 
 export async function updateUnitLabel(
@@ -437,7 +464,7 @@ export async function registerDelivery(
   unitId: string,
   expectedOldDate: string | null,
   newDate: string | null,
-): Promise<{ error?: string; riepilogo?: DeliveryRecalcSummary }> {
+): Promise<{ error?: string; riepilogo?: DeliveryRecalcSummary; revokedInvites?: number; revokeError?: string }> {
   const caller = await requireCaller('registerDelivery', ['super_admin'])
   if ('error' in caller) return { error: caller.error }
 
@@ -480,7 +507,30 @@ export async function registerDelivery(
     return { error: registerDeliveryErrorMessage(rpcError.code) }
   }
 
+  // Regola: un'unità non consegnata non ha inviti attivi. Dopo la rimozione
+  // della consegna si revocano (DELETE, come revokeInvite) gli inviti non usati
+  // e non scaduti; quelli usati restano, e un residente già attivo non si
+  // tocca. Service client come revokeInvite: il perimetro l'ha già provato la
+  // RPC, che con il client di sessione ha trovato e scritto l'unità.
+  let revokedInvites = 0
+  let revokeError: string | undefined
+  if (nuova === null) {
+    const { data: revoked, error: delError } = await createServiceClient()
+      .from('invites')
+      .delete()
+      .eq('unit_id', unitId)
+      .is('used_at', null)
+      .gt('expires_at', new Date().toISOString())
+      .select('id')
+    if (delError) {
+      console.error('registerDelivery: revoca inviti attivi', { unitId, delError })
+      revokeError = `Consegna rimossa, ma gli inviti non sono stati revocati: ${delError.message}`
+    } else {
+      revokedInvites = (revoked ?? []).length
+    }
+  }
+
   revalidatePath(`/admin/residences/${source.residenceId}/units`)
   revalidatePath(`/admin/residences/${source.residenceId}/manutenzioni`)
-  return { riepilogo: plan.riepilogo }
+  return { riepilogo: plan.riepilogo, revokedInvites, revokeError }
 }
