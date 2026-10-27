@@ -14,6 +14,7 @@ type UnitRow = {
   id: string
   label: string
   floor: number | null
+  deliveryDate: string | null
   members: { profile_id: string; is_primary: boolean; profiles: { full_name: string | null } | null }[]
   rawMembers: { ended_at: string | null }[]
   invites: { id: string; token: string; expires_at: string; used_at: string | null }[]
@@ -36,7 +37,7 @@ export default async function UnitsPage({ params, searchParams }: { params: Para
   const { data: rawUnitsAll } = await supabase
     .from('units')
     .select(`
-      id, label, floor,
+      id, label, floor, delivery_date,
       unit_members(profile_id, is_primary, ended_at, profiles(full_name)),
       invites(id, token, expires_at, used_at)
     `)
@@ -57,6 +58,7 @@ export default async function UnitsPage({ params, searchParams }: { params: Para
       id: u.id,
       label: u.label,
       floor: u.floor,
+      deliveryDate: u.delivery_date as string | null,
       members: members as UnitRow['members'],
       rawMembers: rawMembersAll,
       invites,

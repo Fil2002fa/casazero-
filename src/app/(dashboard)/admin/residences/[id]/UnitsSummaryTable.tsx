@@ -5,6 +5,8 @@ import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@
 import { PILL_BASE } from '@/components/ui/Badge'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import { cn } from '@/lib/cn'
+import type { UnitLifecycle } from '@/lib/unit-utils'
+import { UnitLifecycleBadge } from '@/components/UnitLifecycleBadge'
 
 export type UnitSummaryRow = {
   id: string
@@ -12,6 +14,7 @@ export type UnitSummaryRow = {
   floor: number | null
   residentName: string | null
   active: boolean
+  lifecycle: UnitLifecycle
 }
 
 // readOnly: vista amministratore (residenza sola lettura, porta Unità
@@ -25,6 +28,7 @@ export function UnitsSummaryTable({ residenceId, rows, readOnly = false }: { res
     <Table stack="lg">
       <TableHeader>
         <TableHead>Unità</TableHead>
+        <TableHead>Stato</TableHead>
         <TableHead>Residente</TableHead>
       </TableHeader>
       <TableBody>
@@ -35,6 +39,7 @@ export function UnitsSummaryTable({ residenceId, rows, readOnly = false }: { res
             onClick={readOnly ? undefined : () => router.push(`/admin/residences/${residenceId}/units`)}
           >
             <TableCell emphasis>{formatUnitLabel(r.label, r.floor)}</TableCell>
+            <TableCell label="Stato"><UnitLifecycleBadge lifecycle={r.lifecycle} /></TableCell>
             <TableCell label="Residente">
               {r.active ? (
                 <span className="inline-flex items-center gap-2">

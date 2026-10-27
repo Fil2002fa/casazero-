@@ -12,7 +12,7 @@ import {
   overdueLive, isCountable, resolveCompletionMode, formatRelativeDue, todayISO,
   LIVE_STATUS_FIELDS, LIVE_STATUS_TEMPLATE_FIELDS,
 } from '@/lib/maintenance-status'
-import { unitHasNoActiveAccount } from '@/lib/unit-utils'
+import { unitHasNoActiveAccount, unitLifecycleStatus } from '@/lib/unit-utils'
 import { lastActivityLabel } from '@/lib/activity-feed'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import { pluralize } from '@/lib/pluralize'
@@ -29,6 +29,7 @@ type UnitRow = {
   id: string
   label: string
   floor: number | null
+  delivery_date: string | null
   unit_members: { ended_at: string | null; is_primary: boolean; profiles: { full_name: string | null } | null }[] | null
 }
 
@@ -92,6 +93,7 @@ function buildUnitSummary(unitsRaw: unknown[] | null) {
       floor: u.floor,
       residentName: primary?.profiles?.full_name ?? null,
       active: activeMembers.length > 0,
+      lifecycle: unitLifecycleStatus(u.delivery_date, u.unit_members ?? []),
     }
   })
 
@@ -272,7 +274,7 @@ export default async function ResidenceDetailPage({ params }: { params: Params }
   ] = await Promise.all([
     Promise.all([
       supabase.from('units')
-        .select('id, label, floor, unit_members!left(ended_at, is_primary, profiles(full_name))')
+        .select('id, label, floor, delivery_date, unit_members!left(ended_at, is_primary, profiles(full_name))')
         .eq('residence_id', id)
         .order('floor', { ascending: true, nullsFirst: false })
         .order('label', { ascending: true }),

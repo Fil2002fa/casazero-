@@ -3,13 +3,14 @@
 import { useState, useTransition, useMemo } from 'react'
 import { Plus, Trash2, UserPlus, Copy, Check, MessageCircle, Mail, Pencil, X, Loader2 } from 'lucide-react'
 import { createUnit, createInvite, revokeInvite, updateUnitLabel, createBulkInvites } from './actions'
-import { unitHasNoActiveAccount } from '@/lib/unit-utils'
+import { unitHasNoActiveAccount, unitLifecycleStatus } from '@/lib/unit-utils'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import { useToast } from '@/components/ui/Toast'
+import { UnitLifecycleBadge } from '@/components/UnitLifecycleBadge'
 
 type MemberRow = { profile_id: string; is_primary: boolean; profiles: { full_name: string | null } | null }
 type InviteRow = { id: string; token: string; expires_at: string; used_at: string | null }
-type UnitRow = { id: string; label: string; floor: number | null; members: MemberRow[]; rawMembers: { ended_at: string | null }[]; invites: InviteRow[] }
+type UnitRow = { id: string; label: string; floor: number | null; deliveryDate: string | null; members: MemberRow[]; rawMembers: { ended_at: string | null }[]; invites: InviteRow[] }
 
 export function UnitsManager({
   residenceId, units, appUrl, initialFilter,
@@ -288,6 +289,7 @@ export function UnitsManager({
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                <UnitLifecycleBadge lifecycle={unitLifecycleStatus(unit.deliveryDate, unit.rawMembers)} />
                 {activeInvites.length > 0 && (
                   <span className="text-xs bg-semantic-amber-bg text-semantic-amber px-2 py-0.5 rounded-full">
                     {activeInvites.length} invito/i attivo/i
