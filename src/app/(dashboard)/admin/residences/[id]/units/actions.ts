@@ -447,6 +447,37 @@ export async function getDeliveryPreview(
   return { preview: res.preview }
 }
 
+export type DeliveryPreviewResult = { unitId: string } & ({ error: string } | { preview: DeliveryPreview })
+
+/**
+ * Sola lettura: l'ingresso del ricalcolo per più unità della stessa
+ * residenza, per l'anteprima della consegna multipla. Una lettura per unità
+ * con lo stesso loader della modale singola (niente select su tutte le voci
+ * della residenza: resterebbe sotto il limite di righe di PostgREST solo per
+ * caso). L'errore di un'unità non ferma le altre: torna nella sua riga.
+ */
+export async function getDeliveryPreviews(
+  unitIds: string[],
+  residenceId: string,
+): Promise<{ error?: string; results?: DeliveryPreviewResult[] }> {
+  const caller = await requireCaller('getDeliveryPreviews', ['super_admin'])
+  if ('error' in caller) return { error: caller.error }
+
+  if (unitIds.length === 0) return { results: [] }
+  const scope = await requireUnitsInResidence('getDeliveryPreviews', residenceId, unitIds)
+  if ('error' in scope) return { error: scope.error }
+
+  const supabase = await createClient()
+  const wanted = [...new Set(unitIds)]
+  // Solo letture: in parallelo. Le scritture (registerDelivery) restano una
+  // chiamata per unità, in serie, decise dal client.
+  const results = await Promise.all(wanted.map(async (unitId): Promise<DeliveryPreviewResult> => {
+    const res = await loadDeliveryPreview(supabase, 'getDeliveryPreviews', unitId)
+    return 'error' in res ? { unitId, error: res.error } : { unitId, preview: res.preview }
+  }))
+  return { results }
+}
+
 /**
  * Registra (o rimuove, con `newDate` null) la data di consegna di un'unità.
  *
