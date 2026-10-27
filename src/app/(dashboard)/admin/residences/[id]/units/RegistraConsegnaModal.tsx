@@ -118,23 +118,23 @@ export function RegistraConsegnaModal({
   }
 
   const unitLabel = formatUnitLabel(unit.label, unit.floor)
-  const title = step === 'conferma_rimozione' ? 'Segna come non consegnata' : 'Registra consegna'
+  const title = `${step === 'conferma_rimozione' ? 'Segna come non consegnata' : 'Registra consegna'} · ${unitLabel}`
 
   let footer: ReactNode
   if (step === 'proposta_invito') {
     footer = (
       <>
-        <Button variant="secondary" onClick={onClose}>Chiudi</Button>
-        <Button variant="primary" onClick={() => { onInvite(); onClose() }}>Invita il residente</Button>
+        <Button variant="secondary" className="whitespace-nowrap" onClick={onClose}>Chiudi</Button>
+        <Button variant="primary" className="whitespace-nowrap" onClick={() => { onInvite(); onClose() }}>Invita il residente</Button>
       </>
     )
   } else if (step === 'conferma_rimozione') {
     footer = (
       <>
-        <Button variant="secondary" disabled={busy} onClick={() => { setActionError(null); setStep('form') }}>
+        <Button variant="secondary" disabled={busy} className="whitespace-nowrap" onClick={() => { setActionError(null); setStep('form') }}>
           Annulla
         </Button>
-        <Button variant="destructive" disabled={busy || !plan} onClick={submit}>
+        <Button variant="destructive" disabled={busy || !plan} className="whitespace-nowrap" onClick={submit}>
           {busy ? 'Salvataggio…' : 'Segna come non consegnata'}
         </Button>
       </>
@@ -143,12 +143,17 @@ export function RegistraConsegnaModal({
     footer = (
       <>
         {preview.deliveryDate !== null && (
-          <Button variant="ghost" disabled={busy} className="mr-auto" onClick={() => { setActionError(null); setStep('conferma_rimozione') }}>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => { setActionError(null); setStep('conferma_rimozione') }}
+            className="mr-auto whitespace-nowrap text-sm text-semantic-red/80 hover:text-semantic-red hover:underline underline-offset-2 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+          >
             Segna come non consegnata
-          </Button>
+          </button>
         )}
-        <Button variant="secondary" disabled={busy} onClick={handleClose}>Annulla</Button>
-        <Button variant="primary" disabled={busy || !plan} onClick={submit}>
+        <Button variant="secondary" disabled={busy} className="whitespace-nowrap" onClick={handleClose}>Annulla</Button>
+        <Button variant="primary" disabled={busy || !plan} className="whitespace-nowrap" onClick={submit}>
           {busy ? 'Salvataggio…' : 'Registra consegna'}
         </Button>
       </>
@@ -158,10 +163,8 @@ export function RegistraConsegnaModal({
   }
 
   return (
-    <Modal open onClose={handleClose} title={title} size="form" footer={footer}>
+    <Modal open onClose={handleClose} title={title} size="wide" footer={footer}>
       <div className="space-y-4 text-sm text-neutral-900">
-        <p className="text-neutral-600">{unitLabel}</p>
-
         {loadError && <p className="text-semantic-red">{loadError}</p>}
 
         {!loadError && !preview && (
@@ -240,11 +243,16 @@ export function RegistraConsegnaModal({
                       const item = itemById.get(v.item_id)
                       const expired = v.nuova_data !== null && v.nuova_data < preview.today
                       return (
-                        <li key={v.item_id} className="flex items-center justify-between gap-3 px-3 py-2">
-                          <span className="min-w-0 truncate">{item?.title || 'Voce'}</span>
-                          <span className={expired ? 'shrink-0 text-xs text-semantic-amber' : 'shrink-0 text-xs text-neutral-600'}>
-                            {item?.currentDueDate ? `${formatDateIT(item.currentDueDate)} → ` : ''}
-                            {v.nuova_data ? formatDateIT(v.nuova_data) : 'senza scadenza'}
+                        <li key={v.item_id} className="flex items-start justify-between gap-4 px-3 py-2">
+                          {/* Nome mai troncato: va a capo, le date restano allineate a destra. */}
+                          <span className="min-w-0 break-words">{item?.title || 'Voce'}</span>
+                          <span className="shrink-0 flex items-baseline gap-2 whitespace-nowrap">
+                            {item?.currentDueDate && item.currentDueDate !== v.nuova_data && (
+                              <s className="text-xs text-neutral-500">{formatDateIT(item.currentDueDate)}</s>
+                            )}
+                            <span className={expired ? 'font-medium text-semantic-amber' : 'font-medium text-neutral-900'}>
+                              {v.nuova_data ? formatDateIT(v.nuova_data) : 'senza scadenza'}
+                            </span>
                           </span>
                         </li>
                       )

@@ -2,9 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/Table'
-import { PILL_BASE } from '@/components/ui/Badge'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
-import { cn } from '@/lib/cn'
 import type { UnitLifecycle } from '@/lib/unit-utils'
 import { UnitLifecycleBadge } from '@/components/UnitLifecycleBadge'
 
@@ -12,8 +10,8 @@ export type UnitSummaryRow = {
   id: string
   label: string
   floor: number | null
+  /** Nome del residente attivo principale; null se nessun account attivo. */
   residentName: string | null
-  active: boolean
   lifecycle: UnitLifecycle
 }
 
@@ -29,7 +27,6 @@ export function UnitsSummaryTable({ residenceId, rows, readOnly = false }: { res
       <TableHeader>
         <TableHead>Unità</TableHead>
         <TableHead>Stato</TableHead>
-        <TableHead>Residente</TableHead>
       </TableHeader>
       <TableBody>
         {rows.map(r => (
@@ -39,16 +36,11 @@ export function UnitsSummaryTable({ residenceId, rows, readOnly = false }: { res
             onClick={readOnly ? undefined : () => router.push(`/admin/residences/${residenceId}/units`)}
           >
             <TableCell emphasis>{formatUnitLabel(r.label, r.floor)}</TableCell>
-            <TableCell label="Stato"><UnitLifecycleBadge lifecycle={r.lifecycle} /></TableCell>
-            <TableCell label="Residente">
-              {r.active ? (
-                <span className="inline-flex items-center gap-2">
-                  <span className={cn(PILL_BASE, 'bg-brand-dark/8 text-brand-dark')}>Attivo</span>
-                  {r.residentName && <span className="text-neutral-900">{r.residentName}</span>}
-                </span>
-              ) : (
-                <span className={cn(PILL_BASE, 'bg-neutral-600/7 text-neutral-600')}>In attesa</span>
-              )}
+            <TableCell label="Stato">
+              <span className="inline-flex flex-col items-start gap-0.5">
+                <UnitLifecycleBadge lifecycle={r.lifecycle} />
+                {r.residentName && <span className="text-xs text-neutral-600">{r.residentName}</span>}
+              </span>
             </TableCell>
           </TableRow>
         ))}

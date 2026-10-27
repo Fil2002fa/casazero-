@@ -6,11 +6,13 @@ import { X } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { useDialogFocus } from './useDialogFocus'
 
-type ModalSize = 'confirm' | 'form'
+type ModalSize = 'confirm' | 'form' | 'wide'
 
 const SIZE_STYLES: Record<ModalSize, string> = {
   confirm: 'max-w-md',
   form:    'max-w-lg',
+  /** Form con anteprima tabellare (es. Registra consegna): nome voce + due date per riga. */
+  wide:    'max-w-2xl',
 }
 
 interface ModalProps {

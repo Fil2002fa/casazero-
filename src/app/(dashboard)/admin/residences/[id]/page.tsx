@@ -92,7 +92,6 @@ function buildUnitSummary(unitsRaw: unknown[] | null) {
       label: u.label,
       floor: u.floor,
       residentName: primary?.profiles?.full_name ?? null,
-      active: activeMembers.length > 0,
       lifecycle: unitLifecycleStatus(u.delivery_date, u.unit_members ?? []),
     }
   })
