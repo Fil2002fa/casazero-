@@ -284,14 +284,16 @@ export async function revokeInvite(inviteId: string, residenceId: string): Promi
   return {}
 }
 
-// Codici d'errore della RPC (045, testata): l'esito si decide sul SQLSTATE,
-// mai sul testo del messaggio. Ogni altro codice è un guasto tecnico, non un
-// esito di dominio, e il messaggio lo dice.
+// Codici d'errore della RPC (045, conflitto dalla 046, testati): l'esito si
+// decide sul SQLSTATE, mai sul testo del messaggio. Ogni altro codice è un
+// guasto tecnico, non un esito di dominio, e il messaggio lo dice.
+// Il conflitto è PT409, mai 40001: PostgREST ritenta 40001 all'infinito e la
+// richiesta non torna più (046_register_delivery_pt409.sql).
 function registerDeliveryErrorMessage(code: string | undefined): string {
   switch (code) {
     case '42501': return 'Permessi insufficienti per registrare la consegna.'
     case 'P0002': return 'Unità non trovata.'
-    case '40001': return 'La data è stata cambiata da qualcun altro: ricarica la pagina.'
+    case 'PT409': return 'La data è stata cambiata da qualcun altro: ricarica la pagina.'
     case '22023': return 'Piano di ricalcolo non valido: ricarica la pagina e riprova.'
     default:      return 'Errore temporaneo nella registrazione della consegna, riprova.'
   }
@@ -423,7 +425,7 @@ export async function getDeliveryPreview(
  *
  * `expectedOldDate` è la data che l'utente ha visto nell'anteprima: la RPC la
  * confronta con quella in DB sotto lock e, se diverge, non scrive niente
- * (40001). Il piano invece si ricalcola qui su dati freschi: ciò che si scrive
+ * (PT409). Il piano invece si ricalcola qui su dati freschi: ciò che si scrive
  * corrisponde al DB di adesso, non a quello dell'anteprima.
  *
  * Tutte le letture e la RPC passano dal client di SESSIONE, non dal service
