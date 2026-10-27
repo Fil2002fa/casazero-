@@ -7,7 +7,7 @@ import { logActivityEvent } from '@/lib/activity-log'
 import { unitHasNoActiveAccount } from '@/lib/unit-utils'
 import { requireCaller } from '@/lib/require-caller'
 import { nextDueFrom } from '@/lib/maintenance-due'
-import { planDeliveryRecalc, type DeliveryRecalcSummary } from '@/lib/delivery-recalc'
+import { planDeliveryRecalc, type DeliveryRecalcItem, type DeliveryRecalcSummary } from '@/lib/delivery-recalc'
 import {
   LIVE_STATUS_FIELDS, LIVE_STATUS_TEMPLATE_FIELDS,
   resolveCompletionMode, resolveFrequencyMonths, todayISO,
@@ -308,6 +308,116 @@ function normalizeDeliveryDate(value: string | null): string | null | undefined 
   }
 }
 
+export type DeliveryPreviewItem = DeliveryRecalcItem & {
+  title: string
+  /** next_due_date attuale, per mostrare vecchia → nuova scadenza. */
+  currentDueDate: string | null
+}
+
+/** Ingresso di planDeliveryRecalc letto dal DB, più i campi per l'anteprima. */
+export type DeliveryPreview = {
+  residenceId: string
+  /** units.delivery_date attuale: è l'`expectedOldDate` di registerDelivery. */
+  deliveryDate: string | null
+  items: DeliveryPreviewItem[]
+  categoryDates: { category: string; deliveryDate: string }[]
+  today: string
+}
+
+// Unica lettura dell'ingresso del ricalcolo: la usano sia l'anteprima della
+// modale sia registerDelivery, così le due non possono divergere nel select o
+// nella mappatura riga → DeliveryRecalcItem. Client di SESSIONE: la RLS del
+// super_admin è il perimetro (un'unità di un altro costruttore è "non trovata").
+async function loadDeliveryPreview(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  action: string,
+  unitId: string,
+): Promise<{ error: string } | { preview: DeliveryPreview }> {
+  const { data: unit, error: unitError } = await supabase
+    .from('units')
+    .select('id, residence_id, delivery_date')
+    .eq('id', unitId)
+    .maybeSingle()
+  if (unitError) {
+    console.error(`${action}: errore lettura unità`, { unitId, unitError })
+    return { error: 'Errore temporaneo nella lettura dell\'unità, riprova.' }
+  }
+  if (!unit) return { error: 'Unità non trovata.' }
+
+  // completions(count) e non la lista dei completamenti: un conteggio non
+  // incontra il limite di righe per richiesta di PostgREST.
+  const [itemsRes, categoryRes] = await Promise.all([
+    supabase
+      .from('maintenance_items')
+      .select(`id, frequency_months, due_basis_override, ${LIVE_STATUS_FIELDS}, maintenance_templates!inner(${LIVE_STATUS_TEMPLATE_FIELDS}, frequency_months, category, title), completions(count)`)
+      .eq('unit_id', unitId),
+    supabase
+      .from('residence_category_dates')
+      .select('category, delivery_date')
+      .eq('residence_id', unit.residence_id),
+  ])
+  if (itemsRes.error) {
+    console.error(`${action}: errore lettura voci`, { unitId, error: itemsRes.error })
+    return { error: 'Errore temporaneo nella lettura delle voci, riprova.' }
+  }
+  if (categoryRes.error) {
+    console.error(`${action}: errore lettura date di categoria`, { unitId, error: categoryRes.error })
+    return { error: 'Errore temporaneo nella lettura delle date di categoria, riprova.' }
+  }
+
+  const items = (itemsRes.data ?? []).map((row): DeliveryPreviewItem => {
+    const template = normalizeEmbed<{
+      completion_mode: CompletionMode | null
+      is_active: boolean
+      frequency_months: number | null
+      category: string
+      title: string
+    }>(row.maintenance_templates)
+    const resolvable = { ...row, maintenance_templates: template }
+    return {
+      id: row.id as string,
+      frequencyMonths: resolveFrequencyMonths(resolvable),
+      completionMode: resolveCompletionMode(resolvable),
+      activationStatus: row.activation_status,
+      dueBasisOverride: row.due_basis_override as string | null,
+      category: template?.category ?? '',
+      hasCompletions: (normalizeEmbed<{ count: number }>(row.completions)?.count ?? 0) > 0,
+      title: template?.title ?? '',
+      currentDueDate: row.next_due_date as string | null,
+    }
+  })
+
+  return {
+    preview: {
+      residenceId: unit.residence_id as string,
+      deliveryDate: unit.delivery_date as string | null,
+      items,
+      categoryDates: (categoryRes.data ?? []).map(c => ({
+        category: c.category as string,
+        deliveryDate: c.delivery_date as string,
+      })),
+      today: todayISO(),
+    },
+  }
+}
+
+/**
+ * Sola lettura: l'ingresso del ricalcolo per l'anteprima della modale
+ * "Registra consegna". Il piano lo calcola il client con planDeliveryRecalc;
+ * al salvataggio registerDelivery lo ricalcola su dati freschi.
+ */
+export async function getDeliveryPreview(
+  unitId: string,
+): Promise<{ error?: string; preview?: DeliveryPreview }> {
+  const caller = await requireCaller('getDeliveryPreview', ['super_admin'])
+  if ('error' in caller) return { error: caller.error }
+
+  const supabase = await createClient()
+  const res = await loadDeliveryPreview(supabase, 'getDeliveryPreview', unitId)
+  if ('error' in res) return { error: res.error }
+  return { preview: res.preview }
+}
+
 /**
  * Registra (o rimuove, con `newDate` null) la data di consegna di un'unità.
  *
@@ -336,67 +446,17 @@ export async function registerDelivery(
 
   const supabase = await createClient()
 
-  const { data: unit, error: unitError } = await supabase
-    .from('units')
-    .select('id, residence_id')
-    .eq('id', unitId)
-    .maybeSingle()
-  if (unitError) {
-    console.error('registerDelivery: errore lettura unità', { unitId, unitError })
-    return { error: 'Errore temporaneo nella lettura dell\'unità, riprova.' }
-  }
-  if (!unit) return { error: 'Unità non trovata.' }
-
-  // completions(count) e non la lista dei completamenti: un conteggio non
-  // incontra il limite di righe per richiesta di PostgREST.
-  const [itemsRes, categoryRes] = await Promise.all([
-    supabase
-      .from('maintenance_items')
-      .select(`id, frequency_months, due_basis_override, ${LIVE_STATUS_FIELDS}, maintenance_templates!inner(${LIVE_STATUS_TEMPLATE_FIELDS}, frequency_months, category), completions(count)`)
-      .eq('unit_id', unitId),
-    supabase
-      .from('residence_category_dates')
-      .select('category, delivery_date')
-      .eq('residence_id', unit.residence_id),
-  ])
-  if (itemsRes.error) {
-    console.error('registerDelivery: errore lettura voci', { unitId, error: itemsRes.error })
-    return { error: 'Errore temporaneo nella lettura delle voci, riprova.' }
-  }
-  if (categoryRes.error) {
-    console.error('registerDelivery: errore lettura date di categoria', { unitId, error: categoryRes.error })
-    return { error: 'Errore temporaneo nella lettura delle date di categoria, riprova.' }
-  }
-
-  const items = (itemsRes.data ?? []).map(row => {
-    const template = normalizeEmbed<{
-      completion_mode: CompletionMode | null
-      is_active: boolean
-      frequency_months: number | null
-      category: string
-    }>(row.maintenance_templates)
-    const resolvable = { ...row, maintenance_templates: template }
-    return {
-      id: row.id as string,
-      frequencyMonths: resolveFrequencyMonths(resolvable),
-      completionMode: resolveCompletionMode(resolvable),
-      activationStatus: row.activation_status,
-      dueBasisOverride: row.due_basis_override as string | null,
-      category: template?.category ?? '',
-      hasCompletions: (normalizeEmbed<{ count: number }>(row.completions)?.count ?? 0) > 0,
-    }
-  })
+  const loaded = await loadDeliveryPreview(supabase, 'registerDelivery', unitId)
+  if ('error' in loaded) return { error: loaded.error }
+  const source = loaded.preview
 
   let plan
   try {
     plan = planDeliveryRecalc({
       unitDeliveryDate: nuova,
-      items,
-      categoryDates: (categoryRes.data ?? []).map(c => ({
-        category: c.category as string,
-        deliveryDate: c.delivery_date as string,
-      })),
-      today: todayISO(),
+      items: source.items,
+      categoryDates: source.categoryDates,
+      today: source.today,
     })
   } catch (err) {
     // Dato corrotto (frequenza mancante, data malformata, categoria doppia):
@@ -418,7 +478,7 @@ export async function registerDelivery(
     return { error: registerDeliveryErrorMessage(rpcError.code) }
   }
 
-  revalidatePath(`/admin/residences/${unit.residence_id}/units`)
-  revalidatePath(`/admin/residences/${unit.residence_id}/manutenzioni`)
+  revalidatePath(`/admin/residences/${source.residenceId}/units`)
+  revalidatePath(`/admin/residences/${source.residenceId}/manutenzioni`)
   return { riepilogo: plan.riepilogo }
 }
