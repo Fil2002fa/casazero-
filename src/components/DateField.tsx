@@ -7,20 +7,27 @@
 // dentro una riga flex con label a sinistra, non una colonna a larghezza
 // piena — flex-1/py-1.5 invece di w-full/py-2, stesso py-1.5 dei campi
 // annidati in liste dense altrove, es. DocumentiClient.tsx:964).
+// onChange è opzionale e il campo resta non controllato (defaultValue): serve
+// a chi deve reagire al cambio di data, es. l'anteprima di "Registra consegna".
+// Riceve il valore ISO 'YYYY-MM-DD', stringa vuota se il campo è svuotato.
 export function DateField({
-  name, required, min, max, defaultValue, className,
+  name, id, required, min, max, defaultValue, className, onChange,
 }: {
   name: string
+  id?: string
   required?: boolean
   min?: string
   max?: string
   defaultValue?: string
   className?: string
+  onChange?: (value: string) => void
 }) {
   return (
     <input
       type="date"
       name={name}
+      id={id}
+      onChange={onChange ? e => onChange(e.target.value) : undefined}
       required={required}
       min={min}
       max={max}
