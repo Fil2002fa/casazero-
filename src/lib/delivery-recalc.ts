@@ -32,6 +32,7 @@
 
 import type { CompletionMode, ItemActivation } from '@/types/database'
 import { nextDueFrom, resolveDueBasis, type DueBasisLevel } from './maintenance-due'
+import { pluralize } from './pluralize'
 
 export type DeliveryRecalcItem = {
   id: string
@@ -151,4 +152,48 @@ export function planDeliveryRecalc(input: DeliveryRecalcInput): DeliveryRecalcPl
   }
 
   return { voci, riepilogo }
+}
+
+// ------------------------------------------------------------
+// CONSEGNA MULTIPLA: una chiamata a registerDelivery per unita, quindi un
+// piano e un riepilogo per unita. Qui solo la somma per il riepilogo
+// complessivo e il messaggio di esito; niente regole nuove sulle voci.
+// ------------------------------------------------------------
+
+/** Riepilogo complessivo: somma campo per campo dei riepiloghi delle unita. */
+export function sumDeliveryRecalcSummaries(summaries: readonly DeliveryRecalcSummary[]): DeliveryRecalcSummary {
+  const tot: DeliveryRecalcSummary = {
+    ricalcolate: 0,
+    saltate: { nel_fascicolo: 0, promemoria: 0, fuori_piano: 0 },
+    gia_scadute: 0,
+  }
+  for (const s of summaries) {
+    tot.ricalcolate += s.ricalcolate
+    tot.gia_scadute += s.gia_scadute
+    for (const k of Object.keys(tot.saltate) as DeliveryRecalcSkipReason[]) tot.saltate[k] += s.saltate[k]
+  }
+  return tot
+}
+
+export type BulkDeliveryOutcome = {
+  label: string
+  /** null = registrata; altrimenti il messaggio di errore della action. */
+  error: string | null
+}
+
+/**
+ * Esito della consegna multipla, nell'ordine delle unita:
+ * "3 su 4 registrate. B2 non registrata: la data è stata cambiata da qualcun altro: ricarica la pagina."
+ * Il motivo e quello della action, con l'iniziale minuscola perche segue i due punti.
+ */
+export function bulkDeliveryOutcomeMessage(outcomes: readonly BulkDeliveryOutcome[]): string {
+  const total = outcomes.length
+  const ok = outcomes.filter(o => o.error === null).length
+  const parts = [pluralize(ok, `su ${total} registrata.`, `su ${total} registrate.`)]
+  for (const o of outcomes) {
+    if (o.error === null) continue
+    const reason = o.error.trim().replace(/[.\s]+$/, '')
+    parts.push(`${o.label} non registrata: ${reason.charAt(0).toLowerCase()}${reason.slice(1)}.`)
+  }
+  return parts.join(' ')
 }

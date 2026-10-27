@@ -42,7 +42,7 @@ try {
   process.exit(2)
 }
 
-const { planDeliveryRecalc } = mod
+const { planDeliveryRecalc, sumDeliveryRecalcSummaries, bulkDeliveryOutcomeMessage } = mod
 
 let fallimenti = 0
 let eseguiti = 0
@@ -215,6 +215,38 @@ try {
     console.error(`✗ errore di frequenza: il messaggio non nomina la voce\n    ottenuto: ${err.message}`)
   }
 }
+
+// --- consegna multipla: riepilogo complessivo -----------------------------
+const RIEP = (ricalcolate, nel_fascicolo, promemoria, fuori_piano, gia_scadute) =>
+  ({ ricalcolate, saltate: { nel_fascicolo, promemoria, fuori_piano }, gia_scadute })
+
+check('somma riepiloghi: nessuna unita, tutto a zero',
+  () => sumDeliveryRecalcSummaries([]), RIEP(0, 0, 0, 0, 0))
+check('somma riepiloghi: campo per campo, saltate comprese',
+  () => sumDeliveryRecalcSummaries([RIEP(3, 1, 2, 0, 1), RIEP(5, 0, 1, 4, 2)]), RIEP(8, 1, 3, 4, 3))
+check('somma riepiloghi: coincide con il piano delle unita',
+  () => sumDeliveryRecalcSummaries([
+    piano({ unitDeliveryDate: '2025-10-25' }).riepilogo,
+    piano({ items: [voce({ hasCompletions: true })] }).riepilogo,
+  ]),
+  RIEP(1, 1, 0, 0, 1))
+
+// --- consegna multipla: messaggio di esito ---------------------------------
+check('esito: tutte registrate',
+  () => bulkDeliveryOutcomeMessage([{ label: 'A1', error: null }, { label: 'A2', error: null }]),
+  '2 su 2 registrate.')
+check('esito: una sola unita, singolare',
+  () => bulkDeliveryOutcomeMessage([{ label: 'A1', error: null }]),
+  '1 su 1 registrata.')
+check('esito parziale: motivo con iniziale minuscola e un solo punto finale',
+  () => bulkDeliveryOutcomeMessage([
+    { label: 'A1', error: null }, { label: 'B2', error: 'La data è stata cambiata da qualcun altro: ricarica la pagina.' },
+    { label: 'A3', error: null }, { label: 'A4', error: null },
+  ]),
+  '3 su 4 registrate. B2 non registrata: la data è stata cambiata da qualcun altro: ricarica la pagina.')
+check('esito: nessuna registrata, motivi nell ordine delle unita',
+  () => bulkDeliveryOutcomeMessage([{ label: 'B1', error: 'Unità non trovata.' }, { label: 'B2', error: 'Errore temporaneo' }]),
+  '0 su 2 registrate. B1 non registrata: unità non trovata. B2 non registrata: errore temporaneo.')
 
 // --- esito ------------------------------------------------------------------
 if (fallimenti > 0) {
