@@ -6,6 +6,14 @@ import { createServiceClient } from '@/lib/supabase/admin'
 import { logActivityEvent } from '@/lib/activity-log'
 import { unitHasNoActiveAccount } from '@/lib/unit-utils'
 import { requireCaller } from '@/lib/require-caller'
+import { nextDueFrom } from '@/lib/maintenance-due'
+import { planDeliveryRecalc, type DeliveryRecalcSummary } from '@/lib/delivery-recalc'
+import {
+  LIVE_STATUS_FIELDS, LIVE_STATUS_TEMPLATE_FIELDS,
+  resolveCompletionMode, resolveFrequencyMonths, todayISO,
+} from '@/lib/maintenance-status'
+import { normalizeEmbed } from '@/lib/postgrest-embed'
+import type { CompletionMode } from '@/types/database'
 
 // Il perimetro lo decide la RLS su residences (czero_can_access_residence), non un confronto ricopiato qui.
 async function requireResidenceAccess(action: string, residenceId: string): Promise<{ error: string } | null> {
@@ -274,4 +282,143 @@ export async function revokeInvite(inviteId: string, residenceId: string): Promi
 
   revalidatePath(`/admin/residences/${residenceId}/units`)
   return {}
+}
+
+// Codici d'errore della RPC (045, testata): l'esito si decide sul SQLSTATE,
+// mai sul testo del messaggio. Ogni altro codice è un guasto tecnico, non un
+// esito di dominio, e il messaggio lo dice.
+function registerDeliveryErrorMessage(code: string | undefined): string {
+  switch (code) {
+    case '42501': return 'Permessi insufficienti per registrare la consegna.'
+    case 'P0002': return 'Unità non trovata.'
+    case '40001': return 'La data è stata cambiata da qualcun altro: ricarica la pagina.'
+    case '22023': return 'Piano di ricalcolo non valido: ricarica la pagina e riprova.'
+    default:      return 'Errore temporaneo nella registrazione della consegna, riprova.'
+  }
+}
+
+/** ISO 'YYYY-MM-DD' validata, o null; undefined = data malformata. */
+function normalizeDeliveryDate(value: string | null): string | null | undefined {
+  if (value === null) return null
+  try {
+    // nextDueFrom(x, 0) è la validazione della data già esistente: nessun parser nuovo.
+    return nextDueFrom(value, 0)
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Registra (o rimuove, con `newDate` null) la data di consegna di un'unità.
+ *
+ * `expectedOldDate` è la data che l'utente ha visto nell'anteprima: la RPC la
+ * confronta con quella in DB sotto lock e, se diverge, non scrive niente
+ * (40001). Il piano invece si ricalcola qui su dati freschi: ciò che si scrive
+ * corrisponde al DB di adesso, non a quello dell'anteprima.
+ *
+ * Tutte le letture e la RPC passano dal client di SESSIONE, non dal service
+ * client: la RPC è SECURITY INVOKER e riconosce l'attore da auth.uid(), e la
+ * RLS del super_admin è il perimetro (un'unità di un altro costruttore
+ * risulta "non trovata").
+ */
+export async function registerDelivery(
+  unitId: string,
+  expectedOldDate: string | null,
+  newDate: string | null,
+): Promise<{ error?: string; riepilogo?: DeliveryRecalcSummary }> {
+  const caller = await requireCaller('registerDelivery', ['super_admin'])
+  if ('error' in caller) return { error: caller.error }
+
+  const nuova = normalizeDeliveryDate(newDate)
+  const attesa = normalizeDeliveryDate(expectedOldDate)
+  if (nuova === undefined || attesa === undefined) return { error: 'Data di consegna non valida.' }
+  if (nuova === attesa) return { error: 'La data di consegna è già questa: nessuna modifica.' }
+
+  const supabase = await createClient()
+
+  const { data: unit, error: unitError } = await supabase
+    .from('units')
+    .select('id, residence_id')
+    .eq('id', unitId)
+    .maybeSingle()
+  if (unitError) {
+    console.error('registerDelivery: errore lettura unità', { unitId, unitError })
+    return { error: 'Errore temporaneo nella lettura dell\'unità, riprova.' }
+  }
+  if (!unit) return { error: 'Unità non trovata.' }
+
+  // completions(count) e non la lista dei completamenti: un conteggio non
+  // incontra il limite di righe per richiesta di PostgREST.
+  const [itemsRes, categoryRes] = await Promise.all([
+    supabase
+      .from('maintenance_items')
+      .select(`id, frequency_months, due_basis_override, ${LIVE_STATUS_FIELDS}, maintenance_templates!inner(${LIVE_STATUS_TEMPLATE_FIELDS}, frequency_months, category), completions(count)`)
+      .eq('unit_id', unitId),
+    supabase
+      .from('residence_category_dates')
+      .select('category, delivery_date')
+      .eq('residence_id', unit.residence_id),
+  ])
+  if (itemsRes.error) {
+    console.error('registerDelivery: errore lettura voci', { unitId, error: itemsRes.error })
+    return { error: 'Errore temporaneo nella lettura delle voci, riprova.' }
+  }
+  if (categoryRes.error) {
+    console.error('registerDelivery: errore lettura date di categoria', { unitId, error: categoryRes.error })
+    return { error: 'Errore temporaneo nella lettura delle date di categoria, riprova.' }
+  }
+
+  const items = (itemsRes.data ?? []).map(row => {
+    const template = normalizeEmbed<{
+      completion_mode: CompletionMode | null
+      is_active: boolean
+      frequency_months: number | null
+      category: string
+    }>(row.maintenance_templates)
+    const resolvable = { ...row, maintenance_templates: template }
+    return {
+      id: row.id as string,
+      frequencyMonths: resolveFrequencyMonths(resolvable),
+      completionMode: resolveCompletionMode(resolvable),
+      activationStatus: row.activation_status,
+      dueBasisOverride: row.due_basis_override as string | null,
+      category: template?.category ?? '',
+      hasCompletions: (normalizeEmbed<{ count: number }>(row.completions)?.count ?? 0) > 0,
+    }
+  })
+
+  let plan
+  try {
+    plan = planDeliveryRecalc({
+      unitDeliveryDate: nuova,
+      items,
+      categoryDates: (categoryRes.data ?? []).map(c => ({
+        category: c.category as string,
+        deliveryDate: c.delivery_date as string,
+      })),
+      today: todayISO(),
+    })
+  } catch (err) {
+    // Dato corrotto (frequenza mancante, data malformata, categoria doppia):
+    // non è un errore transitorio, riprovare non cambia l'esito.
+    console.error('registerDelivery: piano non calcolabile', { unitId, err })
+    return { error: 'Dati del piano non coerenti per questa unità: nessuna modifica salvata.' }
+  }
+
+  const { error: rpcError } = await supabase.rpc('czero_register_delivery', {
+    p_unit_id: unitId,
+    p_old_date: attesa,
+    p_new_date: nuova,
+    p_plan: plan.voci
+      .filter(v => v.esito === 'ricalcola')
+      .map(v => ({ item_id: v.item_id, nuova_data: v.nuova_data })),
+  })
+  if (rpcError) {
+    console.error('registerDelivery: RPC czero_register_delivery', { unitId, rpcError })
+    return { error: registerDeliveryErrorMessage(rpcError.code) }
+  }
+
+  revalidatePath(`/admin/residences/${unit.residence_id}/units`)
+  revalidatePath(`/admin/residences/${unit.residence_id}/manutenzioni`)
+  return { riepilogo: plan.riepilogo }
 }

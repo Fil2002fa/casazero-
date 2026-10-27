@@ -1,5 +1,5 @@
 import {
-  Send, Mail, UserCheck, UserPlus, UserMinus, FileText, FileCheck, Archive,
+  Send, Mail, UserCheck, UserPlus, UserMinus, FileText, FileCheck, Archive, CalendarClock,
   type LucideIcon,
 } from 'lucide-react'
 import type { ActivityEvent, ActivityEventType } from '@/types/database'
@@ -18,7 +18,7 @@ import { pluralize } from '@/lib/pluralize'
  */
 
 /**
- * Tipizzata `Record<ActivityEventType, ...>`: la completezza sugli 8 tipi la
+ * Tipizzata `Record<ActivityEventType, ...>`: la completezza sui 9 tipi la
  * impone il compilatore, non la diligenza. Non ha nulla a che vedere con la
  * mappa della pagina demo di portafoglio, che serve i suoi tipi finti — i due
  * insiemi sono disgiunti.
@@ -32,6 +32,7 @@ export const ACTIVITY_EVENT_ICON: Record<ActivityEventType, LucideIcon> = {
   documento_caricato:     FileText,
   documento_classificato: FileCheck,
   voce_archiviata:        Archive,
+  data_consegna_modificata: CalendarClock,
 }
 
 /**
@@ -54,6 +55,9 @@ const NEUTRAL_LABEL: Record<ActivityEventType, string> = {
   documento_caricato:     'Documento caricato',
   documento_classificato: 'Documento classificato',
   voce_archiviata:        'Voce archiviata',
+  // Solo etichetta neutra: la frase dal payload (livello, vecchio -> nuovo,
+  // voci ricalcolate) arriva con la UI della modale, non con il produttore.
+  data_consegna_modificata: 'Data di consegna modificata',
 }
 
 // Il payload è JSONB non vincolato dal DB: ogni chiave va letta in modo

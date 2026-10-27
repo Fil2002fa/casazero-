@@ -149,11 +149,16 @@ export interface Completion {
 }
 
 /**
- * Gli 8 tipi di evento del registro attività. Allineato uno a uno al CHECK su
- * `event_type` in 037_activity_events.sql:37-54: aggiungere un valore qui senza
- * una migrazione che allarghi il CHECK produce un errore a runtime, non a
- * compilazione. `src/lib/activity-log.ts` lo ri-esporta per i chiamanti di
- * scrittura, ma la fonte di verità è questa, accanto agli altri union del DB.
+ * I 9 tipi di evento del registro attività. Allineato uno a uno al CHECK su
+ * `event_type`, la cui definizione viva è in 043_event_data_consegna_modificata.sql
+ * (la 037 aveva i primi 8): aggiungere un valore qui senza una migrazione che
+ * allarghi il CHECK produce un errore a runtime, non a compilazione.
+ * `src/lib/activity-log.ts` lo ri-esporta per i chiamanti di scrittura, ma la
+ * fonte di verità è questa, accanto agli altri union del DB.
+ *
+ * `data_consegna_modificata` lo scrive SOLO la RPC czero_register_delivery
+ * (045), mai logActivityEvent: l'evento deve stare nella stessa transazione
+ * delle date che racconta.
  */
 export type ActivityEventType =
   | 'sollecito_inviato'
@@ -164,6 +169,7 @@ export type ActivityEventType =
   | 'documento_caricato'
   | 'documento_classificato'
   | 'voce_archiviata'
+  | 'data_consegna_modificata'
 
 /**
  * Riga del registro attività. Append-only: la 037 non ha policy UPDATE né
