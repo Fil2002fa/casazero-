@@ -5,7 +5,7 @@ import { Plus, UserPlus, Check, Pencil, X, Loader2, CalendarCheck } from 'lucide
 import { createUnit, createInvite, revokeInvite, updateUnitLabel, createBulkInvites } from './actions'
 import { unitHasNoActiveAccount, unitNotDelivered, unitResidentStatus, type UnitResidentStatus } from '@/lib/unit-utils'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
-import { pluralize } from '@/lib/pluralize'
+import { bulkInviteMessage } from '@/lib/bulkInviteMessage'
 import { formatDateIT } from '@/lib/formatDate'
 import { InviteLinkCard } from './InviteLinkCard'
 import { useToast } from '@/components/ui/Toast'
@@ -47,19 +47,6 @@ function ResidentStatusText({ status }: { status: UnitResidentStatus }) {
 // (createInvite, createBulkInvites, revoca in registerDelivery).
 function activeInvitesOf(unit: { invites: InviteRow[] }): InviteRow[] {
   return unit.invites.filter(i => !i.used_at && new Date(i.expires_at) > new Date())
-}
-
-function bulkInviteMessage(r: { count: number; skipped: number; notDelivered: number }): string {
-  const head = r.count > 0 ? `Inviti generati per ${r.count} unità` : 'Nessun nuovo invito generato'
-  const notes: string[] = []
-  if (r.notDelivered > 0) {
-    notes.push(`${pluralize(r.notDelivered, 'unità saltata', 'unità saltate')} perché non ${r.notDelivered === 1 ? 'consegnata' : 'consegnate'}`)
-  }
-  const other = r.skipped - r.notDelivered
-  if (other > 0) {
-    notes.push(`${pluralize(other, 'unità saltata', 'unità saltate')} perché ${other === 1 ? 'ha' : 'hanno'} già un account o un invito attivo`)
-  }
-  return notes.length > 0 ? `${head}; ${notes.join('; ')}.` : `${head}.`
 }
 
 export function UnitsManager({
