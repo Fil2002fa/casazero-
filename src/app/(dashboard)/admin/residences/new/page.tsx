@@ -82,6 +82,9 @@ export default function NewResidencePage() {
   const [error, setError] = useState<string | null>(null)
   const [existingBuilding, setExistingBuilding] = useState(false)
   const [showDateWizard, setShowDateWizard] = useState(false)
+  // Edificio già abitato: tutte le unità nascono consegnate nella stessa data.
+  // Senza, nascono non consegnate (044) e la consegna si registra dalla pagina Unità.
+  const [unitsAlreadyDelivered, setUnitsAlreadyDelivered] = useState(false)
 
   const [step, setStep] = useState<1 | 2 | 3>(1)
   const [features, setFeatures] = useState<Record<FeatureKey, boolean>>(emptyFeatures)
@@ -130,6 +133,7 @@ export default function NewResidencePage() {
       setError(null)
       setExistingBuilding(false)
       setShowDateWizard(false)
+      setUnitsAlreadyDelivered(false)
       setGenPrefix('Unità')
       setGenCount('')
       setGenPerFloor('2')
@@ -323,8 +327,9 @@ export default function NewResidencePage() {
             <div>
               <Field label="Data consegna *" name="delivery_date" type="date" required />
               <p className="text-xs text-text-secondary mt-1">
-                Data di consegna chiavi al cliente. Da qui partono tutte le scadenze delle
-                manutenzioni (data consegna + frequenza).
+                Data di consegna delle parti comuni. Da qui partono le scadenze delle
+                manutenzioni condominiali (data consegna + frequenza). Le scadenze di ogni
+                unità partono dalla sua consegna, che si registra dalla pagina Unità.
               </p>
             </div>
           </section>
@@ -338,6 +343,7 @@ export default function NewResidencePage() {
                 onChange={e => {
                   setExistingBuilding(e.target.checked)
                   setShowDateWizard(e.target.checked)
+                  if (!e.target.checked) setUnitsAlreadyDelivered(false)
                 }}
                 className="w-4 h-4 rounded accent-brand-dark"
               />
@@ -349,6 +355,30 @@ export default function NewResidencePage() {
                 </p>
               </div>
             </label>
+
+            {/* Il campo data esiste solo con l'opzione attiva: senza, non arriva
+                nel FormData e le unità nascono non consegnate. */}
+            {existingBuilding && (
+              <div className="space-y-2">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={unitsAlreadyDelivered}
+                    onChange={e => setUnitsAlreadyDelivered(e.target.checked)}
+                    className="w-4 h-4 rounded accent-brand-dark"
+                  />
+                  <span className="text-sm text-text-primary">Unità già consegnate tutte il</span>
+                </label>
+                {unitsAlreadyDelivered && (
+                  <DateField name="units_delivery_date" required />
+                )}
+                <p className="text-xs text-text-secondary">
+                  {unitsAlreadyDelivered
+                    ? 'Tutte le unità nascono consegnate in questa data: le loro scadenze partono da qui.'
+                    : 'Senza questa opzione le unità nascono non consegnate: la consegna di ciascuna si registra dalla pagina Unità.'}
+                </p>
+              </div>
+            )}
 
             {existingBuilding && (
               <div>

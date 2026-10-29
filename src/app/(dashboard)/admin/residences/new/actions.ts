@@ -27,6 +27,19 @@ export async function createResidence(formData: FormData) {
 
   if (!name || !address || !deliveryDate) return { error: 'Nome, indirizzo e data di consegna obbligatori' }
 
+  // Opzione "Unità già consegnate tutte il <data>" (edificio esistente). Il
+  // campo esiste solo con l'opzione attiva: assente = unità non consegnate,
+  // p_units_delivery_date NULL (044). Formato controllato qui perché un valore
+  // malformato arriverebbe alla RPC come errore di cast generico.
+  const unitsDeliveryRaw = formData.get('units_delivery_date')
+  const unitsDeliveryDate = typeof unitsDeliveryRaw === 'string' && unitsDeliveryRaw.trim()
+    ? unitsDeliveryRaw.trim()
+    : null
+  if (unitsDeliveryRaw !== null && !unitsDeliveryDate) return { error: 'Indica la data di consegna delle unità' }
+  if (unitsDeliveryDate && !/^\d{4}-\d{2}-\d{2}$/.test(unitsDeliveryDate)) {
+    return { error: 'Data di consegna delle unità non valida' }
+  }
+
   const unitsResult = parseUnits(formData.get('units'))
   if ('error' in unitsResult) return { error: unitsResult.error }
   const units = unitsResult.units
@@ -34,6 +47,7 @@ export async function createResidence(formData: FormData) {
   const admin = createServiceClient()
 
   // Il field name nel wizard è date_${category} con il valore esatto del template.
+  // La RPC le salva in residence_category_dates (044), solo le categorie esistenti.
   const categoryDates: Record<string, string> = {}
   for (const [key, value] of formData.entries()) {
     if (key.startsWith('date_') && typeof value === 'string' && value.trim()) {
@@ -69,6 +83,7 @@ export async function createResidence(formData: FormData) {
     p_units: units,
     p_category_dates: categoryDates,
     p_features: features,
+    p_units_delivery_date: unitsDeliveryDate,
   })
 
   if (rpcErr || !residenceId) return { error: rpcErr?.message ?? 'Errore creazione residenza' }
