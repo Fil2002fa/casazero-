@@ -206,7 +206,7 @@ export function UnitsManager({
           <button
             onClick={handleBulkInvite}
             disabled={pending || bulkDeliveredCount === 0}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-semantic-amber text-white rounded-lg text-xs font-medium disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-border bg-surface text-text-primary rounded-lg text-xs font-medium hover:bg-background disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
           >
             {pending && <Loader2 className="w-3 h-3 animate-spin" />}
             Invita le unità consegnate{bulkDeliveredCount > 0 ? ` (${bulkDeliveredCount})` : ''}
