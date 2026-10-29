@@ -10,6 +10,7 @@ import { formatDateIT } from '@/lib/formatDate'
 import { InviteLinkCard } from './InviteLinkCard'
 import { useToast } from '@/components/ui/Toast'
 import { RegistraConsegnaModal } from './RegistraConsegnaModal'
+import { RegistraConsegnaMultiplaModal } from './RegistraConsegnaMultiplaModal'
 
 type MemberRow = { profile_id: string; is_primary: boolean; profiles: { full_name: string | null } | null }
 type InviteRow = { id: string; token: string; expires_at: string; used_at: string | null }
@@ -17,7 +18,8 @@ type UnitRow = { id: string; label: string; floor: number | null; deliveryDate: 
 
 // Stato del residente come testo colorato, senza pillola. Sotto md segue
 // "Piano · consegna" sulla stessa riga, preceduto da " · "; da md va a destra
-// (ml-auto) e il separatore sparisce. Colore solo sul testo dello stato.
+// (ml-auto) e il separatore sparisce. Colore solo sul testo dello stato
+// (per il residente, solo sul nome).
 const RESIDENT_STATUS_COLOR: Record<Exclude<UnitResidentStatus['stato'], 'nessuno'>, string> = {
   da_invitare:          'text-semantic-amber',
   invito_inviato:       'text-text-secondary',
@@ -27,15 +29,16 @@ const RESIDENT_STATUS_COLOR: Record<Exclude<UnitResidentStatus['stato'], 'nessun
 
 function ResidentStatusText({ status }: { status: UnitResidentStatus }) {
   if (status.stato === 'nessuno') return null
-  const text =
-    status.stato === 'da_invitare' ? 'Da invitare'
-    : status.stato === 'invito_inviato' ? 'Invito inviato'
-    : status.stato === 'residente' ? `Residente: ${status.nome ?? 'attivo'}`
-    : 'Residente già attivo'
+  // Residente: l'etichetta resta neutra, il colore va solo sul nome.
+  const content = status.stato === 'residente'
+    ? <><span className="text-text-secondary">Residente: </span><span className={RESIDENT_STATUS_COLOR.residente}>{status.nome ?? 'attivo'}</span></>
+    : <span className={RESIDENT_STATUS_COLOR[status.stato]}>
+        {status.stato === 'da_invitare' ? 'Da invitare' : status.stato === 'invito_inviato' ? 'Invito inviato' : 'Residente già attivo'}
+      </span>
   return (
     <span className="text-xs md:text-sm md:ml-auto md:shrink-0">
       <span className="text-text-secondary md:hidden">· </span>
-      <span className={RESIDENT_STATUS_COLOR[status.stato]}>{text}</span>
+      {content}
     </span>
   )
 }
@@ -79,6 +82,12 @@ export function UnitsManager({
   const [filterSenzaAccount, setFilterSenzaAccount] = useState(initialFilter === 'senza_account')
   const [deliveryUnitId, setDeliveryUnitId] = useState<string | null>(null)
   const deliveryUnit = deliveryUnitId ? units.find(u => u.id === deliveryUnitId) ?? null : null
+  // Consegna multipla: si selezionano solo unità non consegnate. Correggere
+  // una data già registrata è un atto singolo, dalla card dell'unità.
+  const [selected, setSelected] = useState<Set<string>>(() => new Set())
+  // Istantanea delle unità all'apertura: la modale non cambia elenco se la
+  // pagina si aggiorna mentre registra.
+  const [bulkDeliveryUnits, setBulkDeliveryUnits] = useState<{ id: string; label: string; floor: number | null }[] | null>(null)
 
   const displayUnits = filterSenzaAccount
     ? units.filter(u => unitHasNoActiveAccount(u.rawMembers))
@@ -95,6 +104,25 @@ export function UnitsManager({
   )
   // Il numero sul bottone conta solo le unità che riceveranno davvero l'invito.
   const bulkDeliveredCount = bulkTargets.filter(u => !unitNotDelivered(u.deliveryDate)).length
+
+  // Derivate dalle unità visibili: un'unità consegnata nel frattempo o nascosta
+  // dal filtro esce dalla selezione senza bisogno di ripulire lo stato.
+  const selectableUnits = displayUnits.filter(u => unitNotDelivered(u.deliveryDate))
+  const selectedUnits = selectableUnits.filter(u => selected.has(u.id))
+  const allSelected = selectableUnits.length > 0 && selectedUnits.length === selectableUnits.length
+
+  function toggleSelected(unitId: string) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(unitId)) next.delete(unitId)
+      else next.add(unitId)
+      return next
+    })
+  }
+
+  function toggleAllSelected() {
+    setSelected(allSelected ? new Set() : new Set(selectableUnits.map(u => u.id)))
+  }
 
   function handleAddUnit() {
     if (!newUnitLabel.trim()) return
@@ -262,6 +290,29 @@ export function UnitsManager({
         </div>
       )}
 
+      {/* Selezione per la consegna multipla: esiste solo se c'è qualcosa da
+          selezionare. Comando discreto, testuale: l'azione vera è il bottone. */}
+      {selectableUnits.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4">
+          <button
+            type="button"
+            onClick={toggleAllSelected}
+            className="text-sm text-text-secondary underline underline-offset-2 hover:text-text-primary cursor-pointer"
+          >
+            {allSelected ? 'Deseleziona tutte' : `Seleziona le non consegnate (${selectableUnits.length})`}
+          </button>
+          {selectedUnits.length > 0 && (
+            <button
+              onClick={() => setBulkDeliveryUnits(selectedUnits.map(u => ({ id: u.id, label: u.label, floor: u.floor })))}
+              disabled={pending}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-dark text-white rounded-lg text-xs font-medium disabled:opacity-40"
+            >
+              <CalendarCheck className="w-3.5 h-3.5" /> Registra consegna ({selectedUnits.length})
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Lista unità */}
       {displayUnits.map(unit => {
         const activeInvites = activeInvitesOf(unit)
@@ -270,73 +321,88 @@ export function UnitsManager({
 
         return (
           <div key={unit.id} className="bg-surface rounded-xl border border-border overflow-hidden">
-            {/* Header unità */}
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={() => { if (editingUnitId !== unit.id) setExpandedUnit(isExpanded ? null : unit.id) }}
-              onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && editingUnitId !== unit.id) setExpandedUnit(isExpanded ? null : unit.id) }}
-              className="w-full flex items-center justify-between p-4 text-left cursor-pointer"
-            >
-              {/* Una sola struttura per le due larghezze. Sotto md: nome a tutta
-                  riga, sotto "Piano · consegna · stato residente". Da md: tutto
-                  su una riga, lo stato residente spinto a destra (ml-auto). */}
-              <div className="flex-1 min-w-0 flex flex-wrap md:flex-nowrap items-baseline gap-x-1 md:gap-x-3 gap-y-0.5">
-                {editingUnitId === unit.id ? (
-                  <div onClick={e => e.stopPropagation()} className="basis-full md:basis-auto flex items-center gap-1.5 mb-1">
-                    <input
-                      value={editLabel}
-                      onChange={e => setEditLabel(e.target.value)}
-                      maxLength={60}
-                      autoFocus
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') handleSaveLabel(unit.id)
-                        if (e.key === 'Escape') setEditingUnitId(null)
-                      }}
-                      className="flex-1 min-w-0 border border-brand-medium rounded-lg px-2 py-1 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
-                    />
-                    <button
-                      onClick={() => handleSaveLabel(unit.id)}
-                      disabled={pending || !editLabel.trim()}
-                      className="p-1.5 rounded-lg bg-brand-dark text-white disabled:opacity-40"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => setEditingUnitId(null)}
-                      className="p-1.5 rounded-lg border border-border text-text-secondary"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="basis-full md:basis-auto shrink-0 flex items-center gap-1.5">
-                    <p className="text-sm md:text-[15px] font-medium text-text-primary">{formatUnitLabel(unit.label, unit.floor)}</p>
-                    <button
-                      onClick={e => { e.stopPropagation(); setEditingUnitId(unit.id); setEditLabel(unit.label) }}
-                      className="p-0.5 rounded text-text-secondary hover:text-text-primary transition-colors"
-                    >
-                      <Pencil className="w-3 h-3" />
-                    </button>
-                  </div>
-                )}
-                <p className="text-xs text-text-secondary">
-                  {unit.floor ? `Piano ${unit.floor} · ` : ''}
-                  {/* Da md la consegna pesa come dato principale; il piano resta secondario. */}
-                  <span className="md:text-sm md:text-text-primary">
-                    {notDelivered ? 'Non consegnata' : `Consegnata il ${formatDateIT(unit.deliveryDate)}`}
-                  </span>
-                </p>
-                <ResidentStatusText
-                  status={unitResidentStatus({
-                    deliveryDate: unit.deliveryDate,
-                    members: unit.rawMembers,
-                    hasActiveInvite: activeInvites.length > 0,
-                    residentName: unit.members[0]?.profiles?.full_name ?? null,
-                  })}
-                />
+            {/* Header unità. La casella di selezione sta accanto all'header, non
+                dentro: l'header è già un elemento interattivo. Solo le non
+                consegnate hanno la casella: le consegnate non sono selezionabili. */}
+            <div className="flex items-stretch">
+              {notDelivered && (
+                <label className="flex items-center pl-4 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(unit.id)}
+                    onChange={() => toggleSelected(unit.id)}
+                    aria-label={`Seleziona ${formatUnitLabel(unit.label, unit.floor)}`}
+                    className="w-4 h-4 accent-brand-dark cursor-pointer"
+                  />
+                </label>
+              )}
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => { if (editingUnitId !== unit.id) setExpandedUnit(isExpanded ? null : unit.id) }}
+                onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && editingUnitId !== unit.id) setExpandedUnit(isExpanded ? null : unit.id) }}
+                className={`flex-1 min-w-0 flex items-center justify-between p-4 text-left cursor-pointer${notDelivered ? ' pl-3' : ''}`}
+              >
+                {/* Una sola struttura per le due larghezze. Sotto md: nome a tutta
+                    riga, sotto "Piano · consegna · stato residente". Da md: tutto
+                    su una riga, lo stato residente spinto a destra (ml-auto). */}
+                <div className="flex-1 min-w-0 flex flex-wrap md:flex-nowrap items-baseline gap-x-1 md:gap-x-3 gap-y-0.5">
+                  {editingUnitId === unit.id ? (
+                    <div onClick={e => e.stopPropagation()} className="basis-full md:basis-auto flex items-center gap-1.5 mb-1">
+                      <input
+                        value={editLabel}
+                        onChange={e => setEditLabel(e.target.value)}
+                        maxLength={60}
+                        autoFocus
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') handleSaveLabel(unit.id)
+                          if (e.key === 'Escape') setEditingUnitId(null)
+                        }}
+                        className="flex-1 min-w-0 border border-brand-medium rounded-lg px-2 py-1 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
+                      />
+                      <button
+                        onClick={() => handleSaveLabel(unit.id)}
+                        disabled={pending || !editLabel.trim()}
+                        className="p-1.5 rounded-lg bg-brand-dark text-white disabled:opacity-40"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setEditingUnitId(null)}
+                        className="p-1.5 rounded-lg border border-border text-text-secondary"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="basis-full md:basis-auto shrink-0 flex items-center gap-1.5">
+                      <p className="text-sm md:text-[15px] font-medium text-text-primary">{formatUnitLabel(unit.label, unit.floor)}</p>
+                      <button
+                        onClick={e => { e.stopPropagation(); setEditingUnitId(unit.id); setEditLabel(unit.label) }}
+                        className="p-0.5 rounded text-text-secondary hover:text-text-primary transition-colors"
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
+                  <p className="text-xs text-text-secondary">
+                    {unit.floor ? `Piano ${unit.floor} · ` : ''}
+                    {/* Da md la consegna pesa come dato principale; il piano resta secondario. */}
+                    <span className="md:text-sm md:text-text-primary">
+                      {notDelivered ? 'Non consegnata' : `Consegnata il ${formatDateIT(unit.deliveryDate)}`}
+                    </span>
+                  </p>
+                  <ResidentStatusText
+                    status={unitResidentStatus({
+                      deliveryDate: unit.deliveryDate,
+                      members: unit.rawMembers,
+                      hasActiveInvite: activeInvites.length > 0,
+                      residentName: unit.members[0]?.profiles?.full_name ?? null,
+                    })}
+                  />
+                </div>
+                <span className="ml-3 shrink-0 text-text-secondary text-xs">{isExpanded ? '▲' : '▼'}</span>
               </div>
-              <span className="ml-3 shrink-0 text-text-secondary text-xs">{isExpanded ? '▲' : '▼'}</span>
             </div>
 
             {/* Contenuto espanso */}
@@ -430,6 +496,14 @@ export function UnitsManager({
           hasNoActiveAccount={unitHasNoActiveAccount(deliveryUnit.rawMembers)}
           activeInviteCount={activeInvitesOf(deliveryUnit).length}
           onClose={() => setDeliveryUnitId(null)}
+        />
+      )}
+
+      {bulkDeliveryUnits && (
+        <RegistraConsegnaMultiplaModal
+          units={bulkDeliveryUnits}
+          residenceId={residenceId}
+          onClose={() => { setBulkDeliveryUnits(null); setSelected(new Set()) }}
         />
       )}
     </div>

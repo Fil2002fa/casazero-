@@ -10,8 +10,6 @@ export type UnitSummaryRow = {
   id: string
   label: string
   floor: number | null
-  /** Nome del residente attivo principale; null se nessun account attivo. */
-  residentName: string | null
   lifecycle: UnitLifecycle
 }
 
@@ -20,8 +18,9 @@ export type UnitSummaryRow = {
 export function UnitsSummaryTable({ residenceId, rows, readOnly = false }: { residenceId: string; rows: UnitSummaryRow[]; readOnly?: boolean }) {
   const router = useRouter()
 
-  // Card sotto lg (mai tabella compressa): a 320px etichetta unità, pill e
-  // nome residente non stanno su una riga di tabella.
+  // Card sotto lg (mai tabella compressa): a 320px etichetta unità e pill
+  // non stanno su una riga di tabella. Il nome del residente vive nella
+  // pagina Unità: qui basta l'etichetta di stato.
   return (
     <Table stack="lg">
       <TableHeader>
@@ -37,10 +36,7 @@ export function UnitsSummaryTable({ residenceId, rows, readOnly = false }: { res
           >
             <TableCell emphasis>{formatUnitLabel(r.label, r.floor)}</TableCell>
             <TableCell label="Stato">
-              <span className="inline-flex flex-col items-start gap-0.5">
-                <UnitLifecycleBadge lifecycle={r.lifecycle} />
-                {r.residentName && <span className="text-xs text-neutral-600">{r.residentName}</span>}
-              </span>
+              <UnitLifecycleBadge lifecycle={r.lifecycle} />
             </TableCell>
           </TableRow>
         ))}

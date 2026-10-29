@@ -84,17 +84,12 @@ function buildUnitSummary(unitsRaw: unknown[] | null) {
     unitHasNoActiveAccount((u.unit_members ?? []) as { ended_at: string | null }[])
   ).length
 
-  const unitRows: UnitSummaryRow[] = units.map(u => {
-    const activeMembers = (u.unit_members ?? []).filter(m => m.ended_at === null)
-    const primary = [...activeMembers].sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0))[0] ?? null
-    return {
-      id: u.id,
-      label: u.label,
-      floor: u.floor,
-      residentName: primary?.profiles?.full_name ?? null,
-      lifecycle: unitLifecycleStatus(u.delivery_date, u.unit_members ?? []),
-    }
-  })
+  const unitRows: UnitSummaryRow[] = units.map(u => ({
+    id: u.id,
+    label: u.label,
+    floor: u.floor,
+    lifecycle: unitLifecycleStatus(u.delivery_date, u.unit_members ?? []),
+  }))
 
   // Ordinamento naturale: la query ordina 'label' come TEXT (alfabetico:
   // "Unità 10" prima di "Unità 9"), qui si ricorregge con localeCompare
