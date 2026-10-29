@@ -11,12 +11,14 @@ import {
 } from '@/lib/delivery-recalc'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import { pluralize } from '@/lib/pluralize'
-import { getDeliveryPreviews, registerDelivery, type DeliveryPreviewResult } from './actions'
+import { bulkInviteMessage } from '@/lib/bulkInviteMessage'
+import { createBulkInvites, getDeliveryPreviews, registerDelivery, type DeliveryPreviewResult } from './actions'
 import { DeliveryPreviewWarnings } from './DeliveryPreviewWarnings'
 
 // Consegna di più unità non consegnate con una sola data. Una chiamata a
 // registerDelivery per unità, in serie: ogni unità è atomica per conto suo,
-// l'esito può essere parziale e si dice unità per unità.
+// l'esito può essere parziale e si dice unità per unità. Poi, come nella
+// modale singola, gli inviti: una chiamata unica per le unità registrate.
 type Step = 'form' | 'esecuzione' | 'esiti'
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
@@ -33,6 +35,10 @@ type Row = { unit: BulkUnit; label: string } & (
 
 type Outcome = { unitId: string; label: string; error: string | null; riepilogo: DeliveryRecalcSummary | null }
 
+// Esito degli inviti dopo le consegne. null: nessuna unità registrata, o
+// modale chiusa prima della chiamata.
+type InviteOutcome = { message: string; error: null } | { message: null; error: string } | null
+
 export function RegistraConsegnaMultiplaModal({
   units, residenceId, onClose,
 }: {
@@ -48,8 +54,10 @@ export function RegistraConsegnaMultiplaModal({
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(0)
   const [outcomes, setOutcomes] = useState<Outcome[]>([])
-  // Il timer dei 20 s riparte a ogni unità (dipende da `done`): conta il
-  // silenzio della singola chiamata, non la durata dell'intero lotto.
+  const [invitesPhase, setInvitesPhase] = useState(false)
+  const [inviteOutcome, setInviteOutcome] = useState<InviteOutcome>(null)
+  // Il timer dei 20 s riparte a ogni unità (dipende da `done`) e all'avvio
+  // degli inviti: conta il silenzio della singola chiamata, non del lotto.
   const [stalled, setStalled] = useState(false)
   // Chiusa la modale (possibile solo se una risposta tarda), il ciclo non
   // avvia altre registrazioni: quella in volo finisce, le successive no.
@@ -64,7 +72,7 @@ export function RegistraConsegnaMultiplaModal({
     if (!busy) return
     const t = setTimeout(() => setStalled(true), STALL_MS)
     return () => clearTimeout(t)
-  }, [busy, done])
+  }, [busy, done, invitesPhase])
 
   useEffect(() => {
     let cancelled = false
@@ -152,6 +160,25 @@ export function RegistraConsegnaMultiplaModal({
       collected.push(outcome)
       setDone(d => d + 1)
     }
+    // Le unità con un account attivo o un invito attivo le salta il server
+    // (createBulkInvites), e le conta: il messaggio lo dice.
+    const delivered = collected.filter(o => o.error === null).map(o => o.unitId)
+    let invites: InviteOutcome = null
+    if (delivered.length > 0 && !closed.current) {
+      setStalled(false)
+      setInvitesPhase(true)
+      // try separato: le consegne sono già scritte, un guasto qui riguarda solo gli inviti.
+      try {
+        const res = await createBulkInvites(delivered, residenceId)
+        invites = res.error
+          ? { message: null, error: res.error }
+          : { message: bulkInviteMessage(res) + (res.count > 0 ? ' I link sono nelle card delle unità.' : ''), error: null }
+      } catch {
+        invites = { message: null, error: 'Errore imprevisto.' }
+      }
+    }
+    setInviteOutcome(invites)
+    setInvitesPhase(false)
     setOutcomes(collected)
     setBusy(false)
     setStalled(false)
@@ -258,7 +285,7 @@ export function RegistraConsegnaMultiplaModal({
         {step === 'esecuzione' && (
           <p className="flex items-center gap-2 text-neutral-600">
             <Loader2 className="w-4 h-4 animate-spin" />
-            Registrazione in corso: {done} di {eligible.length}…
+            {invitesPhase ? 'Generazione degli inviti…' : <>Registrazione in corso: {done} di {eligible.length}…</>}
           </p>
         )}
 
@@ -270,6 +297,12 @@ export function RegistraConsegnaMultiplaModal({
             {writtenTotal.ricalcolate > 0 && (
               <p className="text-neutral-600">
                 {pluralize(writtenTotal.ricalcolate, 'voce ricalcolata', 'voci ricalcolate')} nelle unità registrate.
+              </p>
+            )}
+            {inviteOutcome?.message && <p>{inviteOutcome.message}</p>}
+            {inviteOutcome?.error && (
+              <p className="text-semantic-red">
+                Inviti non generati: {inviteOutcome.error} Si generano dal bottone «Invita le unità consegnate» della pagina.
               </p>
             )}
           </div>
