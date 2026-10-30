@@ -4,7 +4,8 @@ import { useState, useTransition } from 'react'
 import Image from 'next/image'
 import { Check, Copy, Trash2, UserPlus, Users, Bell, LogOut, Smartphone, Mail, Lock } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
-import { createFamilyInvite, revokeFamilyInvite, signOut, updateNotificationPrefs } from './actions'
+import { createFamilyInvite, revokeFamilyInvite, updateNotificationPrefs } from './actions'
+import { signOut } from '@/app/auth/actions'
 import type { NotificationPrefs } from '@/types/database'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 
@@ -297,7 +298,7 @@ export function ProfiloClient({
         </section>
 
         {/* Logout */}
-        <form action={signOut}>
+        <form action={signOut.bind(null, null)}>
           <Button type="submit" variant="ghost" className="w-full gap-2">
             <LogOut className="w-4 h-4" strokeWidth={1.8} />
             Esci dall&apos;account

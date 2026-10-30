@@ -1,7 +1,6 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/admin'
 
@@ -119,10 +118,4 @@ export async function updateNotificationPrefs(
 
   if (error) return { error: error.message }
   return {}
-}
-
-export async function signOut(): Promise<void> {
-  const supabase = await createClient()
-  await supabase.auth.signOut()
-  redirect('/auth/login')
 }
