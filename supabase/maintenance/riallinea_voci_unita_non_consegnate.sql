@@ -139,8 +139,13 @@ WHERE u.delivery_date IS NULL
 --   WHERE r.name = 'Tencarola'
 --   GROUP BY u.id, u.label, u.delivery_date
 --   ORDER BY u.label;
--- ESITO del controllo promemoria: NON RIPORTATO (il messaggio di Filippo
--- del 29/10 conteneva il segnaposto al posto dell'output). Che D1 abbia
--- escluso le promemoria e' dichiarato da Filippo, non verificato da
--- questa query.
+-- ESITO del controllo promemoria: eseguito da Filippo il 2026-10-30
+-- (non riportato il 29/10, il messaggio conteneva il segnaposto).
+--   label    | delivery_date | promemoria | prom_datate | ricalc_datate | ricalc_non_in_attesa
+--   Unita 1  | null          | 3          | 3           | 0             | 0
+--   Unita 2  | null          | 3          | 3           | 0             | 0
+--   Unita 3  | null          | 3          | 3           | 0             | 0
+--   Unita 4  | null          | 3          | 3           | 0             | 0
+-- Tutte e 4 le unita come atteso: D1 non ha toccato le promemoria (ancora
+-- datate) e nessuna voce ricalcolabile resta datata o fuori da in_attesa.
 -- ============================================================
