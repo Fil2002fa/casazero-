@@ -302,7 +302,7 @@ export function RegistraConsegnaMultiplaModal({
             {inviteOutcome?.message && <p>{inviteOutcome.message}</p>}
             {inviteOutcome?.error && (
               <p className="text-semantic-red">
-                Inviti non generati: {inviteOutcome.error} Si generano dal bottone «Invita le unità consegnate» della pagina.
+                Inviti non generati: {inviteOutcome.error} Si generano da «Invita tutte», sopra l&apos;elenco delle unità.
               </p>
             )}
           </div>

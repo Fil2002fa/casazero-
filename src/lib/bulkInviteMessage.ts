@@ -1,7 +1,7 @@
 import { pluralize } from './pluralize'
 
 // Esito di createBulkInvites in una frase. Una sola fonte per le due superfici
-// che generano inviti in blocco: il bottone di testata della pagina Unità e
+// che generano inviti in blocco: la riga «Invita tutte» della pagina Unità e
 // la consegna multipla.
 export function bulkInviteMessage(r: { count: number; skipped: number; notDelivered: number }): string {
   const head = r.count > 0 ? `Inviti generati per ${r.count} unità` : 'Nessun nuovo invito generato'
