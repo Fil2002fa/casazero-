@@ -7,7 +7,14 @@ import { Button } from '@/components/ui/Button'
 import { Input, Label } from '@/components/ui/Input'
 import { safeNextPath } from '@/lib/safe-next-path'
 
-export function LoginForm({ invite, error, next }: { invite: string | null; error: string | null; next: string | null }) {
+export function LoginForm({ invite, error, next, activeSession }: {
+  invite: string | null
+  error: string | null
+  next: string | null
+  // Pannello della sessione gia' aperta (server component, dalla page): se
+  // presente prende il posto dei pulsanti di accesso, stessa pagina intorno.
+  activeSession?: React.ReactNode
+}) {
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
@@ -67,47 +74,49 @@ export function LoginForm({ invite, error, next }: { invite: string | null; erro
           )}
         </div>
 
-        <div className="bg-surface rounded-xl border border-border p-8 space-y-4">
-          <Button
-            onClick={handleGoogle}
-            type="button"
-            variant="secondary"
-            className="w-full gap-3"
-            disabled={googleLoading}
-          >
-            <GoogleIcon />
-            Continua con Google
-          </Button>
-
-          <div className="relative flex items-center gap-3">
-            <div className="flex-1 border-t border-border" />
-            <span className="text-xs text-text-secondary">oppure</span>
-            <div className="flex-1 border-t border-border" />
-          </div>
-
-          <form onSubmit={handleMagicLink} className="space-y-3">
-            <div>
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="nome@esempio.com"
-                required
-              />
-            </div>
-            <Button type="submit" variant="primary" className="w-full" disabled={loading}>
-              {loading ? 'Invio in corso…' : 'Accedi con email'}
+        {activeSession ? activeSession : (
+          <div className="bg-surface rounded-xl border border-border p-8 space-y-4">
+            <Button
+              onClick={handleGoogle}
+              type="button"
+              variant="secondary"
+              className="w-full gap-3"
+              disabled={googleLoading}
+            >
+              <GoogleIcon />
+              Continua con Google
             </Button>
-          </form>
 
-          {message && (
-            <p className={`text-xs text-center ${message.ok ? 'text-brand-medium' : 'text-status-overdue'}`}>
-              {message.text}
-            </p>
-          )}
-        </div>
+            <div className="relative flex items-center gap-3">
+              <div className="flex-1 border-t border-border" />
+              <span className="text-xs text-text-secondary">oppure</span>
+              <div className="flex-1 border-t border-border" />
+            </div>
+
+            <form onSubmit={handleMagicLink} className="space-y-3">
+              <div>
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="nome@esempio.com"
+                  required
+                />
+              </div>
+              <Button type="submit" variant="primary" className="w-full" disabled={loading}>
+                {loading ? 'Invio in corso…' : 'Accedi con email'}
+              </Button>
+            </form>
+
+            {message && (
+              <p className={`text-xs text-center ${message.ok ? 'text-brand-medium' : 'text-status-overdue'}`}>
+                {message.text}
+              </p>
+            )}
+          </div>
+        )}
 
         <p className="text-xs text-center text-text-primary mt-6">
           Accesso solo su invito. Contatta il tuo costruttore.

@@ -9,17 +9,20 @@ import type { UserRole } from '@/types/database'
 // login): la si dichiara sempre, con le due uscite esplicite. Mai proseguire
 // in silenzio con l'account precedente.
 // `returnTo`: dove riporta il logout (il login, eventualmente con invito o
-// deep link da conservare).
+// deep link da conservare). `continueHref`: dove porta "Continua come…";
+// di default la home del ruolo.
 export function ActiveSessionPanel({
   fullName,
   email,
   role,
   returnTo = '/auth/login',
+  continueHref,
 }: {
   fullName: string | null
   email: string | null
   role: UserRole | null
   returnTo?: string
+  continueHref?: string
 }) {
   const name = fullName?.trim() || email || 'questo account'
 
@@ -31,7 +34,7 @@ export function ActiveSessionPanel({
       </div>
 
       <div className="space-y-2">
-        <Link href={homePathForRole(role)} className={buttonVariants('primary', 'default', 'w-full')}>
+        <Link href={continueHref ?? homePathForRole(role)} className={buttonVariants('primary', 'default', 'w-full')}>
           Continua come {name}
         </Link>
         <form action={signOut.bind(null, returnTo)}>
