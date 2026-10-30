@@ -60,6 +60,23 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/welcome') ||
     pathname === '/offline.html'
 
+  // Codice di accesso arrivato fuori dalla callback: succede quando l'URL di
+  // ritorno non e' tra le Redirect URLs (es. un URL di deploy Vercel) e
+  // Supabase ripiega sul Site URL, consegnando `?code=` su `/`. Senza questa
+  // regola `/` e' protetta, il login lo rimanda a /auth/login e il codice non
+  // viene mai scambiato. Lo si porta alla callback, che lo scambia o mostra
+  // l'errore; solo `code` e `next`, il resto dell'URL non serve.
+  const strayCode = searchParams.get('code')
+  if (!user && strayCode && pathname !== '/auth/callback') {
+    const url = request.nextUrl.clone()
+    url.pathname = '/auth/callback'
+    url.search = ''
+    url.searchParams.set('code', strayCode)
+    const next = searchParams.get('next')
+    if (next) url.searchParams.set('next', next)
+    return NextResponse.redirect(url)
+  }
+
   if (!user && !isPublicPath) {
     // Il percorso richiesto va conservato, non buttato: i link delle email
     // (sollecito, cron) puntano a una voce precisa e chi li apre di norma non
