@@ -45,7 +45,10 @@ export function LoginForm({ invite, error, next }: { invite: string | null; erro
     setGoogleLoading(true)
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: callbackUrl },
+      // select_account: Google mostra sempre la scelta dell'account. Senza,
+      // dopo un logout rientra in silenzio nell'unico account Google aperto
+      // nel browser, e cambiare utente diventa impossibile.
+      options: { redirectTo: callbackUrl, queryParams: { prompt: 'select_account' } },
     })
     if (error) {
       setMessage({ text: error.message, ok: false })
