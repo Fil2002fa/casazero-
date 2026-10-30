@@ -35,6 +35,17 @@ async function requireResidenceAccess(action: string, residenceId: string): Prom
   return null
 }
 
+// Codici d'errore della RPC (044/047, testati): l'esito si decide sul
+// SQLSTATE, mai sul testo del messaggio. Ogni altro codice è un guasto
+// tecnico, non un esito di dominio.
+function createUnitErrorMessage(code: string | undefined): string {
+  switch (code) {
+    case 'P0002': return 'Residenza non trovata.'
+    case '42501': return 'Permessi insufficienti per aggiungere un\'unità.'
+    default:      return 'Errore temporaneo nella creazione dell\'unità, riprova.'
+  }
+}
+
 export async function createUnit(
   residenceId: string,
   label: string,
@@ -42,6 +53,11 @@ export async function createUnit(
 ): Promise<{ error?: string; id?: string }> {
   const caller = await requireCaller('createUnit', ['super_admin'])
   if ('error' in caller) return { error: caller.error }
+
+  // Il service client scavalca la RLS: senza questo controllo un super_admin
+  // aggiungerebbe unità alla residenza di un altro costruttore.
+  const denied = await requireResidenceAccess('createUnit', residenceId)
+  if (denied) return denied
 
   const admin = createServiceClient()
 
@@ -53,7 +69,14 @@ export async function createUnit(
     p_floor: floor,
   })
 
-  if (rpcErr || !unitId) return { error: rpcErr?.message ?? 'Errore creazione unità' }
+  if (rpcErr) {
+    console.error('createUnit: RPC czero_add_unit_with_items', { residenceId, rpcErr })
+    return { error: createUnitErrorMessage(rpcErr.code) }
+  }
+  if (!unitId) {
+    console.error('createUnit: RPC senza id e senza errore', { residenceId })
+    return { error: createUnitErrorMessage(undefined) }
+  }
 
   revalidatePath(`/admin/residences/${residenceId}/units`)
   return { id: unitId as string }
