@@ -460,9 +460,9 @@ export function ReportDocument(data: ReportData) {
               </View>
               <Text style={S.conformitaDetail}>
                 <Text style={S.conformitaDetailBold}>{data.n2n3Ok}</Text>
-                {' manutenzioni N2/N3 in regola su '}
+                {' manutenzioni in regola su '}
                 <Text style={S.conformitaDetailBold}>{data.n2n3Total}</Text>
-                {' totali — Anno '}
+                {' (promemoria escluse) — Anno '}
                 <Text style={S.conformitaDetailBold}>{thisYear}</Text>
               </Text>
             </View>

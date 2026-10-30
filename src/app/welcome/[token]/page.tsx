@@ -239,7 +239,7 @@ function WelcomeAdmin({
             <FeatureRow
               icon={<Wrench className="w-4 h-4" />}
               title="Manutenzioni condominiali"
-              desc="Il ciclo N3: prendi in carico → in corso → completata, con allegati."
+              desc="Il ciclo dei lavori: presa in carico → in corso → completata, con allegati."
             />
             <FeatureRow
               icon={<FileText className="w-4 h-4" />}
