@@ -8,6 +8,7 @@ import { createFamilyInvite, revokeFamilyInvite, updateNotificationPrefs } from 
 import { signOut } from '@/app/auth/actions'
 import type { NotificationPrefs } from '@/types/database'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
+import { roleLabel } from '@/lib/roleLabel'
 
 type InviteRow = { id: string; token: string; expires_at: string; qrCode: string }
 type MemberRow = { profile_id: string; full_name: string | null }
@@ -306,7 +307,7 @@ export function ProfiloClient({
         </form>
 
         <p className="text-xs text-text-secondary text-center pb-2">
-          Ruolo: <span className="font-medium">{role}</span>
+          Ruolo: <span className="font-medium">{roleLabel(role)}</span>
         </p>
       </div>
     </div>
