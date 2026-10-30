@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Building2, Users, Wrench, Settings, HardHat, Menu, X, type LucideIcon } from 'lucide-react'
+import { Building2, Users, Wrench, Settings, HardHat, LogOut, Menu, X, type LucideIcon } from 'lucide-react'
 import type { UserRole } from '@/types/database'
 import { BrandMark } from '@/components/BrandMark'
+import { AccountIdentity } from '@/components/AccountIdentity'
 import { useDialogFocus } from '@/components/ui/useDialogFocus'
+import { signOut } from '@/app/auth/actions'
 
 type NavItem = {
   href: string
@@ -39,15 +41,20 @@ const ADMIN_ITEMS: NavItem[] = [
 
 const LG_QUERY = '(min-width: 1024px)'
 
+// Account in uso, letto dalla shell: nome da profiles, email dall'utente di
+// sessione (auth.users), mai da profiles.
+export type DashboardAccount = { fullName: string | null; email: string | null }
+
 interface Props {
   role: UserRole | string
+  account: DashboardAccount
 }
 
 // Marchio + voci, scritti una volta e montati in due contenitori: la sidebar
 // fissa da lg in su e il drawer sotto lg. Le due forme non possono divergere.
 // Voci alte 44px nel drawer (touch) e 36px nella sidebar: ciascun contenitore
 // esiste su un solo lato di lg, quindi l'altezza segue lo stesso breakpoint.
-function NavContent({ role, onNavigate, brandAction }: Props & {
+function NavContent({ role, account, onNavigate, brandAction }: Props & {
   // Chiude il drawer anche quando la voce punta alla pagina corrente, dove il
   // pathname non cambia.
   onNavigate?: () => void
@@ -101,15 +108,31 @@ function NavContent({ role, onNavigate, brandAction }: Props & {
           })}
         </ul>
       </nav>
+
+      {/* Chi sono + logout, in fondo: stessa forma per super_admin e admin,
+          nella sidebar e nel drawer. Il form e' fratello dell'identita', mai
+          dentro un altro elemento interattivo. */}
+      <div className="flex-shrink-0 border-t border-border px-3 py-3 space-y-1">
+        <AccountIdentity fullName={account.fullName} email={account.email} role={role} className="px-3 py-1" />
+        <form action={signOut.bind(null, null)}>
+          <button
+            type="submit"
+            className="flex w-full items-center gap-3 px-3 h-11 lg:h-9 rounded-lg text-sm font-medium text-text-primary hover:bg-brand-dark/6 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 focus-visible:ring-offset-2"
+          >
+            <LogOut size={18} strokeWidth={1.6} />
+            Esci dall&apos;account
+          </button>
+        </form>
+      </div>
     </>
   )
 }
 
 // Sidebar fissa: esiste solo da lg in su. Sotto lg la navigazione è MobileNav.
-export default function AdminSidebar({ role }: Props) {
+export default function AdminSidebar({ role, account }: Props) {
   return (
     <aside className="hidden lg:flex w-60 flex-shrink-0 flex-col bg-background">
-      <NavContent role={role} />
+      <NavContent role={role} account={account} />
     </aside>
   )
 }
@@ -122,7 +145,7 @@ export default function AdminSidebar({ role }: Props) {
 // la shell imposta inline sul proprio contenitore. Fuori da quel contenitore il
 // marchio perderebbe il colore del costruttore. `fixed` basta: nessun antenato
 // ha transform o contain, quindi il pannello si posiziona sul viewport.
-export function MobileNav({ role }: Props) {
+export function MobileNav({ role, account }: Props) {
   const [open, setOpen] = useState(false)
   const close = useCallback(() => setOpen(false), [])
   const panelRef = useRef<HTMLDivElement>(null)
@@ -170,6 +193,7 @@ export function MobileNav({ role }: Props) {
           >
             <NavContent
               role={role}
+              account={account}
               onNavigate={close}
               brandAction={
                 <button

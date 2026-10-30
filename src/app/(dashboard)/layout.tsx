@@ -1,19 +1,23 @@
-import AdminSidebar, { MobileNav } from '@/components/AdminSidebar'
+import AdminSidebar, { MobileNav, type DashboardAccount } from '@/components/AdminSidebar'
 import { BuilderIdentityBar } from '@/components/BuilderIdentity'
 import { getWhitelabelBrand } from '@/lib/whitelabel'
-import { requireProfile } from '@/lib/auth'
+import { getUser, requireProfile } from '@/lib/auth'
 import { CONTENT_GRID, CONTENT_RHYTHM } from '@/lib/layout'
 import { ToastProvider } from '@/components/ui/Toast'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   // Senza profilo si torna al login, come fanno già le pagine via requireRole:
   // la shell non disegna mai la navigazione di un ruolo che l'utente non ha.
-  const [{ brandDark, logoUrl, builderName }, profile] = await Promise.all([
+  const [{ brandDark, logoUrl, builderName }, profile, user] = await Promise.all([
     getWhitelabelBrand(),
     requireProfile(),
+    getUser(),
   ])
 
   const role = profile.role
+  // "Chi sono" della shell: nome da profiles, email dall'utente di sessione
+  // (auth.users), mai da profiles. getUser e' in cache(): nessuna lettura in piu'.
+  const account: DashboardAccount = { fullName: profile.full_name, email: user?.email ?? null }
 
   // Due stati soli.
   // Da lg in su: sidebar fissa e <main> che scorre accanto, dentro un contenitore
@@ -35,14 +39,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
           che non ha BottomNav. Non aggiunge nodi al DOM: sidebar e main restano
           figli diretti del contenitore flex. */}
       <ToastProvider placement="dashboard">
-        <AdminSidebar role={role} />
+        <AdminSidebar role={role} account={account} />
 
         <main className="lg:flex-1 lg:overflow-auto">
           {/* Identità costruttore — CasaZero resta il marchio della sidebar (BrandMark) */}
           <BuilderIdentityBar
             name={builderName}
             logoSrc={logoUrl}
-            leading={<MobileNav role={role} />}
+            leading={<MobileNav role={role} account={account} />}
             className="sticky top-0 z-sticky lg:static lg:z-auto"
           />
 
