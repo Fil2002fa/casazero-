@@ -36,7 +36,25 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const { pathname } = request.nextUrl
+  const { pathname, searchParams } = request.nextUrl
+
+  // Errore di accesso restituito da Supabase: arriva sulla callback oppure,
+  // se l'URL di ritorno non e' tra le Redirect URLs, sul Site URL (`/`). Va
+  // mostrato su qualunque percorso, mai ignorato: con una sessione gia' aperta
+  // la pagina richiesta si aprirebbe con l'account precedente, senza avviso.
+  // `error_code`, o `error` insieme a `error_description`, sono la forma di
+  // Supabase; `/auth/login?error=no_access` (solo `error`) e' nostro e passa.
+  const authErrorCode = searchParams.get('error_code')
+  const isSupabaseAuthError =
+    authErrorCode !== null || (searchParams.has('error') && searchParams.has('error_description'))
+  if (isSupabaseAuthError && pathname !== '/auth/error') {
+    const url = request.nextUrl.clone()
+    url.pathname = '/auth/error'
+    url.search = ''
+    url.searchParams.set('reason', authErrorCode ?? searchParams.get('error') ?? 'unknown')
+    return NextResponse.redirect(url)
+  }
+
   const isPublicPath =
     pathname.startsWith('/auth') ||
     pathname.startsWith('/welcome') ||

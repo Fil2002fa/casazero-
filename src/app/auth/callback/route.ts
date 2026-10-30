@@ -79,7 +79,23 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.redirect(`${origin}${homePathForRole(profile?.role)}`)
     }
+
+    // Scambio fallito: la sessione precedente, se c'e', resta aperta. La
+    // pagina d'errore lo dice e offre il logout; chiuderla qui farebbe uscire
+    // chiunque per un link aperto due volte.
+    console.error('auth/callback: exchangeCodeForSession', { code: error?.code, error })
+    return authErrorRedirect(origin, error?.code ?? 'exchange_failed')
   }
 
-  return NextResponse.redirect(`${origin}/auth/error`)
+  // Senza code: errore di Supabase in query (di norma lo intercetta gia' il
+  // middleware) oppure URL incompleto.
+  return authErrorRedirect(origin, searchParams.get('error_code') ?? searchParams.get('error') ?? 'missing_code')
+}
+
+// `reason` e' solo una chiave: la pagina la confronta con un elenco noto e non
+// la mostra mai cosi' com'e'.
+function authErrorRedirect(origin: string, reason: string) {
+  const url = new URL('/auth/error', origin)
+  url.searchParams.set('reason', reason)
+  return NextResponse.redirect(url)
 }
