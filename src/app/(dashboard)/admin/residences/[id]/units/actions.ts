@@ -295,8 +295,17 @@ export async function updateUnitLabel(
   if (!trimmed) return { error: 'L\'etichetta non può essere vuota' }
   if (trimmed.length > 60) return { error: 'Etichetta troppo lunga (max 60 caratteri)' }
 
+  // Il service client scavalca la RLS: il perimetro (residenza del
+  // costruttore, unità in quella residenza) si prova qui, prima dell'UPDATE.
+  const checked = await requireUnitsInResidence('updateUnitLabel', residenceId, [unitId])
+  if ('error' in checked) return checked
+
   const admin = createServiceClient()
-  const { error } = await admin.from('units').update({ label: trimmed }).eq('id', unitId)
+  const { error } = await admin
+    .from('units')
+    .update({ label: trimmed })
+    .eq('id', unitId)
+    .eq('residence_id', residenceId)
   if (error) return { error: error.message }
 
   revalidatePath(`/admin/residences/${residenceId}/units`)
