@@ -133,6 +133,9 @@ SELECT
 --   C1 dopo: 0 righe.
 --   C3: tipo_proprio 0, divergenti 0, residui_modalita 3 (modalita propria
 --       uguale al template, lasciate come sono).
---   Verifica a schermo (filtri tra i Consigli nella PWA del residente):
---       esito non riportato al momento del commit.
+--   Verifica a schermo (Filippo, 31/10/2026): nella PWA del residente di
+--       "Appartamento furlan 1" (filippogiochi2002) "Pulizia filtri
+--       climatizzatore" e' tra i "Consigli per la tua casa" come
+--       "Consigliata · ogni 6 mesi", senza "Obbligo di legge"; fascicolo
+--       invariato (2 interventi).
 -- ============================================================
