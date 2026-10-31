@@ -42,11 +42,17 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <AdminSidebar role={role} account={account} />
 
         <main className="lg:flex-1 lg:overflow-auto">
-          {/* Identità costruttore — CasaZero resta il marchio della sidebar (BrandMark) */}
+          {/* Identità costruttore — CasaZero resta il marchio della sidebar (BrandMark).
+              `key` su MobileNav: l'elemento nasce qui, lato server, e arriva al
+              client come riferimento pigro finché il modulo di MobileNav non è
+              caricato. BuilderIdentityBar lo rende accanto a logo e nome, cioè in
+              una lista di figli: React non riesce a marcarlo come statico mentre
+              è ancora pigro, e senza key avvisa "Each child in a list should have
+              a unique key". */}
           <BuilderIdentityBar
             name={builderName}
             logoSrc={logoUrl}
-            leading={<MobileNav role={role} account={account} />}
+            leading={<MobileNav key="mobile-nav" role={role} account={account} />}
             className="sticky top-0 z-sticky lg:static lg:z-auto"
           />
 
