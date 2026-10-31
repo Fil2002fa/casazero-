@@ -3,6 +3,8 @@
 import { useState, useTransition } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { updateMaintenanceItemConfig } from '../fornitori/actions'
+import { useToast } from '@/components/ui/Toast'
+import { ITEM_CONFIG_TEMP_ERROR } from '@/lib/itemConfigMessages'
 import type { CompletionMode, ObligationType } from '@/types/database'
 
 // Il tipo (obligation_type) non si configura per voce: è un fatto normativo del
@@ -23,6 +25,7 @@ export function ItemConfigForm({
   currentSupplierId: string | null
   suppliers: { id: string; name: string }[]
 }) {
+  const { showToast } = useToast()
   const [open, setOpen] = useState(false)
   const [pending, startTransition] = useTransition()
   const [saved, setSaved] = useState(false)
@@ -44,7 +47,18 @@ export function ItemConfigForm({
       return
     }
     startTransition(async () => {
-      await updateMaintenanceItemConfig(itemId, residenceId, changes)
+      // "Salvato" solo su scrittura confermata: l'errore resta visibile e il
+      // pannello aperto, con i valori inseriti, per riprovare.
+      let result: { error?: string }
+      try {
+        result = await updateMaintenanceItemConfig(itemId, residenceId, changes)
+      } catch {
+        result = { error: ITEM_CONFIG_TEMP_ERROR }
+      }
+      if (result.error) {
+        showToast('error', result.error)
+        return
+      }
       setSaved(true)
       setTimeout(() => { setSaved(false); setOpen(false) }, 1200)
     })

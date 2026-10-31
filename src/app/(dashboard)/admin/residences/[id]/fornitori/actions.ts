@@ -8,6 +8,7 @@ import type { CompletionMode } from '@/types/database'
 import { SISTEMI, type Sistema } from '@/lib/document-classification'
 import { nextDueFrom } from '@/lib/maintenance-due'
 import { todayISO } from '@/lib/maintenance-status'
+import { ITEM_CONFIG_TEMP_ERROR } from '@/lib/itemConfigMessages'
 
 function modeToPriority(mode: CompletionMode | null): string | null {
   if (mode === null) return null
@@ -136,14 +137,18 @@ export async function updateMaintenanceItemConfig(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Non autenticato' }
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('role')
     .eq('id', user.id)
     .single()
 
-  if (!profile || !['admin', 'super_admin'].includes(profile.role)) {
-    return { error: 'Permessi insufficienti' }
+  if (profileError) {
+    console.error('updateMaintenanceItemConfig: errore lettura profilo', { itemId, profileError })
+    return { error: ITEM_CONFIG_TEMP_ERROR }
+  }
+  if (!['admin', 'super_admin'].includes(profile.role)) {
+    return { error: 'Permessi insufficienti per configurare questa voce.' }
   }
 
   const updatePayload: Record<string, unknown> = { ...data }
@@ -167,11 +172,15 @@ export async function updateMaintenanceItemConfig(
   if (effectivePriority === 'N1') {
     let freq = data.frequency_months ?? null
     if (!freq) {
-      const { data: itemRow } = await supabase
+      const { data: itemRow, error: itemError } = await supabase
         .from('maintenance_items')
         .select('frequency_months, maintenance_templates(frequency_months)')
         .eq('id', itemId)
         .single()
+      if (itemError) {
+        console.error('updateMaintenanceItemConfig: errore lettura frequenza della voce', { itemId, itemError })
+        return { error: ITEM_CONFIG_TEMP_ERROR }
+      }
       const tpl = itemRow?.maintenance_templates as unknown as { frequency_months: number } | null
       freq = itemRow?.frequency_months ?? tpl?.frequency_months ?? null
     }
@@ -181,12 +190,22 @@ export async function updateMaintenanceItemConfig(
     }
   }
 
-  const { error } = await supabase
+  // .select('id'): un UPDATE filtrato dalla RLS non da' errore, tocca 0 righe.
+  // Senza contarle, il form direbbe "Salvato" su una scrittura mai avvenuta.
+  const { data: updated, error } = await supabase
     .from('maintenance_items')
     .update(updatePayload)
     .eq('id', itemId)
+    .select('id')
 
-  if (error) return { error: error.message }
+  if (error) {
+    console.error('updateMaintenanceItemConfig: UPDATE maintenance_items', { itemId, error })
+    return { error: error.code === '42501' ? 'Permessi insufficienti per configurare questa voce.' : ITEM_CONFIG_TEMP_ERROR }
+  }
+  if (!updated || updated.length === 0) {
+    console.error('updateMaintenanceItemConfig: UPDATE senza righe toccate', { itemId, residenceId })
+    return { error: 'Voce non trovata o non modificabile con il tuo account.' }
+  }
 
   revalidatePath(`/admin/residences/${residenceId}/manutenzioni`)
   return { success: true }
