@@ -7,9 +7,10 @@ import type { CompletionMode, ObligationType } from '@/types/database'
 
 // Il tipo (obligation_type) non si configura per voce: è un fatto normativo del
 // catalogo e la voce lo eredita sempre dal template. Qui serve solo a decidere
-// l'avviso sulla frequenza. La modalità invece è modificabile, ma si scrive
-// solo se l'utente la cambia: salvare frequenza, garanzia o fornitore non deve
-// staccare la voce dal template.
+// l'avviso sulla frequenza. Degli altri campi si scrivono solo quelli che
+// l'utente cambia davvero: i valori mostrati sono quelli effettivi (voce o, in
+// mancanza, template), e riscriverli tali e quali staccherebbe la voce dal
+// template su modalità e frequenza.
 export function ItemConfigForm({
   itemId, residenceId, currentMode, currentObligation, currentFrequency, currentWarranty, currentSupplierId, suppliers,
 }: {
@@ -31,13 +32,19 @@ export function ItemConfigForm({
   const [supplierId, setSupplierId] = useState(currentSupplierId ?? '')
 
   function handleSave() {
+    const changes = {
+      ...(mode !== currentMode && { completion_mode: mode }),
+      ...(frequency !== (currentFrequency?.toString() ?? '') && { frequency_months: frequency ? parseInt(frequency) : null }),
+      ...(warranty !== (currentWarranty ?? '') && { warranty_info: warranty || null }),
+      ...(supplierId !== (currentSupplierId ?? '') && { supplier_id: supplierId || null }),
+    }
+    // Niente da salvare: nessuna scrittura, si chiude e basta.
+    if (Object.keys(changes).length === 0) {
+      setOpen(false)
+      return
+    }
     startTransition(async () => {
-      await updateMaintenanceItemConfig(itemId, residenceId, {
-        ...(mode !== currentMode && { completion_mode: mode }),
-        frequency_months: frequency ? parseInt(frequency) : null,
-        warranty_info: warranty || null,
-        supplier_id: supplierId || null,
-      })
+      await updateMaintenanceItemConfig(itemId, residenceId, changes)
       setSaved(true)
       setTimeout(() => { setSaved(false); setOpen(false) }, 1200)
     })
