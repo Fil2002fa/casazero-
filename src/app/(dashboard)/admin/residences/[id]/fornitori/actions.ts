@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/admin'
 import { logActivityEvent } from '@/lib/activity-log'
-import type { CompletionMode, ObligationType } from '@/types/database'
+import type { CompletionMode } from '@/types/database'
 import { SISTEMI, type Sistema } from '@/lib/document-classification'
 import { nextDueFrom } from '@/lib/maintenance-due'
 import { todayISO } from '@/lib/maintenance-status'
@@ -128,7 +128,6 @@ export async function updateMaintenanceItemConfig(
     frequency_months?: number | null
     priority?: string | null
     completion_mode?: CompletionMode | null
-    obligation_type?: ObligationType | null
     warranty_info?: string | null
     supplier_id?: string | null
   }
@@ -151,7 +150,8 @@ export async function updateMaintenanceItemConfig(
 
   // Dual-write: completion_mode e priority restano sincronizzati durante la transizione.
   // completion_mode ha precedenza (form nuovo); se arriva solo priority (form legacy)
-  // si deriva completion_mode. obligation_type è additivo puro: già nello spread se presente.
+  // si deriva completion_mode. obligation_type non è nel payload: il tipo si eredita
+  // sempre dal template, mai scritto per voce.
   if (data.completion_mode !== undefined) {
     updatePayload.completion_mode = data.completion_mode
     updatePayload.priority = modeToPriority(data.completion_mode)
