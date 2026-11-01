@@ -14,6 +14,8 @@ const REASON_MESSAGES: Record<string, string> = {
   bad_code_verifier: 'Apri il link di accesso nello stesso browser in cui l\'hai richiesto.',
   flow_state_not_found: 'Apri il link di accesso nello stesso browser in cui l\'hai richiesto.',
   access_denied: 'L\'accesso è stato annullato o negato.',
+  // Nostro (auth/callback): guasto tecnico in una lettura del controllo di accesso.
+  temporary_error: 'Errore temporaneo, riprova tra poco.',
 }
 const DEFAULT_MESSAGE = 'Il link potrebbe essere scaduto o già usato.'
 
