@@ -3,6 +3,7 @@ import type { CookieMethodsServer } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
 import { homePathForRole } from '@/lib/auth'
+import { createServiceClient } from '@/lib/supabase/admin'
 import { safeNextPath } from '@/lib/safe-next-path'
 
 export async function GET(request: NextRequest) {
@@ -33,9 +34,30 @@ export async function GET(request: NextRequest) {
     const { data: { user }, error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error && user) {
-      // Flusso accettazione invito: la pagina /accept creerà le associazioni
-      if (next.startsWith('/welcome/')) {
-        return NextResponse.redirect(`${origin}${next}`)
+      // Flusso accettazione invito: la pagina /accept creerà le associazioni.
+      // Il controllo sulle associazioni si salta SOLO se il token nel path è
+      // un invito valido (non usato, non scaduto): senza questa verifica
+      // bastava /auth/login?invite=qualsiasi per restare dentro con la
+      // sessione appena creata. Token non valido: si prosegue col controllo.
+      const inviteMatch = next.match(/^\/welcome\/([^/?#]+)\/accept$/)
+      if (inviteMatch) {
+        let token = inviteMatch[1]
+        try { token = decodeURIComponent(token) } catch { /* path non decodificabile: si usa com'è */ }
+
+        const { data: invite, error: inviteError } = await createServiceClient()
+          .from('invites')
+          .select('id')
+          .eq('token', token.trim())
+          .is('used_at', null)
+          .gt('expires_at', new Date().toISOString())
+          .maybeSingle()
+
+        if (inviteError) {
+          console.error('auth/callback: lettura invito fallita', { userId: user.id, inviteError })
+          await supabase.auth.signOut()
+          return authErrorRedirect(origin, 'temporary_error')
+        }
+        if (invite) return NextResponse.redirect(`${origin}${next}`)
       }
 
       // Controlla se l'utente ha almeno un'associazione valida
@@ -50,10 +72,11 @@ export async function GET(request: NextRequest) {
         return NextResponse.redirect(`${origin}/auth/login?error=no_access`)
       }
 
-      const hasRole =
-        profile?.builder_id !== null ||
-        profile?.role === 'admin' ||
-        profile?.role === 'super_admin'
+      // builder_id non è un criterio di accesso: activateInvite
+      // (accept-invite.ts:82-85) lo scrive su ogni residente invitato, quindi
+      // lasciava entrare anche chi non ha più un'unità attiva. Il residente
+      // entra solo con un'unità attiva, verificata qui sotto.
+      const hasRole = profile?.role === 'admin' || profile?.role === 'super_admin'
 
       if (!hasRole) {
         const { count } = await supabase
