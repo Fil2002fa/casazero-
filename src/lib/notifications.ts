@@ -1,3 +1,5 @@
+import { formatFrequency } from './formatFrequency'
+
 export interface EmailPayload {
   to: string
   subject: string
@@ -77,11 +79,13 @@ function emailWrapper(content: string) {
 </html>`
 }
 
-export function emailMaintenanceDue(title: string, priority: 'N1' | 'N2' | 'N3', dueDate: string, appUrl: string) {
-  const label = priority === 'N1' ? 'consigliata' : priority === 'N2' ? 'obbligatoria' : 'condominiale'
-  const color = priority === 'N2' ? '#A32D2D' : priority === 'N3' ? '#854F0B' : '#185FA5'
+// Scadenza di una voce residente o amministratore. Le promemoria hanno il loro
+// template (emailPromemoriaDue): mai linguaggio di scadenza su quelle voci.
+export function emailMaintenanceDue(title: string, mode: 'residente' | 'amministratore', dueDate: string, appUrl: string) {
+  const heading = mode === 'amministratore' ? 'Manutenzione condominiale in scadenza' : 'Manutenzione in scadenza'
+  const color = mode === 'amministratore' ? '#854F0B' : '#A32D2D'
   return emailWrapper(`
-    <h2 style="margin:0 0 12px;color:#20302A;font-size:16px;">Manutenzione ${label} in scadenza</h2>
+    <h2 style="margin:0 0 12px;color:#20302A;font-size:16px;">${heading}</h2>
     <p style="margin:0 0 20px;color:#6B7A74;font-size:14px;line-height:1.5;">
       <strong style="color:${color};">${title}</strong> è scaduta il <strong>${dueDate}</strong>.
     </p>
@@ -91,7 +95,21 @@ export function emailMaintenanceDue(title: string, priority: 'N1' | 'N2' | 'N3',
     </a>`)
 }
 
-export function emailMaintenanceReminder(title: string, priority: 'N2' | 'N3', dueDate: string, appUrl: string) {
+// Promemoria: nessuna data, nessuna scadenza, solo la frequenza consigliata.
+// Stesso testo e stesso blu del PromemoriaBadge (components/ui/Badge.tsx).
+export function emailPromemoriaDue(title: string, frequencyMonths: number | null, appUrl: string) {
+  return emailWrapper(`
+    <h2 style="margin:0 0 12px;color:#20302A;font-size:16px;">Manutenzione consigliata</h2>
+    <p style="margin:0 0 20px;color:#6B7A74;font-size:14px;line-height:1.5;">
+      <strong style="color:#185FA5;">${title}</strong> · Consigliata ${formatFrequency(frequencyMonths)}.
+    </p>
+    <a href="${appUrl}/manutenzioni"
+       style="display:inline-block;background:#04342C;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-size:14px;">
+      Vai alle manutenzioni →
+    </a>`)
+}
+
+export function emailMaintenanceReminder(title: string, dueDate: string, appUrl: string) {
   return emailWrapper(`
     <h2 style="margin:0 0 12px;color:#20302A;font-size:16px;">Promemoria manutenzione non eseguita</h2>
     <p style="margin:0 0 20px;color:#6B7A74;font-size:14px;line-height:1.5;">

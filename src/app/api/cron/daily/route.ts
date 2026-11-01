@@ -4,9 +4,11 @@ import {
   sendEmail,
   emailMaintenanceDue,
   emailMaintenanceReminder,
+  emailPromemoriaDue,
 } from '@/lib/notifications'
 import { nextDueFrom } from '@/lib/maintenance-due'
 import { todayISO } from '@/lib/maintenance-status'
+import type { CompletionMode } from '@/types/database'
 
 export const runtime = 'nodejs'
 
@@ -18,15 +20,17 @@ type ItemRow = {
   next_due_date: string | null
   unit_id: string | null
   residence_id: string
-  priority: string | null
+  completion_mode: CompletionMode | null
   frequency_months: number | null
   maintenance_templates: {
     title: string
-    priority: string
+    completion_mode: CompletionMode | null
     frequency_months: number
     scope: string
   } | null
 }
+
+type EmailContent = { subject: string; html: string }
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization')
@@ -46,8 +50,8 @@ export async function GET(req: NextRequest) {
   const { data: items, error } = await supabase
     .from('maintenance_items')
     .select(`
-      id, status, next_due_date, unit_id, residence_id, priority, frequency_months,
-      maintenance_templates(title, priority, frequency_months, scope)
+      id, status, next_due_date, unit_id, residence_id, completion_mode, frequency_months,
+      maintenance_templates(title, completion_mode, frequency_months, scope)
     `)
     .or('status.eq.in_attesa,status.eq.scaduta,status.eq.in_corso')
     .lte('next_due_date', today)
@@ -62,15 +66,23 @@ export async function GET(req: NextRequest) {
     const tpl = item.maintenance_templates
     if (!tpl) continue
 
-    const effectivePriority = (item.priority ?? tpl.priority) as 'N1' | 'N2' | 'N3'
+    // Modalità voce ?? template, come resolveCompletionMode: mai dalla
+    // colonna legacy priority. I tipi di notifica (n1_due, n2_due, ...) restano
+    // quelli già salvati in notifications: sono chiavi di dedup, non testo.
+    const mode = item.completion_mode ?? tpl.completion_mode ?? null
+    if (mode === null) {
+      console.error(`[CRON] item ${item.id}: modalità assente su voce e template, saltato`)
+      results.errors++
+      continue
+    }
     const effectiveFreq = item.frequency_months ?? tpl.frequency_months
     const dueDate = item.next_due_date ?? today
 
     try {
       results.processed++
 
-      if (effectivePriority === 'N1') {
-        // N1: avanza la scadenza e notifica (non diventa mai 'scaduta')
+      if (mode === 'promemoria') {
+        // Promemoria: avanza la scadenza e notifica (non diventa mai 'scaduta')
         if (item.status === 'in_attesa') {
           await supabase
             .from('maintenance_items')
@@ -79,8 +91,10 @@ export async function GET(req: NextRequest) {
 
           const shouldNotify = await checkDedup(supabase, item.id, 0, 'n1_due')
           if (shouldNotify && item.unit_id) {
-            await notifyUnitMembers(supabase, item.unit_id, item.id, 'n1_due',
-              tpl.title, dueDate, 'N1')
+            await notifyUnitMembers(supabase, item.unit_id, item.id, 'n1_due', tpl.title, dueDate, {
+              subject: `Manutenzione consigliata: "${tpl.title}"`,
+              html: emailPromemoriaDue(tpl.title, effectiveFreq, APP_URL),
+            })
             results.notified++
           }
         }
@@ -95,30 +109,39 @@ export async function GET(req: NextRequest) {
           .eq('id', item.id)
 
         // Notifica iniziale
-        if (effectivePriority === 'N2' && item.unit_id) {
-          await notifyUnitMembers(supabase, item.unit_id, item.id, 'n2_due',
-            tpl.title, dueDate, 'N2')
-        } else if (effectivePriority === 'N3') {
-          await notifyResidenceAdmins(supabase, item.residence_id, item.id, 'n3_due',
-            tpl.title, dueDate, 'N3')
+        if (mode === 'residente' && item.unit_id) {
+          await notifyUnitMembers(supabase, item.unit_id, item.id, 'n2_due', tpl.title, dueDate, {
+            subject: `Manutenzione in scadenza: "${tpl.title}"`,
+            html: emailMaintenanceDue(tpl.title, 'residente', dueDate, APP_URL),
+          })
+        } else if (mode === 'amministratore') {
+          await notifyResidenceAdmins(supabase, item.residence_id, item.id, 'n3_due', tpl.title, dueDate, {
+            subject: `Manutenzione condominiale in scadenza: "${tpl.title}"`,
+            html: emailMaintenanceDue(tpl.title, 'amministratore', dueDate, APP_URL),
+          })
         }
         results.notified++
         continue
       }
 
       if (item.status === 'scaduta') {
-        // Promemoria: N2 ogni 14 giorni, N3 ogni 30 giorni
-        const intervalDays = effectivePriority === 'N2' ? 14 : 30
-        const reminderType = effectivePriority === 'N2' ? 'n2_reminder' : 'n3_reminder'
+        // Solleciti: residente ogni 14 giorni, amministratore ogni 30 giorni
+        const intervalDays = mode === 'residente' ? 14 : 30
+        const reminderType = mode === 'residente' ? 'n2_reminder' : 'n3_reminder'
         const shouldRemind = await checkDedup(supabase, item.id, intervalDays, reminderType)
         if (!shouldRemind) continue
 
-        if (effectivePriority === 'N2' && item.unit_id) {
-          await notifyUnitMembers(supabase, item.unit_id, item.id, 'n2_reminder',
-            tpl.title, dueDate, 'N2', true)
-        } else if (effectivePriority === 'N3') {
-          await notifyResidenceAdmins(supabase, item.residence_id, item.id, 'n3_reminder',
-            tpl.title, dueDate, 'N3', true)
+        const html = emailMaintenanceReminder(tpl.title, dueDate, APP_URL)
+        if (mode === 'residente' && item.unit_id) {
+          await notifyUnitMembers(supabase, item.unit_id, item.id, 'n2_reminder', tpl.title, dueDate, {
+            subject: `Promemoria: "${tpl.title}" non ancora eseguita`,
+            html,
+          })
+        } else if (mode === 'amministratore') {
+          await notifyResidenceAdmins(supabase, item.residence_id, item.id, 'n3_reminder', tpl.title, dueDate, {
+            subject: `Promemoria: "${tpl.title}" condominiale non eseguita`,
+            html,
+          })
         }
         results.notified++
       }
@@ -169,8 +192,7 @@ async function notifyUnitMembers(
   type: string,
   title: string,
   dueDate: string,
-  priority: 'N1' | 'N2' | 'N3',
-  isReminder = false
+  content: EmailContent,
 ) {
   const { data: members } = await supabase
     .from('unit_members')
@@ -187,15 +209,7 @@ async function notifyUnitMembers(
       status: 'pending',
     })
     const email = await getEmailForProfile(supabase, m.profile_id)
-    if (email) {
-      const html = isReminder
-        ? emailMaintenanceReminder(title, priority as 'N2' | 'N3', dueDate, APP_URL)
-        : emailMaintenanceDue(title, priority, dueDate, APP_URL)
-      const subject = isReminder
-        ? `Promemoria: "${title}" non ancora eseguita`
-        : `Manutenzione in scadenza: "${title}"`
-      await sendEmail({ to: email, subject, html })
-    }
+    if (email) await sendEmail({ to: email, ...content })
   }
 }
 
@@ -207,8 +221,7 @@ async function notifyResidenceAdmins(
   type: string,
   title: string,
   dueDate: string,
-  priority: 'N3',
-  isReminder = false
+  content: EmailContent,
 ) {
   const { data: assignments } = await supabase
     .from('admin_assignments')
@@ -224,14 +237,6 @@ async function notifyResidenceAdmins(
       status: 'pending',
     })
     const email = await getEmailForProfile(supabase, a.profile_id)
-    if (email) {
-      const html = isReminder
-        ? emailMaintenanceReminder(title, priority, dueDate, APP_URL)
-        : emailMaintenanceDue(title, priority, dueDate, APP_URL)
-      const subject = isReminder
-        ? `Promemoria: "${title}" condominiale non eseguita`
-        : `Manutenzione condominiale in scadenza: "${title}"`
-      await sendEmail({ to: email, subject, html })
-    }
+    if (email) await sendEmail({ to: email, ...content })
   }
 }
