@@ -339,6 +339,15 @@ export async function POST(req: NextRequest) {
       { maxRetries: 1, timeout: 90_000 },
     )
 
+    console.log('[ai-usage]', JSON.stringify({
+      route: 'extract-document',
+      doc_type: docType,
+      input_tokens: response.usage.input_tokens,
+      output_tokens: response.usage.output_tokens,
+      cache_read_input_tokens: response.usage.cache_read_input_tokens,
+      cache_creation_input_tokens: response.usage.cache_creation_input_tokens,
+    }))
+
     if (response.stop_reason === 'refusal') {
       throw new Error('Richiesta rifiutata dai filtri di sicurezza del modello')
     }

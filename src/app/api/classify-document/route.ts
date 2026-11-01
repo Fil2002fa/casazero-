@@ -285,6 +285,15 @@ export async function POST(req: NextRequest) {
       throw new Error('Risposta AI non conforme allo schema atteso')
     }
 
+    console.log('[ai-usage]', JSON.stringify({
+      route: 'classify-document',
+      doc_type: parsed.doc_type,
+      input_tokens: response.usage.input_tokens,
+      output_tokens: response.usage.output_tokens,
+      cache_read_input_tokens: response.usage.cache_read_input_tokens,
+      cache_creation_input_tokens: response.usage.cache_creation_input_tokens,
+    }))
+
     const finalStatus = parsed.confidence >= CLASSIFICATION_CONFIDENCE_THRESHOLD ? 'completata' : 'da_revisionare'
 
     // Impresa installatrice: imposta a null per ogni doc_type diverso da
