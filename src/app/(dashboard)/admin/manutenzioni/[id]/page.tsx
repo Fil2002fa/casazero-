@@ -10,6 +10,7 @@ import { StatusBadge, PromemoriaBadge, TypeBadge } from '@/components/ui/Badge'
 import { AwaitingDeliveryNote } from '@/components/AwaitingDelivery'
 import type { MaintenanceStatus, CompletionMode, ItemActivation, ObligationType } from '@/types/database'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
+import { formatRegisteredBy } from '@/lib/formatRegisteredBy'
 import {
   isOverdueLive, isInCorso, resolveLiveStatus, resolveCompletionMode, resolveObligationType, resolveFrequencyMonths,
   todayISO, type LiveStatusItem,
@@ -256,9 +257,9 @@ export default async function AdminItemDetailPage({ params }: { params: Params }
                       </span>
                     )}
                   </div>
-                  {c.performed_by_name && (
-                    <p className="text-xs text-text-secondary">Eseguito da: {c.performed_by_name}</p>
-                  )}
+                  <p className="text-xs text-text-secondary">
+                    Eseguito da: {formatRegisteredBy(c.performed_by_name, resolveCompletionMode(liveItem), null)}
+                  </p>
                   {c.notes && (
                     <p className="text-sm text-text-secondary mt-1 leading-relaxed">{c.notes}</p>
                   )}

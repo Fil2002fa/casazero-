@@ -3,6 +3,7 @@ import {
   Document, Page, Text, View, StyleSheet,
 } from '@react-pdf/renderer'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
+import { formatRegisteredBy } from '@/lib/formatRegisteredBy'
 import { OBLIGATION_LABELS } from '@/components/MaintenanceBadge'
 import type { CompletionMode, ObligationType } from '@/types/database'
 
@@ -511,7 +512,7 @@ export function ReportDocument(data: ReportData) {
                         </View>
                         <Text style={S.completionMeta}>
                           {c.category}
-                          {c.performed_by_name ? ` · Eseguito da: ${c.performed_by_name}` : ''}
+                          {` · Eseguito da: ${formatRegisteredBy(c.performed_by_name, c.completion_mode, null)}`}
                           {c.is_condominium ? ' · [Condominio]' : ' · [Unità]'}
                           {c.attachment_count > 0 ? ` · 📎 ${c.attachment_count} allegat${c.attachment_count === 1 ? 'o' : 'i'}` : ''}
                         </Text>

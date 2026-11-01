@@ -9,6 +9,7 @@ import { CompletionAction } from '../CompletionAction'
 import { N3AdminActions } from '@/components/N3AdminActions'
 import { AwaitingDeliveryNote } from '@/components/AwaitingDelivery'
 import type { ObligationType } from '@/types/database'
+import { formatRegisteredBy } from '@/lib/formatRegisteredBy'
 import {
   isOverdueLive, resolveCompletionMode, resolveFrequencyMonths, resolveLiveStatus,
   resolveObligationType, todayISO,
@@ -223,9 +224,9 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
                         </span>
                       )}
                     </div>
-                    {comp.performed_by_name && (
-                      <p className="text-xs text-text-secondary break-words">Eseguito da: {comp.performed_by_name}</p>
-                    )}
+                    <p className="text-xs text-text-secondary break-words">
+                      Eseguito da: {formatRegisteredBy(comp.performed_by_name, mode, null)}
+                    </p>
                     {comp.notes && (
                       <p className="text-base text-text-secondary mt-1 leading-relaxed break-words">{comp.notes}</p>
                     )}

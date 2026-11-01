@@ -5,6 +5,7 @@ import { createServiceClient } from '@/lib/supabase/admin'
 import { requireProfile } from '@/lib/auth'
 import type { CompletionMode } from '@/types/database'
 import { buttonVariants } from '@/components/ui/Button'
+import { formatRegisteredBy } from '@/lib/formatRegisteredBy'
 import {
   isCountable, overdueLive, resolveCompletionMode, todayISO,
   LIVE_STATUS_FIELDS, LIVE_STATUS_TEMPLATE_FIELDS,
@@ -137,7 +138,11 @@ export default async function FascicoloPage() {
         day: 'numeric', month: 'long', year: 'numeric',
       }),
       year: new Date(c.completed_at).getFullYear(),
-      performedByName: c.performed_by_name,
+      performedByName: formatRegisteredBy(
+        c.performed_by_name,
+        c.maintenance_items?.completion_mode ?? null,
+        tpl?.completion_mode ?? null,
+      ),
       notes: c.notes,
       attachments: c.attachments.map(att => ({
         id: att.id,
