@@ -3,6 +3,8 @@ import {
   Document, Page, Text, View, StyleSheet,
 } from '@react-pdf/renderer'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
+import { OBLIGATION_LABELS } from '@/components/MaintenanceBadge'
+import type { CompletionMode, ObligationType } from '@/types/database'
 
 // ── Palette C ────────────────────────────────────────────────────────────────
 const C = {
@@ -19,6 +21,9 @@ const C = {
   blue:        '#185FA5',
   blueBg:      '#E6F1FB',
   white:       '#FFFFFF',
+  // brand-dark al 25% su bianco e neutral-600 di Tailwind: i colori di TypeBadge
+  brandDark25: '#C0CCCA',
+  neutral600:  '#525252',
 }
 
 const S = StyleSheet.create({
@@ -270,12 +275,14 @@ const S = StyleSheet.create({
     fontSize: 7.5,
     flexShrink: 0,
   },
-  priorityBadge: {
+  typeBadge: {
     fontSize: 6.5,
     fontFamily: 'Helvetica-Bold',
     paddingHorizontal: 5,
     paddingVertical: 2,
-    borderRadius: 3,
+    borderRadius: 8,
+    borderWidth: 0.75,
+    borderStyle: 'solid',
     flexShrink: 0,
     marginTop: 0.5,
   },
@@ -310,7 +317,7 @@ export type CompletionEntry = {
   completed_at: string
   title: string
   category: string
-  priority: 'N1' | 'N2' | 'N3'
+  completion_mode: CompletionMode | null
   is_condominium: boolean
   performed_by_name: string | null
   notes: string | null
@@ -319,7 +326,7 @@ export type CompletionEntry = {
 
 export type OverdueEntry = {
   title: string
-  priority: 'N1' | 'N2' | 'N3'
+  obligation_type: ObligationType | null
   next_due_date: string
 }
 
@@ -334,8 +341,9 @@ export type ReportData = {
   builderColor: string
   generatedAt: string
   conformita: number
-  n2n3Total: number
-  n2n3Ok: number
+  // Voci conteggiate nella conformita (promemoria escluse) e quante in regola.
+  countedTotal: number
+  countedOk: number
   completions: CompletionEntry[]
   overdueItems: OverdueEntry[]
 }
@@ -353,15 +361,19 @@ function conformitaColor(pct: number) {
   return C.red
 }
 
-function priorityStyle(p: 'N1' | 'N2' | 'N3') {
-  if (p === 'N2') return { color: C.blue,        backgroundColor: C.blueBg }
-  if (p === 'N3') return { color: C.brandMedium,  backgroundColor: C.brandLight }
-  return           { color: C.textSecondary,  backgroundColor: C.bgWarm }
+// Badge delle voci scadute: il testo e' il tipo (Obbligo di legge / Raccomandata
+// / Consiglio), outline neutro come TypeBadge in components/ui/Badge.tsx.
+// Il rosso resta solo per "Scaduta il".
+function obligationStyle(t: ObligationType) {
+  if (t === 'A') return { color: C.brandDark, borderColor: C.brandDark25 }
+  return           { color: C.neutral600, borderColor: C.border }
 }
 
-function dotColor(p: 'N1' | 'N2' | 'N3') {
-  if (p === 'N2') return C.blue
-  if (p === 'N3') return C.brandMedium
+// Punto dei completamenti: colore per modalita (chi esegue), stessi colori
+// usati prima dalla sigla legacy (residente blu, amministratore verde).
+function dotColor(m: CompletionMode | null) {
+  if (m === 'residente') return C.blue
+  if (m === 'amministratore') return C.brandMedium
   return C.textSecondary
 }
 
@@ -459,9 +471,9 @@ export function ReportDocument(data: ReportData) {
                 />
               </View>
               <Text style={S.conformitaDetail}>
-                <Text style={S.conformitaDetailBold}>{data.n2n3Ok}</Text>
+                <Text style={S.conformitaDetailBold}>{data.countedOk}</Text>
                 {' manutenzioni in regola su '}
-                <Text style={S.conformitaDetailBold}>{data.n2n3Total}</Text>
+                <Text style={S.conformitaDetailBold}>{data.countedTotal}</Text>
                 {' (promemoria escluse) — Anno '}
                 <Text style={S.conformitaDetailBold}>{thisYear}</Text>
               </Text>
@@ -489,7 +501,7 @@ export function ReportDocument(data: ReportData) {
                       <View
                         style={{
                           ...S.completionDot,
-                          backgroundColor: dotColor(c.priority),
+                          backgroundColor: dotColor(c.completion_mode),
                         }}
                       />
                       <View style={S.completionBody}>
@@ -522,7 +534,6 @@ export function ReportDocument(data: ReportData) {
               </Text>
               <View style={{ marginBottom: 20 }}>
                 {data.overdueItems.map((item, i) => {
-                  const ps = priorityStyle(item.priority)
                   const isAlt = i % 2 === 1
                   return (
                     <View
@@ -533,9 +544,11 @@ export function ReportDocument(data: ReportData) {
                       }}
                       wrap={false}
                     >
-                      <Text style={{ ...S.priorityBadge, ...ps }}>
-                        {item.priority}
-                      </Text>
+                      {item.obligation_type && (
+                        <Text style={{ ...S.typeBadge, ...obligationStyle(item.obligation_type) }}>
+                          {OBLIGATION_LABELS[item.obligation_type]}
+                        </Text>
+                      )}
                       <Text style={S.overdueTitle}>{item.title}</Text>
                       <Text style={{ ...S.overdueDate, color: C.red }}>
                         Scaduta il {fmtDate(item.next_due_date)}

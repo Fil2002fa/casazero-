@@ -6,9 +6,10 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/admin'
 import { ReportDocument } from '@/lib/pdf/ReportDocument'
 import type { ReportData, CompletionEntry, OverdueEntry } from '@/lib/pdf/ReportDocument'
+import type { CompletionMode, ObligationType } from '@/types/database'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import {
-  isCountable, overdueLive, resolveCompletionMode, todayISO,
+  isCountable, overdueLive, resolveCompletionMode, resolveObligationType, todayISO,
   LIVE_STATUS_FIELDS, LIVE_STATUS_TEMPLATE_FIELDS,
   type LiveStatusItem,
 } from '@/lib/maintenance-status'
@@ -153,14 +154,14 @@ export async function GET(req: NextRequest) {
   // Denominatore: voci conteggiabili non-promemoria; scadute calcolate da
   // next_due_date via overdueLive, mai dal campo status salvato.
   type ItemRaw = LiveStatusItem & {
-    priority: string | null
-    maintenance_templates: LiveStatusItem['maintenance_templates'] & { title: string; priority: string }
+    obligation_type: ObligationType | null
+    maintenance_templates: LiveStatusItem['maintenance_templates'] & { title: string; obligation_type: ObligationType | null }
   }
 
   const today = todayISO()
   const itemsQuery = admin
     .from('maintenance_items')
-    .select(`priority, ${LIVE_STATUS_FIELDS}, maintenance_templates!inner(title, priority, ${LIVE_STATUS_TEMPLATE_FIELDS})`)
+    .select(`obligation_type, ${LIVE_STATUS_FIELDS}, maintenance_templates!inner(title, obligation_type, ${LIVE_STATUS_TEMPLATE_FIELDS})`)
     .eq('residence_id', residenceId)
     .neq('status', 'completata')
 
@@ -184,8 +185,8 @@ export async function GET(req: NextRequest) {
     notes: string | null
     unit_id: string | null
     maintenance_items: {
-      priority: string | null
-      maintenance_templates: { title: string; category: string; priority: string; scope: string } | null
+      completion_mode: CompletionMode | null
+      maintenance_templates: { title: string; category: string; completion_mode: CompletionMode | null; scope: string } | null
     } | null
     attachments: { id: string }[]
   }
@@ -194,7 +195,7 @@ export async function GET(req: NextRequest) {
     .from('completions')
     .select(`
       id, completed_at, performed_by_name, notes, unit_id,
-      maintenance_items(priority, maintenance_templates(title, category, priority, scope)),
+      maintenance_items(completion_mode, maintenance_templates(title, category, completion_mode, scope)),
       attachments(id)
     `)
     .eq('residence_id', residenceId)
@@ -206,12 +207,11 @@ export async function GET(req: NextRequest) {
 
   const completions: CompletionEntry[] = ((rawCompletions ?? []) as unknown as CompletionRaw[]).map(c => {
     const tpl = c.maintenance_items?.maintenance_templates
-    const eff = (c.maintenance_items?.priority ?? tpl?.priority ?? 'N2') as 'N1' | 'N2' | 'N3'
     return {
       completed_at:      c.completed_at,
       title:             tpl?.title ?? 'Intervento',
       category:          tpl?.category ?? '',
-      priority:          eff,
+      completion_mode:   c.maintenance_items?.completion_mode ?? tpl?.completion_mode ?? null,
       is_condominium:    c.unit_id === null,
       performed_by_name: c.performed_by_name,
       notes:             c.notes,
@@ -224,8 +224,8 @@ export async function GET(req: NextRequest) {
     .sort((a, b) => ((a.next_due_date ?? '') < (b.next_due_date ?? '') ? -1 : 1))
     .map(i => ({
       title: i.maintenance_templates?.title ?? 'Voce',
-      // priorità legacy solo per il badge nel PDF, non per il conteggio
-      priority: (i.priority ?? i.maintenance_templates?.priority ?? 'N2') as 'N1' | 'N2' | 'N3',
+      // Tipo per il badge nel PDF: voce ?? template, come nelle altre superfici.
+      obligation_type: resolveObligationType(i),
       next_due_date: i.next_due_date as string,
     }))
 
@@ -243,8 +243,8 @@ export async function GET(req: NextRequest) {
       day: 'numeric', month: 'long', year: 'numeric',
     }),
     conformita,
-    n2n3Total: counted.length,
-    n2n3Ok:    counted.length - scaduteCount,
+    countedTotal: counted.length,
+    countedOk:    counted.length - scaduteCount,
     completions,
     overdueItems,
   }
