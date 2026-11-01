@@ -190,6 +190,39 @@ export function normalizeVatNumber(raw: string | null): string | null {
   return digits.length > 0 ? digits : null
 }
 
+// Impresa digitata a mano nel pannello quando il documento non la riporta.
+export type ManualInstaller = { ragioneSociale: string; partitaIva: string }
+
+// Fonte unica (pannello + server action) di QUALE impresa alimenta la proposta.
+// Il verbale vince se ha una ragione sociale: i valori manuali valgono solo a
+// nome vuoto, così un client manipolato non può sovrascrivere un'impresa letta
+// dal documento. A nome vuoto la P.IVA del verbale è ignorata: nome e P.IVA
+// manuali formano una coppia. P.IVA manuale: vuota → null; altrimenti,
+// normalizzata, deve avere 11 cifre.
+export type ResolvedInstaller = {
+  ragioneSociale: string | null
+  partitaIva: string | null
+  manualError: string | null
+}
+
+export function resolveInstallerInput(
+  verbale: { ragioneSociale: string | null; partitaIva: string | null },
+  manual: ManualInstaller | null | undefined,
+): ResolvedInstaller {
+  if ((verbale.ragioneSociale?.trim() ?? '').length > 0) {
+    return { ragioneSociale: verbale.ragioneSociale, partitaIva: verbale.partitaIva, manualError: null }
+  }
+  const nome = typeof manual?.ragioneSociale === 'string' ? manual.ragioneSociale.trim() : ''
+  if (nome.length === 0) return { ragioneSociale: null, partitaIva: null, manualError: null }
+  const rawVat = typeof manual?.partitaIva === 'string' ? manual.partitaIva.trim() : ''
+  if (rawVat === '') return { ragioneSociale: nome, partitaIva: null, manualError: null }
+  const vat = normalizeVatNumber(rawVat)
+  if (vat === null || vat.length !== 11) {
+    return { ragioneSociale: null, partitaIva: null, manualError: 'La partita IVA deve avere 11 cifre.' }
+  }
+  return { ragioneSociale: nome, partitaIva: vat, manualError: null }
+}
+
 // Forme societarie scartate dal nome normalizzato: sono rumore legale, non
 // identità dell'impresa — "Rossi Impianti S.r.l." e "Rossi Impianti srl" sono
 // la stessa ditta e devono produrre la stessa chiave. Lista deliberatamente
@@ -273,6 +306,7 @@ export type SupplierInstallationRef = {
 
 export type SupplierProposal =
   | { kind: 'non_applicabile' }
+  | { kind: 'impresa_mancante'; sistema: Sistema | null }
   | { kind: 'sistema_mancante'; ragioneSociale: string }
   | { kind: 'gia_collegato'; sistema: Sistema; supplier: SupplierProposalCandidate }
   | { kind: 'per_piva'; sistema: Sistema; supplier: SupplierProposalCandidate; partitaIva: string }
@@ -319,8 +353,12 @@ export function buildSupplierProposal(input: {
   // proposta leggibile ("collega X come esecutore di Y") e perché
   // suppliers.name è NOT NULL: senza nome non si può né mostrare né creare.
   // L'AI può restituire stringa vuota (route.ts:121 accetta ''), non solo null.
+  // Senza nome la DiCo non è "non applicabile": l'impresa va inserita a mano
+  // (impresa_mancante). Chi chiama passa i valori manuali come
+  // ragioneSociale/partitaIva solo a verbale senza nome (resolveInstallerInput),
+  // così il ramo che segue è lo stesso per impresa letta e impresa digitata.
   const ragioneSociale = input.ragioneSociale?.trim() ?? ''
-  if (ragioneSociale.length === 0) return { kind: 'non_applicabile' }
+  if (ragioneSociale.length === 0) return { kind: 'impresa_mancante', sistema }
 
   // documents.sistema è la sola fonte del sistema del collegamento, e
   // supplier_installations.sistema è NOT NULL: senza classificazione

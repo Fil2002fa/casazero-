@@ -8,8 +8,10 @@ import {
   DOC_TYPES,
   SISTEMI,
   buildSupplierProposal,
+  resolveInstallerInput,
   supplierVatNumberToWrite,
   type DocType,
+  type ManualInstaller,
   type Sistema,
   type SupplierProposalCandidate,
   type SupplierInstallationRef,
@@ -530,12 +532,15 @@ function installationInsertError(error: { code?: string; message: string }): str
 export async function confirmSupplierProposal(input: {
   documentId: string
   expected: SupplierProposalExpectation
+  // Impresa digitata a mano: usata SOLO se il verbale non ha ragione sociale
+  // (resolveInstallerInput), altrimenti ignorata. Mai scritta in extracted_metadata.
+  manual?: ManualInstaller | null
 }): Promise<ConfirmSupplierProposalResult> {
   const supabase = await createClient()
   const auth = await getAuthorizedSupplierLinker(supabase)
   if ('error' in auth) return { error: auth.error }
 
-  const { documentId, expected } = input
+  const { documentId, expected, manual } = input
   if (!documentId || !expected) return { error: 'Parametri non validi' }
 
   // RLS "documents: admin e super_admin gestiscono" (002): un documento fuori
@@ -559,12 +564,19 @@ export async function confirmSupplierProposal(input: {
 
   // Verbale jsonb: letto in difesa, accettate solo stringhe.
   const metadata = (doc.extracted_metadata ?? {}) as Record<string, unknown>
-  const ragioneSociale = typeof metadata.ragione_sociale_installatore === 'string'
-    ? metadata.ragione_sociale_installatore
-    : null
-  const partitaIva = typeof metadata.partita_iva_installatore === 'string'
-    ? metadata.partita_iva_installatore
-    : null
+  const installer = resolveInstallerInput(
+    {
+      ragioneSociale: typeof metadata.ragione_sociale_installatore === 'string'
+        ? metadata.ragione_sociale_installatore
+        : null,
+      partitaIva: typeof metadata.partita_iva_installatore === 'string'
+        ? metadata.partita_iva_installatore
+        : null,
+    },
+    manual,
+  )
+  if (installer.manualError !== null) return { error: installer.manualError }
+  const { ragioneSociale, partitaIva } = installer
 
   // Stessi due scope di documenti/page.tsx: anagrafica builder-wide,
   // collegamenti della sola residenza del documento.
@@ -594,6 +606,9 @@ export async function confirmSupplierProposal(input: {
 
   if (proposal.kind === 'non_applicabile') {
     return { error: 'Questo documento non propone un fornitore da collegare.' }
+  }
+  if (proposal.kind === 'impresa_mancante') {
+    return { error: 'Impresa installatrice non rilevata nel documento: inserisci la ragione sociale.' }
   }
   if (proposal.kind === 'sistema_mancante') {
     return { error: 'Sistema non classificato: correggi prima la classificazione.' }

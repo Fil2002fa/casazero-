@@ -17,8 +17,10 @@ import {
   SISTEMI,
   SISTEMA_LABELS,
   buildSupplierProposal,
+  resolveInstallerInput,
   supplierVatNumberToWrite,
   type DocType,
+  type ManualInstaller,
   type Sistema,
   type SupplierProposalCandidate,
   type SupplierInstallationRef,
@@ -1558,11 +1560,26 @@ function SupplierProposalSection({ doc, context }: { doc: DocRow; context: Suppl
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState<string | null>(null)
 
+  // Impresa digitata a mano, valida solo se il verbale non ha una ragione
+  // sociale (resolveInstallerInput, la stessa funzione della server action).
+  // Vive solo in questo stato e nell'argomento dell'action: mai nel verbale.
+  const [manualName, setManualName] = useState('')
+  const [manualVat, setManualVat]   = useState('')
+  const verbale = {
+    ragioneSociale: doc.extracted_metadata?.ragione_sociale_installatore ?? null,
+    partitaIva: doc.extracted_metadata?.partita_iva_installatore ?? null,
+  }
+  const nameMissing = (verbale.ragioneSociale?.trim() ?? '') === ''
+  const manual: ManualInstaller | null = nameMissing
+    ? { ragioneSociale: manualName, partitaIva: manualVat }
+    : null
+  const installer = resolveInstallerInput(verbale, manual)
+
   const proposal = buildSupplierProposal({
     docType: doc.doc_type,
     sistema: doc.sistema,
-    ragioneSociale: doc.extracted_metadata?.ragione_sociale_installatore ?? null,
-    partitaIva: doc.extracted_metadata?.partita_iva_installatore ?? null,
+    ragioneSociale: installer.ragioneSociale,
+    partitaIva: installer.partitaIva,
     fornitori: context.suppliers,
     installazioni: context.installations,
   })
@@ -1583,7 +1600,7 @@ function SupplierProposalSection({ doc, context }: { doc: DocRow; context: Suppl
   async function handleConfirm(exp: SupplierProposalExpectation) {
     setSaving(true)
     setError(null)
-    const res = await confirmSupplierProposal({ documentId: doc.id, expected: exp })
+    const res = await confirmSupplierProposal({ documentId: doc.id, expected: exp, manual })
     setSaving(false)
     if ('error' in res) {
       setError(res.error)
@@ -1599,8 +1616,40 @@ function SupplierProposalSection({ doc, context }: { doc: DocRow; context: Suppl
     // parola più larga della card va spezzata invece di far scorrere la pagina.
     <div className="mt-3 pt-3 border-t border-border space-y-1 break-words">
       <p className="text-xs font-medium text-text-secondary">Impresa installatrice</p>
+      {nameMissing && (
+        <div className="space-y-2 pb-1">
+          <p className="text-xs text-semantic-amber">Impresa installatrice non rilevata nel documento</p>
+          <input
+            type="text"
+            value={manualName}
+            onChange={e => setManualName(e.target.value)}
+            placeholder="Ragione sociale (obbligatoria)"
+            aria-label="Ragione sociale dell'impresa installatrice"
+            className="w-full border border-border rounded-xl px-3 py-2 text-sm"
+          />
+          <input
+            type="text"
+            inputMode="numeric"
+            value={manualVat}
+            onChange={e => setManualVat(e.target.value)}
+            placeholder="Partita IVA (facoltativa, 11 cifre)"
+            aria-label="Partita IVA dell'impresa installatrice"
+            className="w-full border border-border rounded-xl px-3 py-2 text-sm"
+          />
+          {installer.manualError && <p className="text-xs text-semantic-red">{installer.manualError}</p>}
+        </div>
+      )}
       <SupplierProposalBody proposal={proposal} residenceName={context.residenceName} />
       {error && <p className="text-xs text-semantic-red">{error}</p>}
+      {!expected && nameMissing && (proposal.kind === 'impresa_mancante' || proposal.kind === 'sistema_mancante') && (
+        <button
+          type="button"
+          disabled
+          className="w-full mt-2 border border-brand-medium text-brand-medium rounded-xl py-2.5 text-sm font-medium opacity-50"
+        >
+          Collega fornitore
+        </button>
+      )}
       {expected && (
         <button
           type="button"
@@ -1625,6 +1674,19 @@ function SupplierProposalBody({ proposal, residenceName }: {
   residenceName: string
 }) {
   switch (proposal.kind) {
+    case 'impresa_mancante':
+      return proposal.sistema === null ? (
+        <p className="text-xs text-semantic-amber">
+          Sistema non classificato: correggi prima la classificazione. Poi inserisci l&apos;impresa
+          per collegarla come esecutore in <span className="font-medium">{residenceName}</span>.
+        </p>
+      ) : (
+        <p className="text-xs text-text-secondary">
+          Inserisci la ragione sociale per proporre il collegamento{' '}
+          <EsecutoreIn sistema={proposal.sistema} residenceName={residenceName} />.
+        </p>
+      )
+
     case 'sistema_mancante':
       return (
         <p className="text-xs text-semantic-amber">

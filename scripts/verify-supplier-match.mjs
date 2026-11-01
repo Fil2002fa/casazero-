@@ -41,9 +41,9 @@
 
 const SOURCE = new URL('../src/lib/document-classification.ts', import.meta.url)
 
-let normalizeCompanyName, normalizeVatNumber, buildSupplierProposal, supplierVatNumberToWrite
+let normalizeCompanyName, normalizeVatNumber, buildSupplierProposal, supplierVatNumberToWrite, resolveInstallerInput
 try {
-  ;({ normalizeCompanyName, normalizeVatNumber, buildSupplierProposal, supplierVatNumberToWrite } = await import(SOURCE.href))
+  ;({ normalizeCompanyName, normalizeVatNumber, buildSupplierProposal, supplierVatNumberToWrite, resolveInstallerInput } = await import(SOURCE.href))
 } catch (err) {
   console.error(
     `\n✗ Impossibile importare ${SOURCE.pathname}: ${err.message}\n` +
@@ -143,9 +143,9 @@ const caso = over => buildSupplierProposal({ ...base, ...over })
 console.log('\nbuildSupplierProposal — la sezione non deve comparire')
 check('doc_type diverso',   proj(caso({ docType: 'ape' })),            { kind: 'non_applicabile', id: null, omonimi: null, piva: null })
 check('doc_type null',      proj(caso({ docType: null })),             { kind: 'non_applicabile', id: null, omonimi: null, piva: null })
-check('ragione sociale ""', proj(caso({ ragioneSociale: '' })),        { kind: 'non_applicabile', id: null, omonimi: null, piva: null })
-check('ragione sociale spazi', proj(caso({ ragioneSociale: '   ' })),  { kind: 'non_applicabile', id: null, omonimi: null, piva: null })
-check('ragione sociale null',  proj(caso({ ragioneSociale: null })),   { kind: 'non_applicabile', id: null, omonimi: null, piva: null })
+check('ragione sociale ""', proj(caso({ ragioneSociale: '' })),        { kind: 'impresa_mancante', id: null, omonimi: null, piva: null })
+check('ragione sociale spazi', proj(caso({ ragioneSociale: '   ' })),  { kind: 'impresa_mancante', id: null, omonimi: null, piva: null })
+check('ragione sociale null',  proj(caso({ ragioneSociale: null })),   { kind: 'impresa_mancante', id: null, omonimi: null, piva: null })
 
 console.log('\nbuildSupplierProposal — sistema non classificato')
 check('sistema null', proj(caso({ sistema: null })), { kind: 'sistema_mancante', id: null, omonimi: null, piva: null })
@@ -186,6 +186,39 @@ check('già collegato trovato per nome',
     installazioni: [{ supplier_id: 'b', sistema: 'elettrico' }],
   })),
   { kind: 'gia_collegato', id: 'b', omonimi: null, piva: null })
+
+check('ragione sociale vuota, sistema null → impresa_mancante (form visibile)',
+  proj(caso({ ragioneSociale: null, sistema: null })), { kind: 'impresa_mancante', id: null, omonimi: null, piva: null })
+check('doc_type diverso con nome vuoto resta non_applicabile',
+  proj(caso({ docType: 'ape', ragioneSociale: null })), { kind: 'non_applicabile', id: null, omonimi: null, piva: null })
+
+// ------------------------------------------------------------
+// 3b. resolveInstallerInput — chi alimenta la proposta (pannello + server)
+// ------------------------------------------------------------
+console.log('\nresolveInstallerInput — verbale vince, manuale solo a nome vuoto')
+const vuoto = { ragioneSociale: null, partitaIva: '99999999999' }
+const pieno = { ragioneSociale: 'Verbale Srl', partitaIva: '01234567891' }
+check('verbale con nome: il manuale è ignorato',
+  resolveInstallerInput(pieno, { ragioneSociale: 'Altro', partitaIva: '11111111111' }),
+  { ragioneSociale: 'Verbale Srl', partitaIva: '01234567891', manualError: null })
+check('nome vuoto, manuale assente → niente',
+  resolveInstallerInput(vuoto, null), { ragioneSociale: null, partitaIva: null, manualError: null })
+check('nome vuoto: la P.IVA del verbale è ignorata',
+  resolveInstallerInput(vuoto, { ragioneSociale: '  Bianchi Srl ', partitaIva: '' }),
+  { ragioneSociale: 'Bianchi Srl', partitaIva: null, manualError: null })
+check('P.IVA manuale normalizzata (IT + spazi)',
+  resolveInstallerInput(vuoto, { ragioneSociale: 'Bianchi', partitaIva: 'IT 01234567891' }),
+  { ragioneSociale: 'Bianchi', partitaIva: '01234567891', manualError: null })
+check('P.IVA manuale con 10 cifre → errore',
+  resolveInstallerInput(vuoto, { ragioneSociale: 'Bianchi', partitaIva: '0123456789' }).manualError !== null, true)
+check('P.IVA manuale senza cifre → errore',
+  resolveInstallerInput(vuoto, { ragioneSociale: 'Bianchi', partitaIva: 'abc' }).manualError !== null, true)
+check('manuale valido, P.IVA in anagrafica → per_piva',
+  proj(caso({ ...(() => { const r = resolveInstallerInput(vuoto, { ragioneSociale: 'Qualsiasi', partitaIva: '01234567891' }); return { ragioneSociale: r.ragioneSociale, partitaIva: r.partitaIva } })() })),
+  { kind: 'per_piva', id: 'a', omonimi: null, piva: '01234567891' })
+check('manuale valido, nessun match → nessun_match',
+  proj(caso({ ...(() => { const r = resolveInstallerInput(vuoto, { ragioneSociale: 'Ditta Nuova', partitaIva: '' }); return { ragioneSociale: r.ragioneSociale, partitaIva: r.partitaIva } })() })),
+  { kind: 'nessun_match', id: null, omonimi: null, piva: null })
 
 // ------------------------------------------------------------
 // 4. supplierVatNumberToWrite — cosa la conferma scrive in anagrafica
