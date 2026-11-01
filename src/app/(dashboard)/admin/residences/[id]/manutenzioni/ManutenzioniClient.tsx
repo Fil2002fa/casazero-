@@ -9,7 +9,8 @@ import { Select } from '@/components/ui/Input'
 import { ItemConfigForm } from './ItemConfigForm'
 import { setTemplateActivationForResidence } from '../fornitori/actions'
 import { sollecitaItem, type SollecitoResult } from './actions'
-import { isOverdueLive, isInCorso, isAwaitingDelivery } from '@/lib/maintenance-status'
+import { isOverdueLive, isInCorso, isAwaitingDelivery, resolveCompletionMode } from '@/lib/maintenance-status'
+import { unitNotDelivered } from '@/lib/unit-utils'
 import type { MaintenancePriority, MaintenanceStatus, CompletionMode, ObligationType, ItemActivation } from '@/types/database'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import { formatFrequency } from '@/lib/formatFrequency'
@@ -41,7 +42,7 @@ export type ItemRow = {
     scope: string
     is_active: boolean
   } | null
-  units: { label: string } | null
+  units: { label: string; delivery_date: string | null } | null
   suppliers: { id: string; name: string } | null
 }
 
@@ -109,6 +110,9 @@ type PendingAction = {
   targetStatus: 'inclusa' | 'archiviata'
   count: number
   freqMonths: number | null
+  // Solo inclusione: il tipo ha voci di unità non consegnate e non promemoria,
+  // che la re-inclusione lascia senza data (cancello di consegna).
+  hasUndeliveredUnitItems: boolean
 }
 
 // Sollecito in transito verso il modale di conferma — unico per superficie
@@ -332,7 +336,10 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
       if (!groups.has(i.template_id)) groups.set(i.template_id, [])
       groups.get(i.template_id)!.push(i)
     }
-    const result: { templateId: string; title: string; category: string; count: number; freq: number | null }[] = []
+    const result: {
+      templateId: string; title: string; category: string; count: number; freq: number | null
+      hasUndeliveredUnitItems: boolean
+    }[] = []
     for (const [templateId, group] of groups) {
       if (group.every(i => i.activation_status === 'archiviata')) {
         const rep = group[0]
@@ -342,6 +349,11 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
           category: rep.maintenance_templates?.category ?? 'Altro',
           count: group.length,
           freq: rep.frequency_months ?? rep.maintenance_templates?.frequency_months ?? null,
+          // Stessa regola del cancello in setTemplateActivationForResidence.
+          hasUndeliveredUnitItems: group.some(i =>
+            i.unit_id !== null &&
+            unitNotDelivered(i.units?.delivery_date ?? null) &&
+            resolveCompletionMode(i) !== 'promemoria'),
         })
       }
     }
@@ -648,6 +660,7 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
                                   targetStatus: 'archiviata',
                                   count: typeItems.length,
                                   freqMonths: freq ?? null,
+                                  hasUndeliveredUnitItems: false,
                                 })}
                                 className="text-xs text-semantic-red font-medium px-2 py-1 rounded-md hover:bg-semantic-red-bg transition-colors"
                               >
@@ -718,6 +731,7 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
                       targetStatus: 'inclusa',
                       count: t.count,
                       freqMonths: t.freq,
+                      hasUndeliveredUnitItems: t.hasUndeliveredUnitItems,
                     })}
                     className="text-xs text-brand-dark font-medium px-3 py-1.5 rounded-md bg-brand-light hover:brightness-95 transition-all flex-shrink-0"
                   >
@@ -752,8 +766,10 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
                     {pendingAction.count} {pendingAction.count === 1 ? 'istanza verrà riattivata' : 'istanze verranno riattivate'}.
                   </p>
                   <p className="text-text-secondary">
-                    Le scadenze verranno ricalcolate a partire da oggi
+                    Le scadenze ripartiranno da oggi
                     {pendingAction.freqMonths ? ` (+ ${pendingAction.freqMonths} mesi)` : ''}.
+                    {pendingAction.hasUndeliveredUnitItems &&
+                      ' Le voci delle unità non ancora consegnate partiranno dalla data di consegna.'}
                   </p>
                 </div>
               </>
