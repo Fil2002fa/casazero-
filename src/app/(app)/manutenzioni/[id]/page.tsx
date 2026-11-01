@@ -4,12 +4,14 @@ import Link from 'next/link'
 import { ChevronLeft, ShieldCheck, Wrench, Phone } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireProfile } from '@/lib/auth'
-import { PriorityBadge } from '@/components/PriorityBadge'
+import { StatusBadge, PromemoriaBadge, TypeBadge } from '@/components/ui/Badge'
 import { CompletionAction } from '../CompletionAction'
 import { N3AdminActions } from '@/components/N3AdminActions'
 import { AwaitingDeliveryNote } from '@/components/AwaitingDelivery'
+import type { ObligationType } from '@/types/database'
 import {
-  isOverdueLive, resolveCompletionMode, resolveLiveStatus, modeToPriority, todayISO,
+  isOverdueLive, resolveCompletionMode, resolveFrequencyMonths, resolveLiveStatus,
+  resolveObligationType, todayISO,
   type LiveStatusItem,
 } from '@/lib/maintenance-status'
 
@@ -25,8 +27,8 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
   const { data: item } = await supabase
     .from('maintenance_items')
     .select(`
-      id, status, next_due_date, unit_id, residence_id, completion_mode, activation_status, frequency_months, warranty_info,
-      maintenance_templates!inner(title, category, description, completion_mode, is_active, frequency_months, scope),
+      id, status, next_due_date, unit_id, residence_id, completion_mode, activation_status, frequency_months, obligation_type, warranty_info,
+      maintenance_templates!inner(title, category, description, completion_mode, is_active, frequency_months, scope, obligation_type),
       suppliers(name, phone, email),
       units(label),
       residences(name)
@@ -46,8 +48,15 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
   const residence = item.residences as unknown as { name: string } | null
   const liveItem = item as unknown as LiveStatusItem
   const mode = resolveCompletionMode(liveItem)
-  const effectivePriority = modeToPriority(mode)
   const status = resolveLiveStatus(liveItem, todayISO())
+  // Stessi badge della lista (ManutenzioniList.tsx), stessi resolver voce ?? template.
+  const axesItem = item as unknown as {
+    obligation_type: ObligationType | null
+    frequency_months: number | null
+    maintenance_templates: { obligation_type: ObligationType | null; frequency_months: number | null } | null
+  }
+  const obligationType = resolveObligationType(axesItem)
+  const frequencyMonths = resolveFrequencyMonths(axesItem)
 
   const formattedDue = item.next_due_date
     ? new Date(item.next_due_date).toLocaleDateString('it-IT', {
@@ -91,7 +100,15 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
           <p className="text-sm text-text-secondary">{tpl?.category}</p>
           <h1 className="font-serif text-[22px] font-semibold text-text-primary break-words">{tpl?.title}</h1>
         </div>
-        <PriorityBadge priority={effectivePriority} status={status} />
+        {/* Promemoria: solo "Consigliata · ogni X mesi", mai stato né scadenza. */}
+        {mode === 'promemoria' ? (
+          <PromemoriaBadge frequencyMonths={frequencyMonths} className="flex-shrink-0" />
+        ) : (
+          <div className="flex flex-col items-end gap-1 flex-shrink-0">
+            <StatusBadge status={status} />
+            {obligationType && <TypeBadge obligationType={obligationType} />}
+          </div>
+        )}
       </div>
 
       <div className="p-4 space-y-4">
