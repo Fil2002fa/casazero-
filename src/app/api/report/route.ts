@@ -7,6 +7,7 @@ import { createServiceClient } from '@/lib/supabase/admin'
 import { ReportDocument } from '@/lib/pdf/ReportDocument'
 import type { ReportData, CompletionEntry, OverdueEntry } from '@/lib/pdf/ReportDocument'
 import type { CompletionMode, ObligationType } from '@/types/database'
+import { authorizeResidenceActor, PG_INVALID_TEXT_REPRESENTATION } from '@/lib/document-access'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import {
   isCountable, overdueLive, resolveCompletionMode, resolveObligationType, todayISO,
@@ -35,120 +36,108 @@ export async function GET(req: NextRequest) {
 
   const admin = createServiceClient()
 
-  const { data: profile } = await admin
-    .from('profiles')
-    .select('role, builder_id')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile) return NextResponse.json({ error: 'Profilo non trovato' }, { status: 403 })
-
-  // ── Dati residenza / unità ────────────────────────────────────────────────
-  type UnitInfo = {
-    id: string; label: string; floor: number | null; residence_id: string
-    residences: {
-      id: string; name: string; address: string | null; energy_class: string | null
-      delivery_date: string | null; builder_id: string
-      builders: { name: string; primary_color: string; logo_url: string | null } | null
-    } | null
-  }
+  // ── Dati residenza / unità + autorizzazione ───────────────────────────────
+  // Admin e super_admin: authorizeResidenceActor (document-access.ts), stesso
+  // perimetro di fascicolo-pdf. Residente: solo scope=unit e solo se membro
+  // attivo dell'unità. Nessun altro ruolo. Ogni lettura destruttura `error`:
+  // un guasto è un 500 tecnico, mai "Accesso negato" o "non trovata".
   type ResidenceInfo = {
     id: string; name: string; address: string | null; energy_class: string | null
     delivery_date: string | null; builder_id: string
-    builders: { name: string; primary_color: string; logo_url: string | null } | null
+    builders: { name: string } | null
   }
+  type UnitInfo = {
+    id: string; label: string; residence_id: string
+    residences: ResidenceInfo | null
+  }
+  const RESIDENCE_FIELDS = 'id, name, address, energy_class, delivery_date, builder_id, builders(name)'
+  const technicalError = () =>
+    NextResponse.json({ error: 'Errore tecnico nella generazione del report, riprova' }, { status: 500 })
 
-  let residenceId: string
+  let residence: ResidenceInfo
   let unitId: string | null = null
   let unitLabel: string | null = null
-  let residenceName = ''
-  let residenceAddress: string | null = null
-  let energyClass: string | null = null
-  let deliveryDate: string | null = null
-  let builderName = 'CasaZero'
-  let builderColor = '#04342C'
 
   if (scope === 'unit') {
-    const { data: unit } = await admin
+    const { data: unit, error: unitError } = await admin
       .from('units')
-      .select('id, label, floor, residence_id, residences(id, name, address, energy_class, delivery_date, builder_id, builders(name, primary_color, logo_url))')
+      .select(`id, label, residence_id, residences(${RESIDENCE_FIELDS})`)
       .eq('id', id)
-      .single()
+      .maybeSingle()
 
+    if (unitError) {
+      if (unitError.code === PG_INVALID_TEXT_REPRESENTATION) {
+        return NextResponse.json({ error: 'Unità non trovata' }, { status: 404 })
+      }
+      console.error(`[report] lettura units fallita (unitId=${id}):`, unitError.message)
+      return technicalError()
+    }
     if (!unit) return NextResponse.json({ error: 'Unità non trovata' }, { status: 404 })
 
     const u = unit as unknown as UnitInfo
-    const r = u.residences
-    if (!r) return NextResponse.json({ error: 'Dati residenza mancanti' }, { status: 404 })
-
+    if (!u.residences) return NextResponse.json({ error: 'Dati residenza mancanti' }, { status: 404 })
     unitId = u.id
     unitLabel = u.label
-    residenceId = r.id
-    residenceName = r.name
-    residenceAddress = r.address
-    energyClass = r.energy_class
-    deliveryDate = r.delivery_date
-    builderName = r.builders?.name ?? 'CasaZero'
-    builderColor = '#04342C' // Colore brand fisso CasaZero (coerente con whitelabel.ts)
+    residence = u.residences
 
-    // Verifica accesso
-    const isSuper   = profile.role === 'super_admin' && profile.builder_id === r.builder_id
-    const isClient  = profile.role === 'client'
+    const { data: profile, error: profileError } = await admin
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle()
 
-    if (!isSuper && profile.role !== 'admin') {
-      if (!isClient) return NextResponse.json({ error: 'Accesso negato' }, { status: 403 })
-      // Client: deve essere membro dell'unità
-      const { count } = await admin
+    if (profileError) {
+      console.error(`[report] lettura profiles fallita (userId=${user.id}):`, profileError.message)
+      return technicalError()
+    }
+
+    if (profile?.role === 'client') {
+      // Residente: deve essere membro attivo dell'unità
+      const { count, error: memberError } = await admin
         .from('unit_members')
         .select('unit_id', { count: 'exact', head: true })
         .eq('unit_id', unitId)
         .eq('profile_id', user.id)
         .is('ended_at', null)
-      if (!count || count === 0) return NextResponse.json({ error: 'Accesso negato' }, { status: 403 })
-    }
 
-    if (profile.role === 'admin') {
-      const { count } = await admin
-        .from('admin_assignments')
-        .select('id', { count: 'exact', head: true })
-        .eq('profile_id', user.id)
-        .eq('residence_id', residenceId)
+      if (memberError) {
+        console.error(`[report] lettura unit_members fallita (unitId=${unitId}, userId=${user.id}):`, memberError.message)
+        return technicalError()
+      }
       if (!count || count === 0) return NextResponse.json({ error: 'Accesso negato' }, { status: 403 })
+    } else {
+      // Ogni ruolo diverso da client passa dall'helper, che accetta solo
+      // super_admin del builder e admin assegnato.
+      const auth = await authorizeResidenceActor(admin, user.id, residence.id, '[report]')
+      if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
     }
 
   } else {
-    // scope = 'residence'
-    const { data: res } = await admin
+    // scope = 'residence': solo admin/super_admin, il residente riceve 403 dall'helper
+    const auth = await authorizeResidenceActor(admin, user.id, id, '[report]')
+    if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
+
+    const { data: res, error: resError } = await admin
       .from('residences')
-      .select('id, name, address, energy_class, delivery_date, builder_id, builders(name, primary_color, logo_url)')
-      .eq('id', id)
-      .single()
+      .select(RESIDENCE_FIELDS)
+      .eq('id', auth.residence.id)
+      .maybeSingle()
 
+    if (resError) {
+      console.error(`[report] lettura residences fallita (residenceId=${auth.residence.id}):`, resError.message)
+      return technicalError()
+    }
     if (!res) return NextResponse.json({ error: 'Residenza non trovata' }, { status: 404 })
-
-    const r = res as unknown as ResidenceInfo
-    residenceId = r.id
-    residenceName = r.name
-    residenceAddress = r.address
-    energyClass = r.energy_class
-    deliveryDate = r.delivery_date
-    builderName = r.builders?.name ?? 'CasaZero'
-    builderColor = '#04342C' // Colore brand fisso CasaZero (coerente con whitelabel.ts)
-
-    // Solo admin/super_admin per il report residenza
-    if (profile.role === 'client') return NextResponse.json({ error: 'Accesso negato' }, { status: 403 })
-    if (profile.role === 'super_admin' && profile.builder_id !== r.builder_id) {
-      return NextResponse.json({ error: 'Accesso negato' }, { status: 403 })
-    }
-    if (profile.role === 'admin') {
-      const { count } = await admin
-        .from('admin_assignments')
-        .select('id', { count: 'exact', head: true })
-        .eq('profile_id', user.id)
-        .eq('residence_id', residenceId)
-      if (!count || count === 0) return NextResponse.json({ error: 'Accesso negato' }, { status: 403 })
-    }
+    residence = res as unknown as ResidenceInfo
   }
+
+  const residenceId      = residence.id
+  const residenceName    = residence.name
+  const residenceAddress = residence.address
+  const energyClass      = residence.energy_class
+  const deliveryDate     = residence.delivery_date
+  const builderName      = residence.builders?.name ?? 'CasaZero'
+  const builderColor     = '#04342C' // Colore brand fisso CasaZero (coerente con whitelabel.ts)
 
   // ── Calcolo conformità (live, stesso helper dei contatori dashboard) ──────
   // Denominatore: voci conteggiabili non-promemoria; scadute calcolate da

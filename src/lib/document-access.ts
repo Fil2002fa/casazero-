@@ -4,12 +4,11 @@
  * super_admin del builder proprietario della residenza, oppure admin
  * assegnato a quella residenza.
  *
- * Stesso perimetro di classify-document (route.ts, blocco "Scoping builder")
- * e di api/report/route.ts:142-149, che quella route già segnala come
- * duplicazione consapevole da unificare "in un commit dedicato". Questa è la
- * fonte per il codice NUOVO (extract-document); le due copie esistenti non
- * sono state toccate — classify-document resta byte-identica per decisione
- * del 18/09 — e sono candidate a migrare qui in un commit di sola pulizia.
+ * Stesso perimetro di classify-document (route.ts, blocco "Scoping builder").
+ * Questa è la fonte per il codice NUOVO (extract-document); la copia in
+ * classify-document non è stata toccata — resta byte-identica per decisione
+ * del 18/09 — ed è candidata a migrare qui in un commit di sola pulizia.
+ * api/report usa già authorizeResidenceActor, più sotto.
  *
  * Convenzione ereditata: entrambi i rami negativi rispondono 404 "Documento
  * non trovato", non 403, per non rivelare a un admin l'esistenza di
@@ -103,8 +102,8 @@ export async function authorizeDocumentActor(
 // ---------------------------------------------------------------------------
 // Livello RESIDENZA: super_admin del builder proprietario, oppure admin
 // assegnato alla residenza. Per le route che agiscono sulla residenza intera
-// (fascicolo-pdf, documenti-xlsx). Fonte unica per il codice nuovo; le copie
-// ancora inline in api/report, classify-document e manutenzioni/actions.ts
+// (fascicolo-pdf, documenti-xlsx, report). Fonte unica per il codice nuovo;
+// le copie ancora inline in classify-document e manutenzioni/actions.ts
 // sono candidate a migrare qui in un commit di sola pulizia.
 //
 // Convenzione di stato ereditata da fascicolo-pdf, la prima route migrata,
@@ -127,8 +126,9 @@ export type ResidenceActorResult =
   | { ok: false; status: 403 | 404 | 500; error: string }
 
 // Postgres invalid_text_representation: l'id passato non è un UUID, quindi
-// nessuna residenza può averlo. Esito di dominio, non tecnico.
-const PG_INVALID_TEXT_REPRESENTATION = '22P02'
+// nessuna residenza può averlo. Esito di dominio, non tecnico. Esportata per
+// le letture per id fatte fuori dall'helper (unità in api/report).
+export const PG_INVALID_TEXT_REPRESENTATION = '22P02'
 
 export async function authorizeResidenceActor(
   admin: SupabaseClient,
