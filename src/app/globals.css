@@ -26,7 +26,7 @@
      neutral-600 (#525252, ~7:1) per non appiattire i due livelli di grigio del sistema. */
   --color-neutral-500: #5E5E5E;
 
-  /* Semantici (legacy — N1/N2/N3, non toccare: usati da PriorityBadge/MaintenanceBadge/MaintenanceCard) */
+  /* Semantici (legacy, non toccare: usati da MaintenanceBadge/MaintenanceCard e da pagine PWA) */
   --color-semantic-red: #A32D2D;
   --color-semantic-red-bg: #FCEBEB;
   --color-semantic-amber: #854F0B;

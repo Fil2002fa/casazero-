@@ -10,8 +10,8 @@ import type { ObligationType } from '@/types/database'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import { pluralize } from '@/lib/pluralize'
 import {
-  isCountable, isInCorso, isOverdueLive, isAwaitingDelivery, modeToPriority, resolveCompletionMode,
-  resolveLiveStatus, formatRelativeDue, todayISO,
+  isCountable, isInCorso, isOverdueLive, isAwaitingDelivery, resolveCompletionMode,
+  resolveFrequencyMonths, resolveLiveStatus, resolveObligationType, formatRelativeDue, todayISO,
   LIVE_STATUS_FIELDS, LIVE_STATUS_TEMPLATE_FIELDS, type LiveStatusItem,
 } from '@/lib/maintenance-status'
 
@@ -19,11 +19,15 @@ import {
 // stato mostrato deriva da next_due_date, mai dal campo status salvato.
 type ItemRow = LiveStatusItem & {
   id: string
+  obligation_type: ObligationType | null
+  frequency_months: number | null
   maintenance_templates:
     | (NonNullable<LiveStatusItem['maintenance_templates']> & {
         title: string
         category: string
         scope: string
+        obligation_type: ObligationType | null
+        frequency_months: number | null
       })
     | null
 }
@@ -69,8 +73,8 @@ export default async function HomePage() {
     supabase
       .from('maintenance_items')
       .select(`
-        id, ${LIVE_STATUS_FIELDS},
-        maintenance_templates!inner(${LIVE_STATUS_TEMPLATE_FIELDS}, title, category, scope)
+        id, ${LIVE_STATUS_FIELDS}, obligation_type, frequency_months,
+        maintenance_templates!inner(${LIVE_STATUS_TEMPLATE_FIELDS}, title, category, scope, obligation_type, frequency_months)
       `)
       .neq('status', 'completata')
       .eq('activation_status', 'inclusa')
@@ -222,9 +226,11 @@ export default async function HomePage() {
                 id={i.id}
                 title={i.maintenance_templates?.title ?? '—'}
                 category={i.maintenance_templates?.category ?? ''}
-                priority={modeToPriority(resolveCompletionMode(i))}
+                mode={resolveCompletionMode(i)}
+                obligationType={resolveObligationType(i)}
                 status={resolveLiveStatus(i, today)}
                 nextDueDate={i.next_due_date}
+                frequencyMonths={resolveFrequencyMonths(i)}
                 scope={(i.maintenance_templates?.scope ?? 'unit') as 'unit' | 'condominium'}
               />
             ))}
