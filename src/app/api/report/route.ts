@@ -165,9 +165,15 @@ export async function GET(req: NextRequest) {
     .eq('residence_id', residenceId)
     .neq('status', 'completata')
 
-  const { data: rawItems } = unitId
+  const { data: rawItems, error: itemsError } = unitId
     ? await itemsQuery.or(`unit_id.eq.${unitId},unit_id.is.null`)
     : await itemsQuery
+
+  // Senza le voci la conformita uscirebbe al 100%: nessun PDF, errore tecnico.
+  if (itemsError) {
+    console.error(`[report] lettura maintenance_items fallita (residenceId=${residenceId}, unitId=${unitId}):`, itemsError.message)
+    return NextResponse.json({ error: 'Errore tecnico nella generazione del report, riprova' }, { status: 500 })
+  }
 
   const allItems = (rawItems ?? []) as unknown as ItemRaw[]
   const counted = allItems.filter(i => isCountable(i) && resolveCompletionMode(i) !== 'promemoria')
@@ -201,9 +207,15 @@ export async function GET(req: NextRequest) {
     .eq('residence_id', residenceId)
     .order('completed_at', { ascending: false })
 
-  const { data: rawCompletions } = unitId
+  const { data: rawCompletions, error: completionsError } = unitId
     ? await completionsQuery.or(`unit_id.eq.${unitId},unit_id.is.null`)
     : await completionsQuery
+
+  // Senza i completamenti lo storico uscirebbe vuoto: nessun PDF, errore tecnico.
+  if (completionsError) {
+    console.error(`[report] lettura completions fallita (residenceId=${residenceId}, unitId=${unitId}):`, completionsError.message)
+    return NextResponse.json({ error: 'Errore tecnico nella generazione del report, riprova' }, { status: 500 })
+  }
 
   const completions: CompletionEntry[] = ((rawCompletions ?? []) as unknown as CompletionRaw[]).map(c => {
     const tpl = c.maintenance_items?.maintenance_templates

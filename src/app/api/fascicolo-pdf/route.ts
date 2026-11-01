@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
     attachments: { id: string }[]
   }
 
-  const { data: rawCompletions } = await admin
+  const { data: rawCompletions, error: completionsError } = await admin
     .from('completions')
     .select(`
       completed_at, unit_id, performed_by_name,
@@ -56,6 +56,12 @@ export async function GET(req: NextRequest) {
     `)
     .eq('residence_id', residenceId)
     .order('completed_at', { ascending: false })
+
+  // Mai un fascicolo vuoto che sembri valido: su errore di lettura nessun PDF.
+  if (completionsError) {
+    console.error(`[fascicolo-pdf] lettura completions fallita (residenceId=${residenceId}):`, completionsError.message)
+    return NextResponse.json({ error: 'Errore tecnico nella generazione del fascicolo, riprova' }, { status: 500 })
+  }
 
   const rows: FascicoloRow[] = ((rawCompletions ?? []) as unknown as CompletionRaw[]).map(c => ({
     completed_at:   c.completed_at,
