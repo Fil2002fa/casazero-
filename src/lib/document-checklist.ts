@@ -85,11 +85,17 @@ export type ScopeCounts = {
   notApplicable: number
 }
 
-export type ChecklistResult = {
-  expectations: ChecklistExpectation[]
-  counts: Record<CountedScope, ScopeCounts>
-  warnings: string[]
-}
+// Esito esplicito: se anche una sola delle 5 query fallisce la checklist NON
+// si calcola su dati parziali (numeri falsi in "Da caricare"), ma si dichiara
+// non disponibile. Chi consuma deve ramificare su `available`.
+export type ChecklistResult =
+  | {
+      available: true
+      expectations: ChecklistExpectation[]
+      counts: Record<CountedScope, ScopeCounts>
+      warnings: string[]
+    }
+  | { available: false }
 
 // ------------------------------------------------------------
 // MAPPA DERIVATA — template_id UUID → attese documentali.
@@ -187,11 +193,11 @@ export async function computeResidenceChecklist(
   // Promise.all invece che sequenziali — stesso risultato, ~300ms → ~176ms
   // misurato su Cavaccio (FASE 0 C5-0).
   const [
-    { data: baseRows },
-    { data: planRows },
-    { data: catalogRows },
-    { data: excRows },
-    { data: docRows },
+    { data: baseRows, error: baseError },
+    { data: planRows, error: planError },
+    { data: catalogRows, error: catalogError },
+    { data: excRows, error: excError },
+    { data: docRows, error: docError },
   ] = await Promise.all([
     // (a) BASE — righe di template attive, ordinate per sort_order.
     supabase
@@ -237,6 +243,22 @@ export async function computeResidenceChecklist(
       .eq('residence_id', residenceId)
       .eq('classification_status', 'completata'),
   ])
+
+  // Un errore tecnico non è "nessun dato": mai calcolare su risultati parziali.
+  const failures = [
+    { table: 'document_checklist_template', error: baseError },
+    { table: 'maintenance_items', error: planError },
+    { table: 'maintenance_templates', error: catalogError },
+    { table: 'residence_checklist_exception', error: excError },
+    { table: 'documents', error: docError },
+  ].filter(f => f.error)
+  if (failures.length > 0) {
+    console.error('[document-checklist] lettura fallita, checklist non disponibile', {
+      residenceId,
+      failures: failures.map(f => ({ table: f.table, code: f.error?.code, message: f.error?.message })),
+    })
+    return { available: false }
+  }
 
   const activeTemplateIds = new Set<string>()
   for (const row of (planRows ?? []) as unknown as PlanRow[]) {
@@ -373,5 +395,5 @@ export async function computeResidenceChecklist(
     else c.missing++
   }
 
-  return { expectations, counts, warnings }
+  return { available: true, expectations, counts, warnings }
 }

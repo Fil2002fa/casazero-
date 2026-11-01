@@ -936,9 +936,33 @@ function MissingDocumentsSection({
   markedByNames: Record<string, string | null>
   canManageChecklist: boolean
 }) {
+  const router = useRouter()
+  const [excludedOpen, setExcludedOpen] = useState(false)
+
+  // Lettura della checklist fallita: nessun numero, nessuna lista. Il
+  // fallimento tecnico non si presenta mai come "niente da caricare".
+  if (!checklist.available) {
+    return (
+      <section className="bg-surface rounded-xl border border-border p-4 flex items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <h2 className="text-sm font-medium text-text-primary">Documenti da caricare non disponibili</h2>
+          <p className="text-xs text-text-secondary">
+            Non riusciamo a caricare l&apos;elenco in questo momento. I tuoi documenti sono al sicuro.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => router.refresh()}
+          className="flex-shrink-0 px-3 py-2 border border-brand-medium rounded-lg text-xs font-medium text-brand-dark"
+        >
+          Riprova
+        </button>
+      </section>
+    )
+  }
+
   const missing = checklist.expectations.filter(e => !e.satisfied && !e.notApplicable)
   const excluded = checklist.expectations.filter(e => e.notApplicable)
-  const [excludedOpen, setExcludedOpen] = useState(false)
 
   const hasNotes = unclassifiedCount > 0 || checklist.warnings.length > 0
   if (missing.length === 0 && excluded.length === 0 && !hasNotes) return null

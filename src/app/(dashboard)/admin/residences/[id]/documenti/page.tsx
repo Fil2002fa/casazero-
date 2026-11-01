@@ -51,9 +51,11 @@ export default async function ResidenceDocumentiPage({
   // realmente presenti tra le attese di questa residenza, non tutti i
   // profili del builder. full_name da profiles (mai email, che non c'è
   // su questa tabella — CLAUDE.md).
-  const markedByIds = [...new Set(
-    checklist.expectations.map(e => e.markedBy).filter((id): id is string => id !== null)
-  )]
+  const markedByIds = checklist.available
+    ? [...new Set(
+        checklist.expectations.map(e => e.markedBy).filter((id): id is string => id !== null)
+      )]
+    : []
   const markedByNames: Record<string, string | null> = {}
   if (markedByIds.length > 0) {
     const { data: markers } = await supabase

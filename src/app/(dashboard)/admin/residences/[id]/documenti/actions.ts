@@ -324,13 +324,17 @@ export type ChecklistExceptionResult = { success: true } | { error: string }
 // nulla su se quell'attesa esiste ancora oggi per questa residenza (B4 C5
 // FASE 0, punto 3 — rischio di chiave orfana su cambi futuri della mappa).
 // Riusata da entrambe le action sotto.
+//
+// Tre esiti, non un boolean: 'non_disponibile' (lettura fallita, già loggata
+// da computeResidenceChecklist) non deve diventare "voce non trovata".
 async function expectationKeyExists(
   supabase: Awaited<ReturnType<typeof createClient>>,
   residenceId: string,
   expectationKey: string
-): Promise<boolean> {
+): Promise<'si' | 'no' | 'non_disponibile'> {
   const checklist = await computeResidenceChecklist(supabase, residenceId)
-  return checklist.expectations.some(e => e.expectationKey === expectationKey)
+  if (!checklist.available) return 'non_disponibile'
+  return checklist.expectations.some(e => e.expectationKey === expectationKey) ? 'si' : 'no'
 }
 
 // Segna una voce della checklist di consegna come non applicabile (B4 C5b,
@@ -369,7 +373,11 @@ export async function setChecklistException(
     return { error: 'La motivazione è obbligatoria' }
   }
 
-  if (!(await expectationKeyExists(supabase, residenceId, expectationKey))) {
+  const exists = await expectationKeyExists(supabase, residenceId, expectationKey)
+  if (exists === 'non_disponibile') {
+    return { error: 'Elenco dei documenti non disponibile, riprova tra poco.' }
+  }
+  if (exists === 'no') {
     return { error: 'Voce non trovata tra le attese correnti della residenza' }
   }
 
