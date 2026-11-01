@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { redirect } from 'next/navigation'
 import { FileDown } from 'lucide-react'
 import { createServiceClient } from '@/lib/supabase/admin'
 import { requireProfile } from '@/lib/auth'
@@ -35,52 +36,27 @@ export default async function FascicoloPage() {
   // Scopo: schermo e PDF mostrano ESATTAMENTE lo stesso perimetro e gli stessi numeri.
   // Definizione uniforme: scaduta live da next_due_date via helper maintenance-status
   // (la stessa di /api/report), mai dal campo status salvato.
+  // Shell (app) solo per il residente: (app)/layout.tsx:12 rimanda gli altri
+  // ruoli a /admin. Ripetuto qui perché layout e pagina vengono renderizzati
+  // in parallelo e la pagina usa il service client.
+  if (profile.role !== 'client') redirect('/admin')
+
   let reportHref: string | null = null
   let primaryResidenceId: string | null = null
   let primaryUnitId: string | null = null
 
-  if (profile.role === 'client') {
-    const { data: mem } = await adminClient
-      .from('unit_members')
-      .select('unit_id, units(id, residence_id)')
-      .eq('profile_id', profile.id)
-      .is('ended_at', null)
-      .limit(1)
-      .single()
-    const unitRow = mem?.units as unknown as { id: string; residence_id: string } | null
-    if (unitRow) {
-      primaryUnitId      = unitRow.id
-      primaryResidenceId = unitRow.residence_id
-      reportHref = `/api/report?scope=unit&id=${primaryUnitId}`
-    }
-  } else if (profile.role === 'admin') {
-    // Un admin può avere più residenze assegnate: ordine esplicito, altrimenti
-    // Postgres non garantisce quale riga torna .limit(1) senza ORDER BY.
-    const { data: assignment } = await adminClient
-      .from('admin_assignments')
-      .select('residence_id')
-      .eq('profile_id', profile.id)
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .single()
-    if (assignment) {
-      primaryResidenceId = assignment.residence_id
-      reportHref = `/api/report?scope=residence&id=${primaryResidenceId}`
-    }
-  } else if (profile.role === 'super_admin' && profile.builder_id) {
-    // Un builder può avere più residenze: ordine esplicito, altrimenti Postgres
-    // non garantisce quale riga torna .limit(1) senza ORDER BY.
-    const { data: residence } = await adminClient
-      .from('residences')
-      .select('id')
-      .eq('builder_id', profile.builder_id)
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .single()
-    if (residence) {
-      primaryResidenceId = residence.id
-      reportHref = `/api/report?scope=residence&id=${primaryResidenceId}`
-    }
+  const { data: mem } = await adminClient
+    .from('unit_members')
+    .select('unit_id, units(id, residence_id)')
+    .eq('profile_id', profile.id)
+    .is('ended_at', null)
+    .limit(1)
+    .single()
+  const unitRow = mem?.units as unknown as { id: string; residence_id: string } | null
+  if (unitRow) {
+    primaryUnitId      = unitRow.id
+    primaryResidenceId = unitRow.residence_id
+    reportHref = `/api/report?scope=unit&id=${primaryUnitId}`
   }
 
   // ── Conformità: stesso scope e stessa definizione live del PDF ───────────
@@ -118,10 +94,9 @@ export default async function FascicoloPage() {
   }
 
   if (primaryUnitId) {
-    // Client: la propria unità + parti condominiali
+    // La propria unità + parti condominiali
     completionsQuery = completionsQuery.or(`unit_id.eq.${primaryUnitId},unit_id.is.null`)
   }
-  // Admin/super_admin: nessun filtro ulteriore (tutte le completions della residenza)
 
   // In parallelo: conformità e completions dipendono solo dal perimetro già
   // risolto sopra, non l'una dall'altra.
