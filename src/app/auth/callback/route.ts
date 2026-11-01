@@ -72,10 +72,11 @@ export async function GET(request: NextRequest) {
         return NextResponse.redirect(`${origin}/auth/login?error=no_access`)
       }
 
-      const hasRole =
-        profile?.builder_id !== null ||
-        profile?.role === 'admin' ||
-        profile?.role === 'super_admin'
+      // builder_id non è un criterio di accesso: activateInvite
+      // (accept-invite.ts:82-85) lo scrive su ogni residente invitato, quindi
+      // lasciava entrare anche chi non ha più un'unità attiva. Il residente
+      // entra solo con un'unità attiva, verificata qui sotto.
+      const hasRole = profile?.role === 'admin' || profile?.role === 'super_admin'
 
       if (!hasRole) {
         const { count } = await supabase
