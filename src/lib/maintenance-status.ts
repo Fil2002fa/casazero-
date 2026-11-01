@@ -36,7 +36,10 @@ export function todayISO(): string {
   return new Date().toISOString().split('T')[0]
 }
 
-export function resolveCompletionMode(i: LiveStatusItem): CompletionMode | null {
+export function resolveCompletionMode(i: {
+  completion_mode: CompletionMode | null
+  maintenance_templates: { completion_mode: CompletionMode | null } | null
+}): CompletionMode | null {
   return i.completion_mode ?? i.maintenance_templates?.completion_mode ?? null
 }
 

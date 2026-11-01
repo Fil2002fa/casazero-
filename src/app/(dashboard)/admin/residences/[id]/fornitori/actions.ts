@@ -7,7 +7,8 @@ import { logActivityEvent } from '@/lib/activity-log'
 import type { CompletionMode } from '@/types/database'
 import { SISTEMI, type Sistema } from '@/lib/document-classification'
 import { nextDueFrom } from '@/lib/maintenance-due'
-import { todayISO } from '@/lib/maintenance-status'
+import { resolveCompletionMode, resolveFrequencyMonths, todayISO } from '@/lib/maintenance-status'
+import { unitNotDelivered } from '@/lib/unit-utils'
 import { ITEM_CONFIG_TEMP_ERROR } from '@/lib/itemConfigMessages'
 
 function modeToPriority(mode: CompletionMode | null): string | null {
@@ -298,11 +299,17 @@ export async function setTemplateActivationForResidence(
   // Inclusione: riattiva le istanze archiviate e ricalcola le scadenze da oggi,
   // per TUTTE le modalità (estensione del guard N1). Il ricalcolo per-riga con
   // fallback freq (item ?? template) non è esprimibile in un singolo UPDATE literal:
-  // si raggruppa per frequenza effettiva (bucket) e si emette un UPDATE per bucket —
+  // si raggruppa per scadenza risultante (bucket) e si emette un UPDATE per bucket —
   // un solo statement nel caso comune (nessun override per-item, es. FV).
+  //
+  // Cancello di consegna (stessa regola di 044 e resolveDueBasis): una voce di
+  // unità non consegnata, non promemoria, torna senza data — il piano dell'unità
+  // parte solo dalla registrazione della consegna. La base NON passa alla data
+  // di consegna per le unità consegnate: resta oggi, altrimenti una voce
+  // re-inclusa potrebbe nascere già scaduta. Le promemoria restano datate.
   const { data: affected, error: fetchError } = await supabase
     .from('maintenance_items')
-    .select('id, frequency_months, maintenance_templates(frequency_months)')
+    .select('id, unit_id, frequency_months, completion_mode, maintenance_templates(frequency_months, completion_mode), units(delivery_date)')
     .eq('template_id', templateId)
     .eq('residence_id', residenceId)
     .eq('activation_status', 'archiviata')
@@ -313,22 +320,38 @@ export async function setTemplateActivationForResidence(
     return { count: 0 }
   }
 
-  const buckets = new Map<number | null, string[]>()
+  const today = todayISO()
+  // Chiave = scadenza da scrivere. 'invariata': frequenza assente, next_due_date
+  // non si tocca (comportamento precedente). 'nessuna': cancello di consegna.
+  const buckets = new Map<string, { nextDue: string | null | undefined; ids: string[] }>()
   for (const row of affected) {
-    const tpl = row.maintenance_templates as unknown as { frequency_months: number } | null
-    const eff = row.frequency_months ?? tpl?.frequency_months ?? null
-    if (!buckets.has(eff)) buckets.set(eff, [])
-    buckets.get(eff)!.push(row.id)
+    const tpl = row.maintenance_templates as unknown as
+      { frequency_months: number; completion_mode: CompletionMode | null } | null
+    const unit = row.units as unknown as { delivery_date: string | null } | null
+    const item = {
+      completion_mode: row.completion_mode as CompletionMode | null,
+      frequency_months: row.frequency_months,
+      maintenance_templates: tpl,
+    }
+    const freq = resolveFrequencyMonths(item)
+    const gated =
+      row.unit_id !== null &&
+      unitNotDelivered(unit?.delivery_date ?? null) &&
+      resolveCompletionMode(item) !== 'promemoria'
+    const nextDue = gated ? null : freq ? nextDueFrom(today, freq) : undefined
+    const key = nextDue === undefined ? 'invariata' : nextDue === null ? 'nessuna' : nextDue
+    if (!buckets.has(key)) buckets.set(key, { nextDue, ids: [] })
+    buckets.get(key)!.ids.push(row.id)
   }
 
   let total = 0
-  for (const [freq, ids] of buckets) {
+  for (const { nextDue, ids } of buckets.values()) {
     const payload: Record<string, unknown> = {
       activation_status: 'inclusa',
       status: 'in_attesa',
     }
-    if (freq) {
-      payload.next_due_date = nextDueFrom(todayISO(), freq)
+    if (nextDue !== undefined) {
+      payload.next_due_date = nextDue
     }
     const { data, error } = await supabase
       .from('maintenance_items')
