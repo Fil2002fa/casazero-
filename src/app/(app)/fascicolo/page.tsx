@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { FileDown } from 'lucide-react'
 import { createServiceClient } from '@/lib/supabase/admin'
 import { requireProfile } from '@/lib/auth'
-import type { MaintenancePriority } from '@/types/database'
+import type { CompletionMode } from '@/types/database'
 import { buttonVariants } from '@/components/ui/Button'
 import {
   isCountable, overdueLive, resolveCompletionMode, todayISO,
@@ -22,8 +22,8 @@ type CompletionRow = {
   unit_id: string | null
   residence_id: string
   maintenance_items: {
-    priority: MaintenancePriority | null
-    maintenance_templates: { title: string; category: string; priority: MaintenancePriority; scope: string } | null
+    completion_mode: CompletionMode | null
+    maintenance_templates: { title: string; category: string; completion_mode: CompletionMode | null; scope: string } | null
   } | null
   attachments: { id: string; file_name: string; storage_path: string; mime_type: string | null }[]
 }
@@ -82,8 +82,8 @@ export default async function FascicoloPage() {
     .select(`
       id, completed_at, performed_by_name, notes, unit_id, residence_id,
       maintenance_items(
-        priority,
-        maintenance_templates(title, category, priority, scope)
+        completion_mode,
+        maintenance_templates(title, category, completion_mode, scope)
       ),
       attachments(id, file_name, storage_path, mime_type)
     `)
@@ -121,14 +121,16 @@ export default async function FascicoloPage() {
   // Safari e un mismatch di hydration.
   const entries: FascicoloEntry[] = completions.map(c => {
     const tpl = c.maintenance_items?.maintenance_templates
-    const effectivePriority = c.maintenance_items?.priority ?? tpl?.priority ?? 'N2'
+    // Colore del punto per modalità (voce ?? template), come dotColor nel PDF
+    // (ReportDocument.tsx): residente blu, amministratore verde, altro neutro.
+    const mode = c.maintenance_items?.completion_mode ?? tpl?.completion_mode ?? null
     return {
       id: c.id,
       title: tpl?.title ?? 'Intervento',
       category: tpl?.category ?? null,
       isCondominium: c.unit_id === null,
-      dotClass: effectivePriority === 'N3' ? 'bg-brand-medium'
-        : effectivePriority === 'N2' ? 'bg-semantic-blue'
+      dotClass: mode === 'amministratore' ? 'bg-brand-medium'
+        : mode === 'residente' ? 'bg-semantic-blue'
         : 'bg-text-secondary',
       dateStr: new Date(c.completed_at).toLocaleDateString('it-IT', {
         day: 'numeric', month: 'long', year: 'numeric',
