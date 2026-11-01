@@ -63,14 +63,23 @@ Non rimuovere `priority` né il dual-write finché quelle viste non migrano.
    Mai dichiarare build pulita senza mostrarla. Diff mostrato prima di committare.
 7. **Messaggi di commit:** MAI here-string PowerShell con virgolette doppie. Usare riga
    singola senza caratteri speciali, oppure `git commit -F <file>` con messaggio su file.
-8. **Migrazioni e RLS: solo anteprima.** Mostrare lo SQL e fermarsi — le applica Filippo
-   a mano nel SQL Editor di Supabase. Mai auto-eseguire DDL o scritture sul DB.
-   SQL sempre incollato per intero nella risposta, oltre che su file.
-   Se un probe di verifica pianificato non è eseguibile per un limite d'ambiente
-   (permessi del SQL Editor, protezioni di sistema), il footer di verifica riporta
-   il motivo esatto e cosa lo ha sostituito — mai un esito positivo non verificato.
-9. **Fine sessione:** generare l'handoff con `/handoff`. Non modificare mai questo file
+8. **Fine sessione:** generare l'handoff con `/handoff`. Non modificare mai questo file
    (CLAUDE.md) direttamente: proporre i cambiamenti nella sezione "Leggi emerse" dell'handoff.
+
+## Migrazioni e database
+
+- Claude Code può applicare migrazioni direttamente sul progetto Supabase CasaZero tramite il server MCP Supabase.
+- Prima di ogni migrazione mostra il SQL e cosa cambia.
+- SQL sempre incollato per intero nella risposta, oltre che su file.
+- Applica senza chiedere solo le migrazioni additive: nuove tabelle, nuove colonne, nuovi indici.
+- Operazioni distruttive (DROP, DELETE di massa, rinomina di colonne con dati, ALTER TYPE su dati esistenti): fermati e chiedi conferma esplicita a Filippo.
+- Modifiche RLS che allargano l'accesso (nuove policy, policy più permissive): fermati e chiedi conferma esplicita a Filippo.
+- Manutenzione non distruttiva (per esempio ANALYZE) è permessa senza conferma.
+- Dopo ogni migrazione esegui le verifiche e riporta PASS o FAIL.
+- Se un probe di verifica pianificato non è eseguibile per un limite d'ambiente (permessi del SQL Editor, protezioni di sistema), il footer di verifica riporta il motivo esatto e cosa lo ha sostituito — mai un esito positivo non verificato.
+- Ogni migrazione aggiunge una riga a `docs/migrations.log` (creato alla prima migrazione) (data, file, esito).
+- Le verifiche di sola lettura usano solo SELECT.
+- `completions` resta immutabile e off-limits.
 
 ## Regole di codice ricorrenti (bug class note)
 
