@@ -41,43 +41,39 @@ export default async function FascicoloPage() {
   // in parallelo e la pagina usa il service client.
   if (profile.role !== 'client') redirect('/admin')
 
-  let reportHref: string | null = null
-  let primaryResidenceId: string | null = null
-  let primaryUnitId: string | null = null
-
-  const { data: mem } = await adminClient
+  const { data: mem, error: memError } = await adminClient
     .from('unit_members')
     .select('unit_id, units(id, residence_id)')
     .eq('profile_id', profile.id)
     .is('ended_at', null)
     .limit(1)
-    .single()
-  const unitRow = mem?.units as unknown as { id: string; residence_id: string } | null
-  if (unitRow) {
-    primaryUnitId      = unitRow.id
-    primaryResidenceId = unitRow.residence_id
-    reportHref = `/api/report?scope=unit&id=${primaryUnitId}`
+    .maybeSingle()
+  if (memError) {
+    console.error('[fascicolo] lettura unit_members fallita', { profileId: profile.id, memError })
+    return <FascicoloMessage text="Errore tecnico nel caricamento del fascicolo, riprova." />
   }
+  const unitRow = mem?.units as unknown as { id: string; residence_id: string } | null
+  // Senza unità attiva nessuna query: col service client e senza filtro si
+  // leggerebbero voci e completamenti di tutte le residenze.
+  if (!unitRow) return <FascicoloMessage text="Nessuna unità collegata al tuo account." />
+  const primaryUnitId      = unitRow.id
+  const primaryResidenceId = unitRow.residence_id
+  const reportHref = `/api/report?scope=unit&id=${primaryUnitId}`
 
   // ── Conformità: stesso scope e stessa definizione live del PDF ───────────
-  let itemsQuery = adminClient
+  const itemsQuery = adminClient
     .from('maintenance_items')
     .select(`${LIVE_STATUS_FIELDS}, maintenance_templates!inner(${LIVE_STATUS_TEMPLATE_FIELDS})`)
     .neq('status', 'completata')
-
-  if (primaryResidenceId) {
-    itemsQuery = itemsQuery.eq('residence_id', primaryResidenceId)
-    if (primaryUnitId) {
-      itemsQuery = itemsQuery.or(`unit_id.eq.${primaryUnitId},unit_id.is.null`)
-    }
-  }
+    .eq('residence_id', primaryResidenceId)
+    .or(`unit_id.eq.${primaryUnitId},unit_id.is.null`)
 
   // ── Completions ──────────────────────────────────────────────────────────
   // Usa adminClient per evitare dipendenza da RLS e applicare esplicitamente
   // lo stesso perimetro usato per conformità e PDF (residence_id + unit_id).
   // Si carica sempre lo scope "Tutti": Unità e Condominio sono una partizione
   // su unit_id e li filtra FascicoloList in memoria, senza tornare al server.
-  let completionsQuery = adminClient
+  const completionsQuery = adminClient
     .from('completions')
     .select(`
       id, completed_at, performed_by_name, notes, unit_id, residence_id,
@@ -87,23 +83,28 @@ export default async function FascicoloPage() {
       ),
       attachments(id, file_name, storage_path, mime_type)
     `)
-    .order('completed_at', { ascending: false })
-
-  if (primaryResidenceId) {
-    completionsQuery = completionsQuery.eq('residence_id', primaryResidenceId)
-  }
-
-  if (primaryUnitId) {
+    .eq('residence_id', primaryResidenceId)
     // La propria unità + parti condominiali
-    completionsQuery = completionsQuery.or(`unit_id.eq.${primaryUnitId},unit_id.is.null`)
-  }
+    .or(`unit_id.eq.${primaryUnitId},unit_id.is.null`)
+    .order('completed_at', { ascending: false })
 
   // In parallelo: conformità e completions dipendono solo dal perimetro già
   // risolto sopra, non l'una dall'altra.
-  const [{ data: rawItems }, { data: rawCompletions }] = await Promise.all([
+  const [itemsRes, completionsRes] = await Promise.all([
     itemsQuery,
     completionsQuery,
   ])
+  if (itemsRes.error || completionsRes.error) {
+    console.error('[fascicolo] lettura voci/completamenti fallita', {
+      residenceId: primaryResidenceId,
+      unitId: primaryUnitId,
+      itemsError: itemsRes.error,
+      completionsError: completionsRes.error,
+    })
+    return <FascicoloMessage text="Errore tecnico nel caricamento del fascicolo, riprova." />
+  }
+  const rawItems = itemsRes.data
+  const rawCompletions = completionsRes.data
 
   const allItems = (rawItems ?? []) as unknown as LiveStatusItem[]
   const counted = allItems.filter(i => isCountable(i) && resolveCompletionMode(i) !== 'promemoria')
@@ -186,6 +187,22 @@ export default async function FascicoloPage() {
       <p className="text-xs text-text-secondary text-center pb-2">
         Il fascicolo è un registro permanente e non modificabile.
       </p>
+    </div>
+  )
+}
+
+// Stato senza dati (nessuna unità attiva o errore di lettura): stessa testata
+// della pagina, nessun dato mostrato.
+function FascicoloMessage({ text }: { text: string }) {
+  return (
+    <div className="p-4 space-y-6 pb-safe">
+      <header>
+        <h1 className="font-serif text-[22px] font-semibold text-text-primary">Fascicolo</h1>
+        <p className="text-sm text-text-secondary mt-0.5">Registro permanente degli interventi</p>
+      </header>
+      <div className="bg-surface rounded-xl border border-border p-4">
+        <p className="text-sm text-text-secondary">{text}</p>
+      </div>
     </div>
   )
 }
