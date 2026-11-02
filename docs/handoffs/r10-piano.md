@@ -53,3 +53,13 @@
 - Sessione 2 (Sonnet): commit 4, 5, 7.
 - Sessione 3 (Sonnet): commit 6.
 - Per ogni commit: diff + npm run verify completo, ok di Filippo, commit, hash. Dati di prova solo su TEST wizard A (f949ac0f).
+
+## Stato 2/11
+
+- **Commit fatti (sessione 1):**
+  - commit 1, migrazione 048 + tipi + `docs/migrations.log`: `8c9c811` (048 applicata via MCP il 2026-11-02, V1-V5 PASS);
+  - piano R10 (questo file): `ef03383`;
+  - commit 2, `DeadlinesSection` da `currentExtraction`: `8152915`;
+  - commit 3, merge in `src/lib/document-overrides.ts` + `scripts/verify-document-overrides.mjs` (64 casi): `b54c82b`. Select provata dal vivo su TEST wizard A: pagina Documenti 200 con f949ac0f, export Excel 200, nessun errore in console o nel log del server.
+- **Decisione:** "Correggi dati" si mostra solo con un'estrazione corrente. Le correzioni sopra un documento senza estrazione corrente sono in backlog come **R10b**.
+- **Prossimo:** commit 4 (server action `saveDocumentFieldOverride` e `clearDocumentFieldOverride`; validazione con `normalizeOverrideInput`).
