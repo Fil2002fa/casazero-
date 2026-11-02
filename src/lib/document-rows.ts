@@ -28,6 +28,7 @@ import {
   type ApeFields,
   type PolizzaFields,
 } from './document-extraction'
+import { effectiveExtraction, effectiveInstaller, type OverrideRow } from './document-overrides'
 
 // Sottoinsieme letto di extracted_metadata (jsonb): la proposta AI completa,
 // oppure una nota di skip. Tutti i campi opzionali — si legge in difesa.
@@ -71,6 +72,10 @@ export type DocRow = {
   // estrarre". Distinta da extracted_metadata, che è il verbale della
   // classificazione.
   extraction: DocumentExtractionRow | null
+  // Correzioni manuali (048), di qualunque for_doc_type: quali valgono lo
+  // decide document-overrides.ts. Si leggono SOLO attraverso
+  // currentExtraction e documentFacts, mai direttamente.
+  overrides: OverrideRow[]
 }
 
 export type UnitRow = {
@@ -82,8 +87,11 @@ export type UnitRow = {
 // o se la riga è di un doc_type precedente (riclassificazione umana).
 // Unica porta d'accesso ai dati estratti in questa pagina: nessun
 // componente legge doc.extraction direttamente senza passare da qui.
+// Restituisce l'estrazione EFFETTIVA: le correzioni manuali in vigore
+// sopra quella AI (R10, D4); senza correzioni è la riga AI così com'è.
 export function currentExtraction(doc: DocRow): DocumentExtractionRow | null {
-  return doc.extraction && extractionIsCurrent(doc, doc.extraction) ? doc.extraction : null
+  const ext = doc.extraction && extractionIsCurrent(doc, doc.extraction) ? doc.extraction : null
+  return effectiveExtraction(doc.doc_type, ext, doc.overrides)
 }
 
 // Data mostrata in riga: la data del documento estratta, altrimenti quella
@@ -126,10 +134,12 @@ function nonEmpty(value: unknown): string | null {
 }
 
 export function documentFacts(doc: DocRow): DocumentFacts {
-  const isDico = doc.doc_type === 'dich_conformita_dm37'
+  // Installatore: verbale di classificazione con sopra le correzioni in
+  // vigore, solo per la DiCo (null per ogni altro tipo).
+  const installer = effectiveInstaller(doc.doc_type, doc.extracted_metadata, doc.overrides)
   const facts: DocumentFacts = {
-    installatore: isDico ? nonEmpty(doc.extracted_metadata?.ragione_sociale_installatore) : null,
-    partitaIva: isDico ? nonEmpty(doc.extracted_metadata?.partita_iva_installatore) : null,
+    installatore: installer.ragioneSociale,
+    partitaIva: installer.partitaIva,
     ambito: null,
     unitaRiferimento: null,
     oggetto: null,

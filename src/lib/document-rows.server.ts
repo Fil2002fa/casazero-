@@ -17,6 +17,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { normalizeEmbed } from '@/lib/postgrest-embed'
 import type { DocumentExtractionRow } from '@/lib/document-extraction'
 import type { DocRow, UnitRow } from '@/lib/document-rows'
+import type { OverrideRow } from '@/lib/document-overrides'
 
 export type ResidenceDocumentRows = {
   docs: DocRow[]
@@ -31,7 +32,7 @@ export async function loadResidenceDocumentRows(
   const [{ data: rawDocs, error: docsError }, { data: rawUnits, error: unitsError }] = await Promise.all([
     supabase
       .from('documents')
-      .select('id, title, category, file_name, storage_path, file_date, unit_id, created_at, classification_status, doc_type, sistema, classification_confidence, extracted_metadata, document_extractions(for_doc_type, status, document_date, ambito, unita_riferimento, valid_until, fields)')
+      .select('id, title, category, file_name, storage_path, file_date, unit_id, created_at, classification_status, doc_type, sistema, classification_confidence, extracted_metadata, document_extractions(for_doc_type, status, document_date, ambito, unita_riferimento, valid_until, fields), document_field_overrides(for_doc_type, field_key, value, set_by, set_at)')
       .eq('residence_id', residenceId)
       .order('created_at', { ascending: false }),
     supabase
@@ -49,10 +50,12 @@ export async function loadResidenceDocumentRows(
   // L'embed to-one può tornare oggetto o array di un elemento (bug class
   // registrata, vedi postgrest-embed.ts): normalizzato qui, una volta.
   const docs: DocRow[] = ((rawDocs ?? []) as Array<Record<string, unknown>>).map(row => {
-    const { document_extractions, ...rest } = row
+    const { document_extractions, document_field_overrides, ...rest } = row
     return {
-      ...(rest as Omit<DocRow, 'extraction'>),
+      ...(rest as Omit<DocRow, 'extraction' | 'overrides'>),
       extraction: normalizeEmbed<DocumentExtractionRow>(document_extractions),
+      // Embed to-many (048, PK su più righe per documento): sempre array.
+      overrides: Array.isArray(document_field_overrides) ? (document_field_overrides as OverrideRow[]) : [],
     }
   })
 
