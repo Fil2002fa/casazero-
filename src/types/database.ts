@@ -194,3 +194,24 @@ export interface ActivityEvent {
   payload: Record<string, unknown>
   created_at: string
 }
+
+/**
+ * Correzione manuale di un campo estratto (048_document_field_overrides.sql).
+ * Stato corrente, non storico: una riga = la correzione in vigore per quel
+ * campo; "Ripristina valore AI" è una DELETE.
+ *
+ * Vale solo se `for_doc_type` coincide con il doc_type attuale del documento
+ * (stessa regola di attualità di document_extractions). `field_key` non ha
+ * CHECK nel DB: le chiavi ammesse per tipo vivono in src/lib/document-overrides.ts.
+ * `value` NULL = l'utente dichiara che il documento non riporta il campo.
+ *
+ * Scrive solo il service role dalla server action: authenticated ha solo SELECT.
+ */
+export interface DocumentFieldOverride {
+  document_id: string
+  for_doc_type: string
+  field_key: string
+  value: string | null
+  set_by: string
+  set_at: string
+}

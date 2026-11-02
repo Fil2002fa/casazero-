@@ -1,0 +1,6 @@
+# CasaZero — registro delle migrazioni applicate
+# Una riga per migrazione: data | file | esito (PASS/FAIL e verifiche).
+# Le migrazioni 001-047 sono anteriori a questo registro: la loro
+# ricostruzione è un lavoro separato, non ancora fatto.
+
+2026-11-02 | 048_document_field_overrides.sql | PASS (V1 colonne, V2 vincoli, V3 RLS e policy SELECT unica, V4 grants authenticated SELECT e anon nessuno, V5 0 righe)
