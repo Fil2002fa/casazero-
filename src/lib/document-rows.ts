@@ -28,7 +28,17 @@ import {
   type ApeFields,
   type PolizzaFields,
 } from './document-extraction'
-import { effectiveExtraction, effectiveInstaller, type OverrideRow } from './document-overrides'
+import {
+  buildCorrectionFields,
+  currentOverrides,
+  effectiveExtraction,
+  effectiveInstaller,
+  hasCurrentOverrides,
+  overridableKeys,
+  overridesLostOnTypeChange,
+  type CorrectionField,
+  type OverrideRow,
+} from './document-overrides'
 
 // Sottoinsieme letto di extracted_metadata (jsonb): la proposta AI completa,
 // oppure una nota di skip. Tutti i campi opzionali — si legge in difesa.
@@ -92,6 +102,38 @@ export type UnitRow = {
 export function currentExtraction(doc: DocRow): DocumentExtractionRow | null {
   const ext = doc.extraction && extractionIsCurrent(doc, doc.extraction) ? doc.extraction : null
   return effectiveExtraction(doc.doc_type, ext, doc.overrides)
+}
+
+// --- Correzioni manuali (R10): unico punto in cui la UI le legge ------------
+// Nessun componente legge doc.overrides, doc.extraction o extracted_metadata
+// per mostrare o contare correzioni: passa da queste funzioni.
+
+// "Correggi dati" si offre solo con un'estrazione corrente (decisione 2/11,
+// R10b in backlog) e per un tipo con campi correggibili (non 'altro').
+export function canCorrectFields(doc: DocRow): boolean {
+  return currentExtraction(doc) !== null && overridableKeys(doc.doc_type).length > 0
+}
+
+// Campi del pannello, con valore AI come riferimento. La riga AI è quella
+// corrente, NON quella effettiva: serve proprio a mostrare cosa direbbe l'AI.
+export function correctionFields(doc: DocRow): CorrectionField[] {
+  const ai = doc.extraction && extractionIsCurrent(doc, doc.extraction) ? doc.extraction : null
+  return buildCorrectionFields(doc.doc_type, ai, doc.extracted_metadata, doc.overrides)
+}
+
+// Etichetta discreta "Dati corretti a mano" in riga.
+export function hasCorrections(doc: DocRow): boolean {
+  return hasCurrentOverrides(doc.doc_type, doc.overrides)
+}
+
+// Avviso di riclassificazione (D6): quante correzioni smetterebbero di valere.
+export function correctionsLostOnTypeChange(doc: DocRow, newType: string | null): number {
+  return overridesLostOnTypeChange(doc.doc_type, newType, doc.overrides)
+}
+
+// Autori delle correzioni in vigore, per risolvere i nomi nella pagina.
+export function correctionAuthorIds(docs: readonly DocRow[]): string[] {
+  return [...new Set(docs.flatMap(d => currentOverrides(d.doc_type, d.overrides).map(o => o.set_by)))]
 }
 
 // Data mostrata in riga: la data del documento estratta, altrimenti quella

@@ -76,7 +76,7 @@ export function overrideRequiresExtraction(key: string): boolean {
 // Tipo di valore per chiave e normalizzazione
 // ------------------------------------------------------------
 
-type FieldKind = 'date' | 'int' | 'text' | 'ambito' | 'classe' | 'vat'
+export type FieldKind = 'date' | 'int' | 'text' | 'ambito' | 'classe' | 'vat'
 
 const FIELD_KIND: Record<string, FieldKind> = {
   document_date: 'date',
@@ -97,7 +97,27 @@ const FIELD_KIND: Record<string, FieldKind> = {
   scadenza: 'date',
 }
 
-const MAX_TEXT_LENGTH = 300
+/** Etichette del pannello "Correggi dati". */
+const FIELD_LABELS: Record<string, string> = {
+  document_date: 'Data del documento',
+  ambito: 'Ambito',
+  unita_riferimento: 'Unità di riferimento',
+  ragione_sociale_installatore: 'Impresa installatrice',
+  partita_iva_installatore: 'Partita IVA dell’impresa',
+  inizio: 'Inizio della garanzia',
+  durata_anni: 'Durata (anni)',
+  oggetto: 'Oggetto',
+  rilasciata_da: 'Rilasciata da',
+  classe_energetica: 'Classe energetica',
+  valida_fino_al: 'Valida fino al',
+  compagnia: 'Compagnia',
+  numero_polizza: 'Numero polizza',
+  decorrenza: 'Decorrenza',
+  evento_decorrenza: 'Evento di decorrenza',
+  scadenza: 'Scadenza',
+}
+
+export const MAX_TEXT_LENGTH = 300
 
 export type NormalizedOverride = { value: string | null } | { error: string }
 
@@ -276,4 +296,80 @@ export function fieldProvenance(
 /** Almeno una correzione in vigore: etichetta "Dati corretti a mano" in riga. */
 export function hasCurrentOverrides(docType: string | null, overrides: readonly OverrideRow[] | null | undefined): boolean {
   return currentOverrides(docType, overrides).length > 0
+}
+
+// ------------------------------------------------------------
+// Campi del pannello "Correggi dati"
+// ------------------------------------------------------------
+
+/**
+ * Un campo correggibile come lo mostra il pannello: valore AI (riferimento),
+ * valore effettivo (quello che il pannello precompila) e provenienza. I
+ * valori sono testo pronto da mettere in un input: date ISO, interi come
+ * stringa, ambito e classe come codice. null = non riportato.
+ */
+export type CorrectionField = {
+  key: string
+  label: string
+  kind: FieldKind
+  ai: string | null
+  effective: string | null
+  provenance: FieldProvenance
+}
+
+function fieldText(
+  key: string,
+  extraction: DocumentExtractionRow | null,
+  installer: EffectiveInstaller,
+): string | null {
+  if (key === 'ragione_sociale_installatore') return installer.ragioneSociale
+  if (key === 'partita_iva_installatore') return installer.partitaIva
+  if (!extraction) return null
+  let v: unknown
+  if (key === 'document_date') v = extraction.document_date
+  else if (key === 'ambito') v = extraction.ambito
+  else if (key === 'unita_riferimento') v = extraction.unita_riferimento
+  else v = extraction.fields[key]
+  if (typeof v === 'number') return String(v)
+  return typeof v === 'string' && v.trim() !== '' ? v : null
+}
+
+/**
+ * Campi correggibili per il doc_type attuale, nell'ordine di overridableKeys.
+ * `aiExtraction` è la riga AI già filtrata con extractionIsCurrent (null se
+ * non c'è); `metadata` è il verbale di classificazione (installatore DiCo).
+ * Fonte unica del pannello: il componente non legge mai estrazione, verbale
+ * o correzioni per conto suo.
+ */
+export function buildCorrectionFields(
+  docType: string | null,
+  aiExtraction: DocumentExtractionRow | null,
+  metadata: { ragione_sociale_installatore?: string | null; partita_iva_installatore?: string | null } | null,
+  overrides: readonly OverrideRow[] | null | undefined,
+): CorrectionField[] {
+  const aiInstaller = effectiveInstaller(docType, metadata, [])
+  const effInstaller = effectiveInstaller(docType, metadata, overrides)
+  const effExtraction = effectiveExtraction(docType, aiExtraction, overrides)
+  const provenance = fieldProvenance(docType, overrides)
+  return overridableKeys(docType).map(key => ({
+    key,
+    label: FIELD_LABELS[key] ?? key,
+    kind: FIELD_KIND[key],
+    ai: fieldText(key, aiExtraction, aiInstaller),
+    effective: fieldText(key, effExtraction, effInstaller),
+    provenance: provenance[key],
+  }))
+}
+
+/**
+ * Correzioni in vigore che smetterebbero di applicarsi se il documento
+ * passasse a `newType` (D6): restano nel DB legate al tipo attuale e
+ * tornano attive se si torna a quel tipo. 0 se il tipo non cambia.
+ */
+export function overridesLostOnTypeChange(
+  docType: string | null,
+  newType: string | null,
+  overrides: readonly OverrideRow[] | null | undefined,
+): number {
+  return newType === docType ? 0 : currentOverrides(docType, overrides).length
 }

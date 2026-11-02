@@ -8,6 +8,7 @@ import { requireRole } from '@/lib/auth'
 import { computeResidenceChecklist } from '@/lib/document-checklist'
 import { todayISO } from '@/lib/maintenance-status'
 import { loadResidenceDocumentRows } from '@/lib/document-rows.server'
+import { correctionAuthorIds } from '@/lib/document-rows'
 import { DocumentiClient } from './DocumentiClient'
 import type {
   SupplierProposalCandidate,
@@ -64,6 +65,24 @@ export default async function ResidenceDocumentiPage({
       .in('id', markedByIds)
     for (const m of markers ?? []) {
       markedByNames[m.id as string] = (m.full_name as string | null) ?? null
+    }
+  }
+
+  // Nomi di chi ha corretto a mano i dati estratti (048): solo gli autori delle
+  // correzioni in vigore, stesso schema di markedByNames. Un errore tecnico
+  // non rompe la pagina: l'etichetta "Modificato a mano" esce senza il nome.
+  const correctedByIds = correctionAuthorIds(docs)
+  const correctedByNames: Record<string, string | null> = {}
+  if (correctedByIds.length > 0) {
+    const { data: authors, error: authorsError } = await supabase
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', correctedByIds)
+    if (authorsError) {
+      console.error('[documenti] lettura autori delle correzioni fallita', authorsError)
+    }
+    for (const a of authors ?? []) {
+      correctedByNames[a.id as string] = (a.full_name as string | null) ?? null
     }
   }
 
@@ -152,6 +171,7 @@ export default async function ResidenceDocumentiPage({
         checklist={checklist}
         today={todayISO()}
         markedByNames={markedByNames}
+        correctedByNames={correctedByNames}
         canManageChecklist={profile.role === 'super_admin'}
         canLinkSuppliers={canLinkSuppliers}
         residenceName={residence.name}

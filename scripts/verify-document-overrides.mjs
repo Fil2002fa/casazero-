@@ -42,7 +42,7 @@ try {
 }
 
 const { overridableKeys, overrideRequiresExtraction, normalizeOverrideInput, effectiveExtraction, fieldProvenance, hasCurrentOverrides } = ov
-const { currentExtraction, documentFacts, extractionFacts } = rows
+const { currentExtraction, documentFacts, extractionFacts, canCorrectFields, correctionFields, hasCorrections, correctionsLostOnTypeChange, correctionAuthorIds } = rows
 
 let fallimenti = 0
 let eseguiti = 0
@@ -270,6 +270,61 @@ for (const k of ['document_date', 'ambito', 'unita_riferimento', 'inizio', 'dura
   }
   check('estrazione non richiesta: solo le due chiavi installatore', [...senza].sort(),
     ['partita_iva_installatore', 'ragione_sociale_installatore'])
+}
+
+// --- 13. Pannello "Correggi dati": campi, gate, avviso, autori ---------------
+{
+  const g = garanzia([o('garanzia', 'oggetto', 'Caldaia a condensazione'), o('ape', 'classe_energetica', 'A1')])
+  const campi = correctionFields(g)
+  const per = k => campi.find(c => c.key === k)
+  check('pannello: chiavi in ordine di overridableKeys', campi.map(c => c.key), overridableKeys('garanzia'))
+  check('pannello: oggetto corretto, AI come riferimento', [per('oggetto').ai, per('oggetto').effective, per('oggetto').provenance.source],
+    ['Caldaia', 'Caldaia a condensazione', 'manuale'])
+  check('pannello: provenienza con chi e quando', per('oggetto').provenance,
+    { source: 'manuale', setBy: 'u-admin', setAt: '2026-11-02T10:00:00+00:00' })
+  check('pannello: campo non corretto = AI', [per('rilasciata_da').ai, per('rilasciata_da').effective, per('rilasciata_da').provenance.source],
+    ['Rossi', 'Rossi', 'ai'])
+  check('pannello: durata intera come testo', [per('durata_anni').ai, per('durata_anni').kind], ['2', 'int'])
+  check('pannello: data ISO e tipo', [per('inizio').effective, per('inizio').kind], ['2020-01-01', 'date'])
+  check('pannello: override di altro tipo non compare', campi.some(c => c.key === 'classe_energetica'), false)
+
+  // value null scelto a mano: effettivo null, AI resta come riferimento.
+  const nullo = correctionFields(garanzia([o('garanzia', 'oggetto', null)])).find(c => c.key === 'oggetto')
+  check('pannello: non riportato a mano', [nullo.ai, nullo.effective, nullo.provenance.source], ['Caldaia', null, 'manuale'])
+
+  // DiCo come f949ac0f: installatore dal verbale (vuoto) + correzione.
+  const dico = doc({
+    doc_type: 'dich_conformita_dm37',
+    extraction: ext({ for_doc_type: 'dich_conformita_dm37' }),
+    extracted_metadata: { ragione_sociale_installatore: null, partita_iva_installatore: null },
+    overrides: [o('dich_conformita_dm37', 'ragione_sociale_installatore', 'Elettrica Rossi Srl'),
+                o('dich_conformita_dm37', 'partita_iva_installatore', '01234567891')],
+  })
+  const cd = correctionFields(dico)
+  check('pannello DiCo: installatore AI vuoto, effettivo corretto',
+    cd.filter(c => c.key.endsWith('_installatore')).map(c => [c.key, c.ai, c.effective]),
+    [['ragione_sociale_installatore', null, 'Elettrica Rossi Srl'], ['partita_iva_installatore', null, '01234567891']])
+
+  // Gate "Correggi dati": estrazione corrente + tipo con campi correggibili.
+  check('gate: garanzia con estrazione corrente', canCorrectFields(garanzia([])), true)
+  check('gate: nessuna estrazione', canCorrectFields(doc({ doc_type: 'garanzia' })), false)
+  check('gate: estrazione di un altro tipo', canCorrectFields(doc({ doc_type: 'ape', extraction: garanziaExt })), false)
+  check('gate: documento altro', canCorrectFields(doc({ doc_type: 'altro', extraction: ext({ for_doc_type: 'altro' }) })), false)
+  check('gate: senza tipo', canCorrectFields(doc({ extraction: garanziaExt })), false)
+  check('gate: estrazione fallita ammessa', canCorrectFields(doc({ doc_type: 'garanzia', extraction: { ...garanziaExt, status: 'fallita' } })), true)
+
+  // Etichetta in riga e avviso di riclassificazione (D6).
+  check('etichetta: nessuna correzione', hasCorrections(garanzia([])), false)
+  check('etichetta: correzione attuale', hasCorrections(g), true)
+  check('etichetta: solo correzione di altro tipo', hasCorrections(garanzia([o('ape', 'classe_energetica', 'A1')])), false)
+  check('avviso: tipo diverso conta le attuali', correctionsLostOnTypeChange(g, 'ape'), 1)
+  check('avviso: stesso tipo = 0', correctionsLostOnTypeChange(g, 'garanzia'), 0)
+  check('avviso: nessuna correzione = 0', correctionsLostOnTypeChange(garanzia([]), 'ape'), 0)
+
+  // Autori: solo correzioni in vigore, senza duplicati.
+  const due = garanzia([o('garanzia', 'oggetto', 'X'), { ...o('garanzia', 'rilasciata_da', 'Y'), set_by: 'u-2' },
+    { ...o('ape', 'classe_energetica', 'A1'), set_by: 'u-3' }])
+  check('autori: solo correzioni in vigore, unici', correctionAuthorIds([due, g]), ['u-admin', 'u-2'])
 }
 
 // --- esito -------------------------------------------------------------------

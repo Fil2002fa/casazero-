@@ -11,6 +11,7 @@ import { pluralize } from '@/lib/pluralize'
 import { formatDateIT } from '@/lib/formatDate'
 import { humanizeDocumentTitle } from '@/lib/documentTitle'
 import { DateField } from '@/components/DateField'
+import { CorrectDataPanel } from './CorrectDataPanel'
 import {
   DOC_TYPES,
   DOC_TYPE_LABELS,
@@ -40,6 +41,9 @@ import {
   displayDate,
   hasValidity,
   extractionFacts,
+  canCorrectFields,
+  hasCorrections,
+  correctionsLostOnTypeChange,
   validitySubject,
   type DocRow,
   type UnitRow,
@@ -160,6 +164,9 @@ interface Props {
   // id profilo → full_name (028), solo i marcatori realmente presenti tra
   // le eccezioni di questa residenza. null = profilo senza full_name.
   markedByNames: Record<string, string | null>
+  // id profilo → full_name di chi ha corretto a mano i dati estratti (048),
+  // solo gli autori delle correzioni in vigore. Stesso schema di markedByNames.
+  correctedByNames: Record<string, string | null>
   // Eccezioni checklist (segna/annulla non applicabile) riservate al
   // costruttore: obbligatoria, senza default, così un chiamante che
   // dimentica di passarla fallisce in build invece di togliere in silenzio
@@ -197,7 +204,7 @@ type SupplierContext = {
 }
 
 export function DocumentiClient({
-  residenceId, docs, units, checklist, today, markedByNames, canManageChecklist,
+  residenceId, docs, units, checklist, today, markedByNames, correctedByNames, canManageChecklist,
   canLinkSuppliers, suppliers, supplierInstallations, residenceName,
 }: Props) {
   const supplierContext: SupplierContext | null = canLinkSuppliers
@@ -877,7 +884,7 @@ export function DocumentiClient({
                 Nessun documento di residenza{isFiltered ? ' per questo filtro' : ''}.
               </p>
             ) : (
-              residenceDocs.map(doc => <DocCard key={doc.id} doc={doc} supplierContext={supplierContext} onClassificationConfirmed={handleClassificationConfirmed} />)
+              residenceDocs.map(doc => <DocCard key={doc.id} doc={doc} supplierContext={supplierContext} correctedByNames={correctedByNames} onClassificationConfirmed={handleClassificationConfirmed} />)
             )}
           </section>
 
@@ -890,7 +897,7 @@ export function DocumentiClient({
                   <h3 className="text-sm font-medium text-text-primary">
                     {unitMap.get(unitId)?.label ?? 'Unità'}
                   </h3>
-                  {unitDocs.map(doc => <DocCard key={doc.id} doc={doc} supplierContext={supplierContext} onClassificationConfirmed={handleClassificationConfirmed} />)}
+                  {unitDocs.map(doc => <DocCard key={doc.id} doc={doc} supplierContext={supplierContext} correctedByNames={correctedByNames} onClassificationConfirmed={handleClassificationConfirmed} />)}
                 </div>
               ))}
             </section>
@@ -1347,12 +1354,18 @@ function searchText(doc: DocRow): string {
   return [doc.title, humanizeDocumentTitle(doc.title), doc.file_name, ...extractionFacts(doc)].join(' ').toLowerCase()
 }
 
-function DocCard({ doc, supplierContext, onClassificationConfirmed }: {
+function DocCard({ doc, supplierContext, correctedByNames, onClassificationConfirmed }: {
   doc: DocRow
   supplierContext: SupplierContext | null
+  correctedByNames: Record<string, string | null>
   onClassificationConfirmed: ClassificationConfirmedHandler
 }) {
-  const [reviewOpen, setReviewOpen] = useState(false)
+  // Un solo pannello aperto per volta: revisione della classificazione oppure
+  // correzione dei dati estratti.
+  const [openPanel, setOpenPanel] = useState<'review' | 'correct' | null>(null)
+  const reviewOpen = openPanel === 'review'
+  const correctOpen = openPanel === 'correct'
+  const canCorrect = canCorrectFields(doc)
   const formattedDate = formatDateIT(displayDate(doc))
   const facts = extractionFacts(doc)
   // 'fallita' è un errore di merito dell'AI sul documento, non un errore di
@@ -1388,6 +1401,11 @@ function DocCard({ doc, supplierContext, onClassificationConfirmed }: {
               {CAT_LABELS[doc.category]}
             </span>
             <ClassificationBadge doc={doc} />
+            {hasCorrections(doc) && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-neutral-600/7 text-neutral-600 font-medium">
+                Dati corretti a mano
+              </span>
+            )}
           </div>
         </div>
         <a
@@ -1399,26 +1417,43 @@ function DocCard({ doc, supplierContext, onClassificationConfirmed }: {
         </a>
       </div>
 
-      {canReview && (
+      {(canReview || canCorrect) && (
         <div className="border-t border-border px-4 py-2">
-          <button
-            onClick={() => setReviewOpen(v => !v)}
-            className="inline-flex items-center gap-1.5 h-9 max-lg:h-11 px-3 rounded-lg border border-border text-xs font-medium text-brand-medium hover:bg-background transition-colors"
-          >
-            <ChevronDown
-              className={`w-3.5 h-3.5 transition-transform ${reviewOpen ? 'rotate-180' : ''}`}
-              strokeWidth={1.8}
-            />
-            {reviewOpen ? 'Chiudi revisione' : 'Rivedi classificazione'}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            {canReview && (
+              <button
+                onClick={() => setOpenPanel(p => (p === 'review' ? null : 'review'))}
+                className="inline-flex items-center gap-1.5 h-9 max-lg:h-11 px-3 rounded-lg border border-border text-xs font-medium text-brand-medium hover:bg-background transition-colors"
+              >
+                <ChevronDown
+                  className={`w-3.5 h-3.5 transition-transform ${reviewOpen ? 'rotate-180' : ''}`}
+                  strokeWidth={1.8}
+                />
+                {reviewOpen ? 'Chiudi revisione' : 'Rivedi classificazione'}
+              </button>
+            )}
+            {canCorrect && (
+              <button
+                onClick={() => setOpenPanel(p => (p === 'correct' ? null : 'correct'))}
+                className="inline-flex items-center gap-1.5 h-9 max-lg:h-11 px-3 rounded-lg border border-border text-xs font-medium text-brand-medium hover:bg-background transition-colors"
+              >
+                <ChevronDown
+                  className={`w-3.5 h-3.5 transition-transform ${correctOpen ? 'rotate-180' : ''}`}
+                  strokeWidth={1.8}
+                />
+                {correctOpen ? 'Chiudi correzione' : 'Correggi dati'}
+              </button>
+            )}
+          </div>
           {reviewOpen && (
             <ReviewPanel
               doc={doc}
               supplierContext={supplierContext}
-              onDone={() => setReviewOpen(false)}
+              onDone={() => setOpenPanel(null)}
               onConfirmed={docType => onClassificationConfirmed({ id: doc.id, title: doc.title }, docType)}
             />
           )}
+          {correctOpen && <CorrectDataPanel doc={doc} correctedByNames={correctedByNames} />}
         </div>
       )}
     </div>
@@ -1445,6 +1480,10 @@ function ReviewPanel({ doc, supplierContext, onDone, onConfirmed }: {
   const [sistema, setSistema]   = useState<Sistema | ''>(doc.sistema ?? doc.extracted_metadata?.sistema ?? '')
   const [saving, setSaving]     = useState(false)
   const [error, setError]       = useState<string | null>(null)
+
+  // Correzioni manuali che smetterebbero di valere con il tipo scelto (D6);
+  // 0 se il tipo non cambia (un cambio del solo impianto non avvisa).
+  const lostCorrections = correctionsLostOnTypeChange(doc, selected)
 
   // Confidenza del VERBALE (extracted_metadata), non della colonna: il blocco
   // "Proposta AI" deve restare fedele a cosa ha detto la macchina.
@@ -1522,6 +1561,13 @@ function ReviewPanel({ doc, supplierContext, onDone, onConfirmed }: {
           ))}
         </select>
       </div>
+
+      {lostCorrections > 0 && (
+        <p className="text-xs text-semantic-amber">
+          {pluralize(lostCorrections, 'correzione manuale non si applicherà più', 'correzioni manuali non si applicheranno più')} con
+          questo tipo. Restano salvate e tornano attive se rimetti il tipo attuale.
+        </p>
+      )}
 
       {error && <p className="text-xs text-semantic-red">{error}</p>}
 
