@@ -32,7 +32,6 @@ import {
   AMBITO_LABELS,
   isExtractableDocType,
   needsExtraction,
-  extractionIsCurrent,
   validityEntries,
   type Ambito,
 } from '@/lib/document-extraction'
@@ -1051,12 +1050,15 @@ function MissingDocumentsSection({
 // non compare se non c'è nulla da mostrare. Il lessico scadenza/scaduta è
 // vietato sulle voci promemoria e sui badge di classificazione, non sulla
 // validità di polizze, garanzie e APE, che è linguaggio di dominio.
+// Legge l'estrazione SOLO da currentExtraction, come riga ed Excel: è la
+// porta unica su cui si innestano le correzioni manuali (R10).
 function DeadlinesSection({ docs, today }: { docs: DocRow[]; today: string }) {
   const entries = validityEntries(
     docs,
-    d => extractionIsCurrent(d, d.extraction) && d.extraction
-      ? { docType: d.doc_type, validUntil: d.extraction.valid_until, fields: d.extraction.fields }
-      : null,
+    d => {
+      const ext = currentExtraction(d)
+      return ext ? { docType: d.doc_type, validUntil: ext.valid_until, fields: ext.fields } : null
+    },
     today,
   )
   if (entries.length === 0) return null
