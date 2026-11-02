@@ -41,7 +41,7 @@ try {
   process.exit(2)
 }
 
-const { overridableKeys, normalizeOverrideInput, effectiveExtraction, fieldProvenance, hasCurrentOverrides } = ov
+const { overridableKeys, overrideRequiresExtraction, normalizeOverrideInput, effectiveExtraction, fieldProvenance, hasCurrentOverrides } = ov
 const { currentExtraction, documentFacts, extractionFacts } = rows
 
 let fallimenti = 0
@@ -254,6 +254,22 @@ check('input: testo troppo lungo', 'error' in normalizeOverrideInput('garanzia',
   check('provenienza: altri campi AI', p.rilasciata_da, { source: 'ai' })
   check('provenienza: chiavi solo del tipo attuale', Object.keys(p),
     ['document_date', 'ambito', 'unita_riferimento', 'inizio', 'durata_anni', 'oggetto', 'rilasciata_da'])
+}
+
+// --- 12. Quali chiavi richiedono un'estrazione corrente ---------------------
+check('estrazione richiesta: ragione sociale installatore no', overrideRequiresExtraction('ragione_sociale_installatore'), false)
+check('estrazione richiesta: P.IVA installatore no', overrideRequiresExtraction('partita_iva_installatore'), false)
+for (const k of ['document_date', 'ambito', 'unita_riferimento', 'inizio', 'durata_anni', 'oggetto', 'classe_energetica', 'scadenza']) {
+  check(`estrazione richiesta: ${k} sì`, overrideRequiresExtraction(k), true)
+}
+// Ogni chiave ammessa per qualche tipo: le sole senza estrazione sono le due dell'installatore.
+{
+  const senza = new Set()
+  for (const t of ['dich_conformita_dm37', 'garanzia', 'ape', 'polizza_decennale', 'manuale', 'altro']) {
+    for (const k of overridableKeys(t)) if (!overrideRequiresExtraction(k)) senza.add(k)
+  }
+  check('estrazione non richiesta: solo le due chiavi installatore', [...senza].sort(),
+    ['partita_iva_installatore', 'ragione_sociale_installatore'])
 }
 
 // --- esito -------------------------------------------------------------------

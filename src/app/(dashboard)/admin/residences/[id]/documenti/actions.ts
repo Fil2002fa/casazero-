@@ -2,6 +2,11 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/admin'
+import { requireCaller } from '@/lib/require-caller'
+import { authorizeDocumentActor } from '@/lib/document-access'
+import { extractionIsCurrent } from '@/lib/document-extraction'
+import { normalizeOverrideInput, overridableKeys, overrideRequiresExtraction } from '@/lib/document-overrides'
 import type { DocumentCategory } from '@/types/database'
 import { ALLOWED_DOCUMENT_MIME } from '@/lib/document-upload'
 import {
@@ -718,5 +723,125 @@ export async function confirmSupplierProposal(input: {
   }
 
   revalidatePath(documentiPath)
+  return { success: true }
+}
+
+// ============================================================
+// Correzioni manuali dei campi estratti (R10, tabella
+// document_field_overrides, migrazione 048). Vivono sopra i due verbali AI,
+// che non si toccano mai: salvare = upsert, ripristinare il valore AI =
+// DELETE (stato corrente, lo storico sarà in activity_events al commit 6).
+//
+// Autorizzazione: admin e super_admin con lo scope di authorizeDocumentActor
+// (residenza assegnata / builder). Scrittura solo via service role: la 048
+// non concede INSERT/UPDATE/DELETE ad authenticated. Il DB non ha CHECK su
+// field_key né su for_doc_type, quindi chiave e valore si validano qui con le
+// stesse funzioni pure che usa il merge in lettura.
+// ============================================================
+
+export type SaveDocumentFieldOverrideResult = { success: true } | { error: string }
+export type ClearDocumentFieldOverrideResult = { success: true } | { error: string }
+
+const OVERRIDE_TECH_ERROR = 'Errore tecnico, riprova.'
+
+export async function saveDocumentFieldOverride(input: {
+  documentId: string
+  fieldKey: string
+  value: string | null
+}): Promise<SaveDocumentFieldOverrideResult> {
+  const { documentId, fieldKey, value } = input ?? {}
+  if (typeof documentId !== 'string' || documentId === '' || typeof fieldKey !== 'string' || fieldKey === '') {
+    return { error: 'Parametri non validi' }
+  }
+  if (value !== null && typeof value !== 'string') return { error: 'Parametri non validi' }
+
+  const caller = await requireCaller('saveDocumentFieldOverride', ['admin', 'super_admin'])
+  if ('error' in caller) return { error: caller.error }
+
+  const svc = createServiceClient()
+  const actor = await authorizeDocumentActor(svc, caller.userId, documentId, '[saveDocumentFieldOverride]')
+  if (!actor.ok) return { error: actor.error }
+  const { doc } = actor
+
+  // Chiave ammessa per il doc_type corrente + valore normalizzato (vuoto = null).
+  const normalized = normalizeOverrideInput(doc.doc_type, fieldKey, value)
+  if ('error' in normalized) return { error: normalized.error }
+
+  // Le chiavi dell'estrazione valgono solo sopra un'estrazione corrente
+  // (anche 'fallita' o 'saltata'): senza riga da correggere sarebbero inerti.
+  // L'impresa installatrice della DiCo no, sta nel verbale di classificazione.
+  if (overrideRequiresExtraction(fieldKey)) {
+    const { data: extraction, error: extractionError } = await svc
+      .from('document_extractions')
+      .select('for_doc_type')
+      .eq('document_id', documentId)
+      .maybeSingle()
+    if (extractionError) {
+      console.error('[saveDocumentFieldOverride] lettura estrazione fallita', { documentId, extractionError })
+      return { error: OVERRIDE_TECH_ERROR }
+    }
+    if (!extractionIsCurrent(doc, extraction)) {
+      return { error: 'Per correggere questo campo serve prima l’estrazione dei dati del documento.' }
+    }
+  }
+
+  // set_at va passato: sul conflitto il DO UPDATE aggiorna solo le colonne presenti.
+  const { error: upsertError } = await svc
+    .from('document_field_overrides')
+    .upsert(
+      {
+        document_id: documentId,
+        for_doc_type: doc.doc_type,
+        field_key: fieldKey,
+        value: normalized.value,
+        set_by: caller.userId,
+        set_at: new Date().toISOString(),
+      },
+      { onConflict: 'document_id,for_doc_type,field_key' },
+    )
+  if (upsertError) {
+    console.error('[saveDocumentFieldOverride] upsert fallito', { documentId, fieldKey, upsertError })
+    return { error: OVERRIDE_TECH_ERROR }
+  }
+
+  revalidatePath(`/admin/residences/${doc.residence_id}/documenti`)
+  return { success: true }
+}
+
+export async function clearDocumentFieldOverride(input: {
+  documentId: string
+  fieldKey: string
+}): Promise<ClearDocumentFieldOverrideResult> {
+  const { documentId, fieldKey } = input ?? {}
+  if (typeof documentId !== 'string' || documentId === '' || typeof fieldKey !== 'string' || fieldKey === '') {
+    return { error: 'Parametri non validi' }
+  }
+
+  const caller = await requireCaller('clearDocumentFieldOverride', ['admin', 'super_admin'])
+  if ('error' in caller) return { error: caller.error }
+
+  const svc = createServiceClient()
+  const actor = await authorizeDocumentActor(svc, caller.userId, documentId, '[clearDocumentFieldOverride]')
+  if (!actor.ok) return { error: actor.error }
+  const { doc } = actor
+
+  if (!overridableKeys(doc.doc_type).includes(fieldKey)) {
+    return { error: 'Questo campo non è modificabile per questo tipo di documento.' }
+  }
+
+  // Solo la correzione del tipo attuale: quelle di altri tipi (D6) restano.
+  // Nessuna riga corrispondente = già al valore AI, esito positivo.
+  const { error: deleteError } = await svc
+    .from('document_field_overrides')
+    .delete()
+    .eq('document_id', documentId)
+    .eq('for_doc_type', doc.doc_type as string)
+    .eq('field_key', fieldKey)
+  if (deleteError) {
+    console.error('[clearDocumentFieldOverride] delete fallito', { documentId, fieldKey, deleteError })
+    return { error: OVERRIDE_TECH_ERROR }
+  }
+
+  revalidatePath(`/admin/residences/${doc.residence_id}/documenti`)
   return { success: true }
 }

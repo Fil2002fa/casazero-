@@ -62,6 +62,16 @@ export function overridableKeys(docType: string | null): string[] {
   return [...COMMON_OVERRIDE_KEYS]
 }
 
+/**
+ * Una correzione vale solo sopra un'estrazione corrente, tranne l'impresa
+ * installatrice della DiCo, che sta nel verbale di classificazione e si applica
+ * sempre (effectiveInstaller). Fonte unica per la server action (che rifiuta
+ * il salvataggio) e per il gate di "Correggi dati" in UI.
+ */
+export function overrideRequiresExtraction(key: string): boolean {
+  return !(INSTALLER_OVERRIDE_KEYS as readonly string[]).includes(key)
+}
+
 // ------------------------------------------------------------
 // Tipo di valore per chiave e normalizzazione
 // ------------------------------------------------------------
