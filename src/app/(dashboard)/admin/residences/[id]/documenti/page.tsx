@@ -6,6 +6,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import { computeResidenceChecklist } from '@/lib/document-checklist'
+import { PG_INVALID_TEXT_REPRESENTATION } from '@/lib/document-access'
 import { todayISO } from '@/lib/maintenance-status'
 import { loadResidenceDocumentRows } from '@/lib/document-rows.server'
 import { correctionAuthorIds } from '@/lib/document-rows'
@@ -20,6 +21,36 @@ export const metadata: Metadata = { title: 'Documenti residenza' }
 type Params = Promise<{ id: string }>
 type SearchParams = Promise<{ onboarding?: string }>
 
+// Guasto tecnico nel caricamento: NON è "nessun documento" e NON è "residenza
+// inesistente". Mostra un avviso con Riprova invece dello stato vuoto, che
+// direbbe il falso (e offrirebbe di caricare documenti su una lista che non si
+// è riusciti a leggere). Il dettaglio è già nel log del server.
+function DocumentiLoadError({ residenceId, residenceName }: { residenceId: string; residenceName: string | null }) {
+  return (
+    <>
+      <PageHeader
+        back={{ href: `/admin/residences/${residenceId}`, label: residenceName ?? 'Residenza' }}
+        title="Documenti"
+        className="mb-6"
+      />
+      <div
+        role="alert"
+        className="bg-neutral-600/7 border border-neutral-600/20 rounded-xl px-4 py-3 text-sm text-neutral-600 flex items-center gap-3"
+      >
+        <p className="flex-1 min-w-0">
+          Impossibile caricare i documenti per un problema tecnico. Riprova tra poco.
+        </p>
+        <a
+          href={`/admin/residences/${residenceId}/documenti`}
+          className="flex-shrink-0 px-3 py-2 border border-brand-medium rounded-lg text-xs font-medium text-brand-dark"
+        >
+          Riprova
+        </a>
+      </div>
+    </>
+  )
+}
+
 export default async function ResidenceDocumentiPage({
   params, searchParams,
 }: {
@@ -32,21 +63,28 @@ export default async function ResidenceDocumentiPage({
   const profile = await requireRole(['admin', 'super_admin'], '/admin/manutenzioni')
   const supabase = await createClient()
 
-  const { data: residence } = await supabase
+  // maybeSingle: "nessuna residenza" è un esito di dominio (data null, error
+  // null; anche un id non UUID, 22P02), un errore di rete o di RLS no.
+  const { data: residence, error: residenceError } = await supabase
     .from('residences')
     .select('id, name')
     .eq('id', residenceId)
-    .single()
+    .maybeSingle()
 
+  if (residenceError && residenceError.code !== PG_INVALID_TEXT_REPRESENTATION) {
+    console.error('[documenti] lettura residenza fallita', { residenceId, code: residenceError.code, message: residenceError.message })
+    return <DocumentiLoadError residenceId={residenceId} residenceName={null} />
+  }
   if (!residence) notFound()
 
   // Documenti + unità dal loader condiviso con l'export Excel (client di
   // sessione, perimetro RLS). Un errore tecnico è già nel log del server e
-  // qui rende la lista vuota, come prima dell'estrazione del loader.
-  const [{ docs, units }, checklist] = await Promise.all([
+  // qui non diventa una lista vuota: si mostra l'avviso con Riprova.
+  const [{ docs, units, error: loadError }, checklist] = await Promise.all([
     loadResidenceDocumentRows(supabase, residenceId),
     computeResidenceChecklist(supabase, residenceId),
   ])
+  if (loadError) return <DocumentiLoadError residenceId={residenceId} residenceName={residence.name} />
 
   // Nomi leggibili per "Escluso da {utente}" (028): solo i marked_by
   // realmente presenti tra le attese di questa residenza, non tutti i
