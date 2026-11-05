@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { requireRole } from '@/lib/auth'
 import { PageHeader } from '@/components/PageHeader'
+import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/admin'
 import {
   overdueLive, todayISO,
@@ -37,6 +38,24 @@ export default async function AdminDetailPage({ params }: { params: Params }) {
   const { id: profileId } = await params
   // Super_admin SEMPRE read-only: nessun form di completamento raggiungibile da qui
   await requireRole(['super_admin'])
+
+  // Perimetro: lo decide la RLS con il client di sessione, PRIMA di qualsiasi
+  // lettura con il service client (che la RLS non vede). Un super_admin vede un
+  // admin solo se ha il suo builder_id o è assegnato a una sua residenza
+  // (policy su profiles). Stesso pattern di createAdminInvite in admin-actions.ts.
+  const supabase = await createClient()
+  const { data: visibleAdmin, error: visibleError } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('id', profileId)
+    .eq('role', 'admin')
+    .maybeSingle()
+  if (visibleError) {
+    // Guasto tecnico, non "non trovato": lasciarlo salire all'error boundary.
+    console.error('AdminDetailPage: errore lettura perimetro admin', { profileId, visibleError })
+    throw new Error('Errore temporaneo nella lettura dell\'amministratore, riprova.')
+  }
+  if (!visibleAdmin) notFound()
 
   const svc = createServiceClient()
   const today = todayISO()
