@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/admin'
 import { requireCaller } from '@/lib/require-caller'
 import { authorizeDocumentActor, PG_INVALID_TEXT_REPRESENTATION } from '@/lib/document-access'
-import { checkUnitAssignment } from '@/lib/document-unit'
+import { checkUnitAssignment, documentUnitChangeEventUnitId, documentUnitChangePayload } from '@/lib/document-unit'
 import { extractionIsCurrent } from '@/lib/document-extraction'
 import {
   documentCorrectionPayload,
@@ -1090,9 +1090,9 @@ export async function clearDocumentFieldOverride(input: {
 // client di SESSIONE, così la policy "documents: admin e super_admin
 // gestiscono" resta la seconda barriera.
 //
-// Nessun evento nel registro: nessun tipo esistente descrive l'atto
-// (documento_corretto è legato ai campi estratti, vedi 049). Aggiungerne uno
-// richiede una migrazione della CHECK su activity_events.event_type.
+// Scrive l'evento documento_unita_cambiata (migrazione 051, payload piatto:
+// document_id, title, doc_type, from_unit_id, to_unit_id). Solo se l'unità è
+// davvero cambiata; il registro non blocca mai l'atto già compiuto.
 //
 // Effetti da conoscere: unit_id decide la lettura (policy "documents:
 // lettura se si ha accesso") e la checklist B4 (un documento di unità non
@@ -1153,6 +1153,22 @@ export async function setDocumentUnit(input: {
   }
   // La RLS può filtrare la riga senza errore: zero righe = non aggiornato.
   if (!updated || updated.length === 0) return { error: 'Documento non trovato o non accessibile' }
+
+  await logActivityEvent(svc, {
+    residenceId: doc.residence_id,
+    unitId: documentUnitChangeEventUnitId(doc.unit_id, unitId),
+    eventType: 'documento_unita_cambiata',
+    actorId: caller.userId,
+    actorRole: caller.role,
+    actorName: caller.fullName,
+    payload: documentUnitChangePayload({
+      documentId,
+      title: doc.title,
+      docType: doc.doc_type,
+      fromUnitId: doc.unit_id,
+      toUnitId: unitId,
+    }),
+  })
 
   revalidatePath(`/admin/residences/${doc.residence_id}/documenti`)
   return { success: true }

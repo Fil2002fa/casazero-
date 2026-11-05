@@ -33,7 +33,10 @@ try {
   process.exit(2)
 }
 
-const { checkUnitAssignment, UNIT_NOT_IN_RESIDENCE_ERROR } = mod
+const {
+  checkUnitAssignment, UNIT_NOT_IN_RESIDENCE_ERROR,
+  documentUnitChangePayload, documentUnitChangeEventUnitId, documentUnitChangeText,
+} = mod
 
 let fallimenti = 0
 let eseguiti = 0
@@ -78,6 +81,23 @@ check('riga letta con id diverso da quello richiesto: rifiutata',
   checkUnitAssignment({ residence_id: R1, unit_id: null }, 'u1', unit('u2')), ko)
 check('stessa unità ma riga di altra residenza (dato incoerente): rifiutata, non "invariata"',
   checkUnitAssignment({ residence_id: R1, unit_id: 'u1' }, 'u1', unit('u1', R2)), ko)
+
+// --- evento documento_unita_cambiata (051) -------------------------------
+check('payload piatto: esattamente le cinque chiavi del contratto',
+  documentUnitChangePayload({ documentId: 'd1', title: 'APE interno 3', docType: 'ape', fromUnitId: null, toUnitId: 'u1' }),
+  { document_id: 'd1', title: 'APE interno 3', doc_type: 'ape', from_unit_id: null, to_unit_id: 'u1' })
+check('payload: titolo e tipo possono essere null',
+  Object.keys(documentUnitChangePayload({ documentId: 'd1', title: null, docType: null, fromUnitId: 'u1', toUnitId: null })),
+  ['document_id', 'title', 'doc_type', 'from_unit_id', 'to_unit_id'])
+check('unit_id dell\'evento: destinazione, o origine se torna alla residenza',
+  [documentUnitChangeEventUnitId(null, 'u2'), documentUnitChangeEventUnitId('u1', 'u2'), documentUnitChangeEventUnitId('u1', null)],
+  ['u2', 'u2', 'u1'])
+check('frase: assegnato', documentUnitChangeText({ title: 'APE', from_unit_id: null, to_unit_id: 'u1' }), 'Documento «APE» assegnato a un’unità')
+check('frase: spostato', documentUnitChangeText({ title: 'APE', from_unit_id: 'u1', to_unit_id: 'u2' }), 'Documento «APE» spostato in un’altra unità')
+check('frase: riportato alla residenza', documentUnitChangeText({ title: 'APE', from_unit_id: 'u1', to_unit_id: null }), 'Documento «APE» riportato alla residenza')
+check('frase: senza titolo', documentUnitChangeText({ from_unit_id: null, to_unit_id: 'u1' }), 'Documento assegnato a un’unità')
+check('frase: payload vuoto o vecchio → null (ripiego neutro)',
+  [documentUnitChangeText({}), documentUnitChangeText({ title: 'X' }), documentUnitChangeText({ from_unit_id: 5, to_unit_id: '' })], [null, null, null])
 
 // --- esito -------------------------------------------------------------------
 if (fallimenti > 0) {

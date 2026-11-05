@@ -1,9 +1,10 @@
 import {
-  Send, Mail, UserCheck, UserPlus, UserMinus, FileText, FileCheck, Archive, CalendarClock, PencilLine,
+  Send, Mail, UserCheck, UserPlus, UserMinus, FileText, FileCheck, Archive, CalendarClock, PencilLine, FileSymlink,
   type LucideIcon,
 } from 'lucide-react'
 import type { ActivityEvent, ActivityEventType } from '@/types/database'
 import { DOCUMENT_CORRECTED_NEUTRAL_LABEL, documentCorrectionText } from '@/lib/document-overrides'
+import { documentUnitChangeText } from '@/lib/document-unit'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import { pluralize } from '@/lib/pluralize'
 
@@ -35,6 +36,7 @@ export const ACTIVITY_EVENT_ICON: Record<ActivityEventType, LucideIcon> = {
   voce_archiviata:        Archive,
   data_consegna_modificata: CalendarClock,
   documento_corretto:     PencilLine,
+  documento_unita_cambiata: FileSymlink,
 }
 
 /**
@@ -62,6 +64,7 @@ const NEUTRAL_LABEL: Record<ActivityEventType, string> = {
   data_consegna_modificata: 'Data di consegna modificata',
   // Ripiego della frase piena (documentCorrectionText, document-overrides.ts).
   documento_corretto:     DOCUMENT_CORRECTED_NEUTRAL_LABEL,
+  documento_unita_cambiata: 'Unità del documento cambiata',
 }
 
 // Il payload è JSONB non vincolato dal DB: ogni chiave va letta in modo
@@ -157,6 +160,12 @@ export function describeActivityEvent(event: ActivityEvent): string {
     // payload). La frase vive accanto alle etichette dei campi, che servono anche
     // al pannello "Correggi dati": una sola fonte, verificata da script.
     return documentCorrectionText(event.payload)
+  }
+
+  if (event.event_type === 'documento_unita_cambiata') {
+    // Frase dal payload piatto (051): titolo, da/a unità. Le etichette delle
+    // unità non sono nel payload: il soggetto della riga le dà già.
+    return documentUnitChangeText(event.payload) ?? NEUTRAL_LABEL.documento_unita_cambiata
   }
 
   return NEUTRAL_LABEL[event.event_type]
