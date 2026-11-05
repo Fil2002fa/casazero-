@@ -4,7 +4,8 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/admin'
 import { requireCaller } from '@/lib/require-caller'
-import { authorizeDocumentActor } from '@/lib/document-access'
+import { authorizeDocumentActor, PG_INVALID_TEXT_REPRESENTATION } from '@/lib/document-access'
+import { checkUnitAssignment } from '@/lib/document-unit'
 import { extractionIsCurrent } from '@/lib/document-extraction'
 import {
   documentCorrectionPayload,
@@ -1048,6 +1049,86 @@ export async function clearDocumentFieldOverride(input: {
       }),
     })
   }
+
+  revalidatePath(`/admin/residences/${doc.residence_id}/documenti`)
+  return { success: true }
+}
+
+// ============================================================
+// Assegna / cambia / toglie l'unità di un documento (E1a, D2).
+//
+// Gate: requireCaller + authorizeDocumentActor, cioè lo stesso perimetro di
+// authorizeResidenceActor (super_admin del builder proprietario, admin
+// assegnato alla residenza) risolto a partire dal documento. L'unità di
+// destinazione si legge col service client e deve essere della STESSA
+// residenza del documento (checkUnitAssignment): la FK su units(id) e la
+// policy di scrittura di documents non lo controllano. La scrittura passa dal
+// client di SESSIONE, così la policy "documents: admin e super_admin
+// gestiscono" resta la seconda barriera.
+//
+// Nessun evento nel registro: nessun tipo esistente descrive l'atto
+// (documento_corretto è legato ai campi estratti, vedi 049). Aggiungerne uno
+// richiede una migrazione della CHECK su activity_events.event_type.
+//
+// Effetti da conoscere: unit_id decide la lettura (policy "documents:
+// lettura se si ha accesso") e la checklist B4 (un documento di unità non
+// soddisfa le voci di condominio e dossier_admin, document-checklist.ts).
+// storage_path non cambia: il file non si sposta.
+// ============================================================
+
+const UNIT_TECH_ERROR = 'Errore tecnico, riprova.'
+
+export type SetDocumentUnitResult = { success: true } | { error: string }
+
+export async function setDocumentUnit(input: {
+  documentId: string
+  unitId: string | null
+}): Promise<SetDocumentUnitResult> {
+  const { documentId, unitId } = input ?? {}
+  if (typeof documentId !== 'string' || documentId === '') return { error: 'Parametri non validi' }
+  if (unitId !== null && (typeof unitId !== 'string' || unitId === '')) return { error: 'Parametri non validi' }
+
+  const caller = await requireCaller('setDocumentUnit', ['admin', 'super_admin'])
+  if ('error' in caller) return { error: caller.error }
+
+  const svc = createServiceClient()
+  const actor = await authorizeDocumentActor(svc, caller.userId, documentId, '[setDocumentUnit]')
+  if (!actor.ok) return { error: actor.error }
+  const { doc } = actor
+
+  // Unità di destinazione: "non trovata" è un esito di dominio (riga assente,
+  // id non UUID), un errore di lettura no.
+  let targetUnit: { id: string; residence_id: string } | null = null
+  if (unitId !== null) {
+    const { data, error } = await svc
+      .from('units')
+      .select('id, residence_id')
+      .eq('id', unitId)
+      .maybeSingle()
+    if (error && error.code !== PG_INVALID_TEXT_REPRESENTATION) {
+      console.error('[setDocumentUnit] lettura unità fallita', { documentId, unitId, code: error.code, message: error.message })
+      return { error: UNIT_TECH_ERROR }
+    }
+    targetUnit = error ? null : (data as { id: string; residence_id: string } | null)
+  }
+
+  const check = checkUnitAssignment(doc, unitId, targetUnit)
+  if (!check.ok) return { error: check.error }
+  if (check.change === 'invariata') return { success: true }
+
+  const supabase = await createClient()
+  const { data: updated, error: updateError } = await supabase
+    .from('documents')
+    .update({ unit_id: unitId })
+    .eq('id', documentId)
+    .eq('residence_id', doc.residence_id)
+    .select('id')
+  if (updateError) {
+    console.error('[setDocumentUnit] update fallito', { documentId, unitId, code: updateError.code, message: updateError.message })
+    return { error: UNIT_TECH_ERROR }
+  }
+  // La RLS può filtrare la riga senza errore: zero righe = non aggiornato.
+  if (!updated || updated.length === 0) return { error: 'Documento non trovato o non accessibile' }
 
   revalidatePath(`/admin/residences/${doc.residence_id}/documenti`)
   return { success: true }

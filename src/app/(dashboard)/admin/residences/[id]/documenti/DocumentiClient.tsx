@@ -13,6 +13,7 @@ import { formatDateIT } from '@/lib/formatDate'
 import { humanizeDocumentTitle } from '@/lib/documentTitle'
 import { DateField } from '@/components/DateField'
 import { CorrectDataPanel } from './CorrectDataPanel'
+import { AssignUnitPanel } from './AssignUnitPanel'
 import {
   DOC_TYPES,
   DOC_TYPE_LABELS,
@@ -905,7 +906,7 @@ export function DocumentiClient({
                 Nessun documento di residenza{isFiltered ? ' per questo filtro' : ''}.
               </p>
             ) : (
-              residenceDocs.map(doc => <DocCard key={doc.id} doc={doc} supplierContext={supplierContext} correctedByNames={correctedByNames} onClassificationConfirmed={handleClassificationConfirmed} />)
+              residenceDocs.map(doc => <DocCard key={doc.id} doc={doc} units={units} supplierContext={supplierContext} correctedByNames={correctedByNames} onClassificationConfirmed={handleClassificationConfirmed} />)
             )}
           </section>
 
@@ -918,7 +919,7 @@ export function DocumentiClient({
                   <h3 className="text-sm font-medium text-text-primary">
                     {unitMap.get(unitId)?.label ?? 'Unità'}
                   </h3>
-                  {unitDocs.map(doc => <DocCard key={doc.id} doc={doc} supplierContext={supplierContext} correctedByNames={correctedByNames} onClassificationConfirmed={handleClassificationConfirmed} />)}
+                  {unitDocs.map(doc => <DocCard key={doc.id} doc={doc} units={units} supplierContext={supplierContext} correctedByNames={correctedByNames} onClassificationConfirmed={handleClassificationConfirmed} />)}
                 </div>
               ))}
             </section>
@@ -1375,17 +1376,19 @@ function searchText(doc: DocRow): string {
   return [doc.title, humanizeDocumentTitle(doc.title), doc.file_name, ...extractionFacts(doc)].join(' ').toLowerCase()
 }
 
-function DocCard({ doc, supplierContext, correctedByNames, onClassificationConfirmed }: {
+function DocCard({ doc, units, supplierContext, correctedByNames, onClassificationConfirmed }: {
   doc: DocRow
+  units: UnitRow[]
   supplierContext: SupplierContext | null
   correctedByNames: Record<string, string | null>
   onClassificationConfirmed: ClassificationConfirmedHandler
 }) {
-  // Un solo pannello aperto per volta: revisione della classificazione oppure
-  // correzione dei dati estratti.
-  const [openPanel, setOpenPanel] = useState<'review' | 'correct' | null>(null)
+  // Un solo pannello aperto per volta: revisione della classificazione,
+  // correzione dei dati estratti oppure assegnazione dell'unità.
+  const [openPanel, setOpenPanel] = useState<'review' | 'correct' | 'unit' | null>(null)
   const reviewOpen = openPanel === 'review'
   const correctOpen = openPanel === 'correct'
+  const unitOpen = openPanel === 'unit'
   const canCorrect = canCorrectFields(doc)
   const formattedDate = formatDateIT(displayDate(doc))
   const facts = extractionFacts(doc)
@@ -1454,7 +1457,7 @@ function DocCard({ doc, supplierContext, correctedByNames, onClassificationConfi
         </a>
       </div>
 
-      {(canReview || canCorrect) && (
+      {(canReview || canCorrect || units.length > 0) && (
         <div className="border-t border-border px-4 py-2">
           <div className="flex flex-wrap gap-2">
             {canReview && (
@@ -1481,6 +1484,18 @@ function DocCard({ doc, supplierContext, correctedByNames, onClassificationConfi
                 {correctOpen ? 'Chiudi correzione' : 'Correggi dati'}
               </button>
             )}
+            {units.length > 0 && (
+              <button
+                onClick={() => setOpenPanel(p => (p === 'unit' ? null : 'unit'))}
+                className="inline-flex items-center gap-1.5 h-9 max-lg:h-11 px-3 rounded-lg border border-border text-xs font-medium text-brand-medium hover:bg-background transition-colors"
+              >
+                <ChevronDown
+                  className={`w-3.5 h-3.5 transition-transform ${unitOpen ? 'rotate-180' : ''}`}
+                  strokeWidth={1.8}
+                />
+                {unitOpen ? 'Chiudi unità' : doc.unit_id ? 'Cambia unità' : 'Assegna unità'}
+              </button>
+            )}
           </div>
           {reviewOpen && (
             <ReviewPanel
@@ -1491,6 +1506,7 @@ function DocCard({ doc, supplierContext, correctedByNames, onClassificationConfi
             />
           )}
           {correctOpen && <CorrectDataPanel doc={doc} correctedByNames={correctedByNames} />}
+          {unitOpen && <AssignUnitPanel doc={doc} units={units} onDone={() => setOpenPanel(null)} />}
         </div>
       )}
     </div>
