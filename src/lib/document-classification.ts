@@ -94,6 +94,20 @@ export const DOC_TYPE_TO_CATEGORY: Record<DocType, DocumentCategory | null> = {
 // AI ha prodotto un doc_type valido (coda di revisione umana, commit 4/5).
 export const CLASSIFICATION_CONFIDENCE_THRESHOLD = 0.8
 
+// Fascia di confidenza per chi legge (export Excel): Alta = da 0,8 (la stessa
+// soglia di sopra), Media = da 0,6 a sotto 0,8, Bassa = sotto 0,6. Decisione
+// di Filippo, 5/11. null = confidenza non registrata (es. tipo scelto a mano).
+export const CLASSIFICATION_CONFIDENCE_MEDIUM = 0.6
+export type ConfidenceBand = 'alta' | 'media' | 'bassa'
+
+export function classificationConfidenceBand(confidence: number | null | undefined): ConfidenceBand | null {
+  if (confidence === null || confidence === undefined || Number.isNaN(Number(confidence))) return null
+  const c = Number(confidence)
+  if (c >= CLASSIFICATION_CONFIDENCE_THRESHOLD) return 'alta'
+  if (c >= CLASSIFICATION_CONFIDENCE_MEDIUM) return 'media'
+  return 'bassa'
+}
+
 // Asse `sistema` — a QUALE impianto si riferisce un documento (prerequisito B4:
 // "manca la conformità dell'impianto termico"). Ortogonale a doc_type: un
 // edificio ha più impianti, ciascuno con le proprie dich. conformità/collaudi/

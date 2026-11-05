@@ -13,7 +13,12 @@
  */
 import { humanizeDocumentTitle } from './documentTitle'
 import { formatUnitLabel } from './formatUnitLabel'
-import { DOC_TYPE_LABELS, type ClassificationStatus } from './document-classification'
+import {
+  DOC_TYPE_LABELS,
+  classificationConfidenceBand,
+  type ClassificationStatus,
+  type ConfidenceBand,
+} from './document-classification'
 import { textCell, dateCell, type ExportCell } from './xlsx-helpers'
 import {
   correctedFieldLabels,
@@ -40,6 +45,7 @@ export const DOCUMENT_EXPORT_HEADERS = [
   'Oggetto coperto',
   'File',
   'Stato classificazione',
+  'Confidenza classificazione',
   'Origine del dato',
   'Campi corretti a mano',
 ] as const
@@ -53,6 +59,12 @@ const CLASSIFICATION_STATUS_LABELS: Record<ClassificationStatus, string> = {
   fallita: 'Non classificabile',
   in_corso: 'In classificazione',
   non_classificato: 'Non classificato',
+}
+
+const CONFIDENCE_BAND_LABELS: Record<ConfidenceBand, string> = {
+  alta: 'Alta',
+  media: 'Media',
+  bassa: 'Bassa',
 }
 
 const DATA_ORIGIN_LABELS: Record<DataOrigin, string> = {
@@ -76,6 +88,7 @@ export function documentExportRow(doc: DocRow, unitLabel: string | null): Export
   const facts = documentFacts(doc)
   const origin = dataOrigin(doc)
   const corrected = correctedFieldLabels(doc)
+  const band = classificationConfidenceBand(doc.classification_confidence)
   return [
     text(humanizeDocumentTitle(doc.title)),
     text(doc.doc_type ? DOC_TYPE_LABELS[doc.doc_type] : null),
@@ -91,6 +104,7 @@ export function documentExportRow(doc: DocRow, unitLabel: string | null): Export
     text(facts.oggetto),
     text(doc.file_name),
     text(CLASSIFICATION_STATUS_LABELS[doc.classification_status] ?? null),
+    text(band ? CONFIDENCE_BAND_LABELS[band] : null),
     text(origin ? DATA_ORIGIN_LABELS[origin] : null),
     text(corrected.length > 0 ? corrected.join(', ') : null),
   ]

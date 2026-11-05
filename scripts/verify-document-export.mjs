@@ -4,8 +4,8 @@
 //       (oppure: npm run verify:export)
 // ------------------------------------------------------------
 // COSA GARANTISCE: che documentExportRow / documentExportRows
-// (src/lib/document-export.ts) diano le 16 celle attese (12 di dati estratti
-// più file, stato, origine del dato e campi corretti), con il tipo giusto
+// (src/lib/document-export.ts) diano le 17 celle attese (12 di dati estratti
+// più file, stato, confidenza, origine del dato e campi corretti), con il tipo giusto
 // (data o testo), su casi positivi E negativi: documento senza estrazione,
 // non classificato, DiCo con installatore e P.IVA con zero iniziale,
 // garanzia, polizza senza date (formula), APE di unità, estrazione non
@@ -33,12 +33,14 @@ register('./ts-resolve-hooks.mjs', import.meta.url)
 const EXPORT = new URL('../src/lib/document-export.ts', import.meta.url)
 const ROWS = new URL('../src/lib/document-rows.ts', import.meta.url)
 const XLSX = new URL('../src/lib/xlsx-helpers.ts', import.meta.url)
+const CLS = new URL('../src/lib/document-classification.ts', import.meta.url)
 
-let exp, rows, xlsx
+let exp, rows, xlsx, cls
 try {
   exp = await import(EXPORT.href)
   rows = await import(ROWS.href)
   xlsx = await import(XLSX.href)
+  cls = await import(CLS.href)
 } catch (err) {
   console.error(
     `\n✗ Impossibile importare i moduli: ${err.message}\n` +
@@ -133,10 +135,10 @@ const saltata = doc({
 })
 
 // --- intestazioni ----------------------------------------------------------
-check('intestazioni: 16 colonne nell\'ordine concordato', DOCUMENT_EXPORT_HEADERS, [
+check('intestazioni: 17 colonne nell\'ordine concordato', DOCUMENT_EXPORT_HEADERS, [
   'Titolo', 'Tipo', 'Ambito', 'Unità', 'Data documento', 'Scadenza o validità',
   'Installatore', 'Partita IVA', 'Compagnia', 'Numero polizza', 'Classe energetica', 'Oggetto coperto',
-  'File', 'Stato classificazione', 'Origine del dato', 'Campi corretti a mano',
+  'File', 'Stato classificazione', 'Confidenza classificazione', 'Origine del dato', 'Campi corretti a mano',
 ])
 
 // --- una riga per caso -----------------------------------------------------
@@ -174,7 +176,7 @@ check('estrazione saltata: celle estratte vuote',
   [T('Manuale caldaia'), T('Manuale'), _, _, D('2025-02-02'), _, _, _, _, _, _, _])
 
 const tutti = [nonClassificato, soloCaricamento, dico, dicoSenzaImpresa, garanzia, polizza, ape, nonAttuale, saltata]
-check('ogni riga ha 16 celle', tutti.map(d => documentExportRow(d, null).length), tutti.map(() => 16))
+check('ogni riga ha 17 celle', tutti.map(d => documentExportRow(d, null).length), tutti.map(() => 17))
 check('nessuna cella testo vuota: vuoto è sempre null',
   tutti.flatMap(d => documentExportRow(d, null)).filter(c => c !== null && c.value === '').length, 0)
 
@@ -183,12 +185,12 @@ const ov = (docType, key, value) => ({
   for_doc_type: docType, field_key: key, value, set_by: 'u1', set_at: '2026-11-04T10:00:00+00:00',
 })
 const garanziaAi = doc({
-  title: 'garanzia_ai', file_name: 'garanzia_ai.pdf', classification_status: 'completata', doc_type: 'garanzia',
+  title: 'garanzia_ai', file_name: 'garanzia_ai.pdf', classification_status: 'completata', classification_confidence: 0.92, doc_type: 'garanzia',
   extraction: ext({ for_doc_type: 'garanzia', document_date: '2025-03-10', valid_until: '2029-03-10', fields: { inizio: '2025-03-10', durata_anni: 4 } }),
   overrides: [],
 })
 const garanziaCorretta = doc({
-  title: 'garanzia_corretta', file_name: 'garanzia_corretta.pdf', classification_status: 'completata', doc_type: 'garanzia',
+  title: 'garanzia_corretta', file_name: 'garanzia_corretta.pdf', classification_status: 'completata', classification_confidence: 0.8, doc_type: 'garanzia',
   extraction: ext({ for_doc_type: 'garanzia', document_date: '2025-03-10', valid_until: '2029-03-10', fields: { inizio: '2025-03-10', durata_anni: 4, oggetto: 'Caldaia' } }),
   overrides: [ov('garanzia', 'durata_anni', '5'), ov('garanzia', 'oggetto', 'Caldaia a condensazione')],
 })
@@ -198,9 +200,9 @@ const garanziaCorrezioneVecchia = doc({
   // Correzione di un tipo precedente: non vale, non deve far dire "corretto a mano".
   overrides: [ov('ape', 'classe_energetica', 'B')],
 })
-const daRivedere = doc({ title: 'da_rivedere', file_name: 'x.pdf', classification_status: 'da_revisionare', doc_type: 'garanzia' })
+const daRivedere = doc({ title: 'da_rivedere', file_name: 'x.pdf', classification_status: 'da_revisionare', classification_confidence: 0.6, doc_type: 'garanzia' })
 const nonClass = doc({ title: 'non_class', file_name: 'y.pdf', classification_status: 'non_classificato' })
-const fallita = doc({ title: 'fallita', file_name: 'z.pdf', classification_status: 'fallita' })
+const fallita = doc({ title: 'fallita', file_name: 'z.pdf', classification_status: 'fallita', classification_confidence: 0.59 })
 const inCorso = doc({ title: 'in_corso', file_name: 'w.pdf', classification_status: 'in_corso' })
 const senzaEstrazione = doc({ title: 'ape_senza', file_name: 'ape.pdf', classification_status: 'completata', doc_type: 'ape' })
 const estrazioneSaltata = doc({
@@ -236,19 +238,19 @@ check('campi corretti: nessuna correzione e correzione vecchia → vuoto',
   [correctedFieldLabels(garanziaAi), correctedFieldLabels(garanziaCorrezioneVecchia)], [[], []])
 
 check('colonne nuove: AI', documentExportRow(garanziaAi, null).slice(12),
-  [T('garanzia_ai.pdf'), T('Classificato'), T('AI'), _])
+  [T('garanzia_ai.pdf'), T('Classificato'), T('Alta'), T('AI'), _])
 check('colonne nuove: corretto a mano con i campi', documentExportRow(garanziaCorretta, null).slice(12),
-  [T('garanzia_corretta.pdf'), T('Classificato'), T('Corretto a mano'), T('Durata (anni), Oggetto')])
+  [T('garanzia_corretta.pdf'), T('Classificato'), T('Alta'), T('Corretto a mano'), T('Durata (anni), Oggetto')])
 check('colonne nuove: da rivedere', documentExportRow(daRivedere, null).slice(12),
-  [T('x.pdf'), T('Da rivedere'), T('Da verificare'), _])
+  [T('x.pdf'), T('Da rivedere'), T('Media'), T('Da verificare'), _])
 check('colonne nuove: non classificato', documentExportRow(nonClass, null).slice(12),
-  [T('y.pdf'), T('Non classificato'), T('Da verificare'), _])
+  [T('y.pdf'), T('Non classificato'), _, T('Da verificare'), _])
 check('colonne nuove: non classificabile', documentExportRow(fallita, null).slice(12),
-  [T('z.pdf'), T('Non classificabile'), T('Da verificare'), _])
+  [T('z.pdf'), T('Non classificabile'), T('Bassa'), T('Da verificare'), _])
 check('colonne nuove: non estratto', documentExportRow(senzaEstrazione, null).slice(12),
-  [T('ape.pdf'), T('Classificato'), T('Non estratto'), _])
+  [T('ape.pdf'), T('Classificato'), _, T('Non estratto'), _])
 check('colonne nuove: "altro" senza origine', documentExportRow(altroDoc, null).slice(12),
-  [T('v.pdf'), T('Classificato'), _, _])
+  [T('v.pdf'), T('Classificato'), _, _, _])
 check('colonne nuove: stato sconosciuto → cella vuota, mai undefined',
   documentExportRow(doc({ file_name: 'q.pdf', classification_status: 'valore_vecchio' }), null).slice(13, 14), [_])
 
@@ -309,6 +311,21 @@ check('validitySubject: non classificato → null', validitySubject(nonClassific
   check('fileSlug: accenti, spazi e maiuscole', fileSlug('Residenza Cavaccio'), 'residenza-cavaccio')
   check('fileSlug: lettere accentate e punteggiatura', fileSlug("  Villa Sant'Àgata — Blocco 2 "), 'villa-sant-agata-blocco-2')
   check('fileSlug: solo simboli → fallback', fileSlug('***'), 'residenza')
+}
+
+// --- fasce di confidenza (Alta >= 0,8; Media 0,6-0,79; Bassa < 0,6) --------
+{
+  const { classificationConfidenceBand } = cls
+  check('fascia: soglie esatte e limiti',
+    [1, 0.99, 0.8, 0.799, 0.79, 0.6, 0.599, 0.59, 0].map(classificationConfidenceBand),
+    ['alta', 'alta', 'alta', 'media', 'media', 'media', 'bassa', 'bassa', 'bassa'])
+  check('fascia: non registrata → null', [null, undefined, Number.NaN].map(classificationConfidenceBand), [null, null, null])
+  check('fascia: numeric di Postgres arrivato come stringa', classificationConfidenceBand('0.850'), 'alta')
+  check('colonna confidenza: nessun valore → cella vuota',
+    documentExportRow(doc({ classification_status: 'completata', doc_type: 'altro', classification_confidence: null }), null)[14], null)
+  check('colonna confidenza: fascia nel foglio',
+    [0.9, 0.7, 0.2].map(c => documentExportRow(doc({ classification_confidence: c }), null)[14]),
+    [T('Alta'), T('Media'), T('Bassa')])
 }
 
 // --- esito -----------------------------------------------------------------
