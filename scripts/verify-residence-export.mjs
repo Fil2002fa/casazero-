@@ -29,9 +29,11 @@ const DEADLINE = new URL('../src/lib/deadline-export.ts', import.meta.url)
 const FETCH_ALL = new URL('../src/lib/supabase/fetch-all.ts', import.meta.url)
 const XLSX = new URL('../src/lib/xlsx-helpers.ts', import.meta.url)
 const UNIT_EXPORT = new URL('../src/lib/unit-export.ts', import.meta.url)
+const SUPPLIER_EXPORT = new URL('../src/lib/supplier-export.ts', import.meta.url)
 
-let deadline, fetchAll, xlsxHelpers, writeXlsxFile, unitExport
+let deadline, fetchAll, xlsxHelpers, writeXlsxFile, unitExport, supplierExport
 try {
+  supplierExport = await import(SUPPLIER_EXPORT.href)
   deadline = await import(DEADLINE.href)
   fetchAll = await import(FETCH_ALL.href)
   xlsxHelpers = await import(XLSX.href)
@@ -276,6 +278,56 @@ check('numberCell: numeri validi, il resto → null',
 {
   const c = toSheetCell(N(7))
   check('toSheetCell: numero → cella numerica', [c.type === Number, c.value], [true, 7])
+}
+
+// --- scheda Fornitori ---------------------------------------------------------
+{
+  const { SUPPLIER_EXPORT_HEADERS, mergeSupplierSources, supplierExportRows } = supplierExport
+  const sup = (id, name, over = {}) => ({ id, name, phone: null, email: null, vat_number: null, ...over })
+  const inst = (supplierId, over = {}) => ({ supplier_id: supplierId, sistema: 'elettrico', source: 'manuale', source_document_id: null, ...over })
+  const titles = new Map([['d1', 'dico_elettrico_interno_3'], ['d2', 'dico_termico']])
+
+  check('fornitori: intestazioni', SUPPLIER_EXPORT_HEADERS,
+    ['Fornitore', 'Partita IVA', 'Telefono', 'Email', 'Impianti in questa residenza', 'Origine del collegamento', 'Documenti collegati'])
+
+  // Due fonti unite
+  {
+    const merged = mergeSupplierSources(
+      [sup('a', 'Alfa Srl'), sup('b', 'Beta Srl')],
+      [
+        { sistema: 'elettrico', source: 'documento', source_document_id: 'd1', suppliers: { id: 'b', name: 'Beta Srl', phone: '0421', email: null, vat_number: '01234567890' } },
+        { sistema: 'vmc', source: 'manuale', source_document_id: null, suppliers: [{ id: 'c', name: 'Gamma Spa', phone: null, email: 'g@x.it', vat_number: null }] },
+        { sistema: 'elettrico', source: 'manuale', source_document_id: null, suppliers: null },
+      ],
+    )
+    check('fornitori: unione per id (da residenza, da collegamento anche come array; collegamento senza fornitore scartato)',
+      [merged.suppliers.map(s => s.id).sort(), merged.installations.length], [['a', 'b', 'c'], 2])
+    check('fornitori: il dato completo del collegamento vince su quello della residenza',
+      merged.suppliers.find(s => s.id === 'b').vat_number, '01234567890')
+  }
+
+  // Righe
+  {
+    const rowsOut = supplierExportRows(
+      [sup('b', 'Beta Srl', { vat_number: '01234567890', phone: '0421 1', email: 'b@x.it' }), sup('a', 'alfa srl'), sup('c', 'Gamma Spa')],
+      [
+        inst('b', { sistema: 'vmc', source: 'manuale' }),
+        inst('b', { sistema: 'elettrico', source: 'documento', source_document_id: 'd1' }),
+        inst('b', { sistema: 'elettrico', source: 'documento', source_document_id: 'd1' }),
+        inst('c', { sistema: 'termico', source: 'manuale', source_document_id: 'd-non-in-elenco' }),
+      ],
+      titles,
+    )
+    check('fornitori: ordine alfabetico senza distinguere maiuscole', rowsOut.map(r => r[0].value), ['alfa srl', 'Beta Srl', 'Gamma Spa'])
+    check('fornitori: senza collegamenti → celle di collegamento vuote', rowsOut[0].slice(4), [_, _, _])
+    check('fornitori: P.IVA come testo con lo zero iniziale, contatti, impianti senza doppioni nell\'ordine del catalogo, origine mista, documento',
+      rowsOut[1], [T('Beta Srl'), T('01234567890'), T('0421 1'), T('b@x.it'),
+        T('Impianto elettrico, VMC (ventilazione meccanica)'), T('Da documento e manuale'), T('Dico elettrico interno 3')])
+    check('fornitori: documento non in elenco → nessun titolo, origine manuale', [rowsOut[2][5], rowsOut[2][6]], [T('Manuale'), _])
+  }
+  check('fornitori: sistema non in catalogo → chiave grezza, mai vuoto né errore',
+    supplierExportRows([sup('z', 'Zeta')], [inst('z', { sistema: 'sistema_futuro' })], new Map())[0][4], T('sistema_futuro'))
+  check('fornitori: nessun fornitore → nessuna riga', supplierExportRows([], [], new Map()), [])
 }
 
 // --- file xlsx vero ----------------------------------------------------------

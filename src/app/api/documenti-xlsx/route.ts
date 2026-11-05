@@ -9,6 +9,12 @@ import { loadResidenceDocumentRows } from '@/lib/document-rows.server'
 import { DOCUMENT_EXPORT_HEADERS, documentExportRows } from '@/lib/document-export'
 import { deadlineExportHeaders, deadlineExportRows, toDeadlineItem, type RawDeadlineItem } from '@/lib/deadline-export'
 import { todayISO } from '@/lib/maintenance-status'
+import {
+  SUPPLIER_EXPORT_HEADERS,
+  mergeSupplierSources,
+  supplierExportRows,
+  type RawSupplierInstallation,
+} from '@/lib/supplier-export'
 import { toUnitExportUnit, unitExportHeaders, unitExportRows, type RawUnitExportUnit } from '@/lib/unit-export'
 import { buildSheet, fileSlug } from '@/lib/xlsx-helpers'
 
@@ -18,6 +24,7 @@ export const dynamic = 'force-dynamic'
 
 // Larghezze in caratteri, nell'ordine delle intestazioni di ogni scheda.
 const UNIT_WIDTHS = [16, 8, 16, 28, 12, 12, 10, 10, 16, 22, 40, 22, 40, 22, 40]
+const SUPPLIER_SHEET_WIDTHS = [32, 16, 18, 30, 34, 24, 50]
 const DOCUMENT_WIDTHS = [40, 34, 22, 14, 15, 40, 30, 16, 26, 20, 11, 32, 34, 22, 16, 18, 40]
 const DEADLINE_WIDTHS = [18, 44, 22, 16, 18, 16, 16, 28]
 const SUPPLIER_WIDTH = 28
@@ -87,6 +94,35 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Errore tecnico, riprova' }, { status: 500 })
   }
 
+  // Fornitori (solo super_admin): due fonti unite, come la pagina Fornitori.
+  // Per l'admin non si legge nulla: la scheda non esiste, non è vuota.
+  let supplierSheet: ReturnType<typeof buildSheet> | null = null
+  if (includeSupplier) {
+    const [byResidence, installed] = await Promise.all([
+      supabase
+        .from('suppliers')
+        .select('id, name, phone, email, vat_number')
+        .eq('residence_id', residenceId),
+      supabase
+        .from('supplier_installations')
+        .select('sistema, source, source_document_id, suppliers(id, name, phone, email, vat_number)')
+        .eq('residence_id', residenceId),
+    ])
+    const supplierError = byResidence.error ?? installed.error
+    if (supplierError) {
+      console.error('[documenti-xlsx] lettura fornitori fallita:', supplierError.message)
+      return NextResponse.json({ error: 'Errore tecnico, riprova' }, { status: 500 })
+    }
+    const merged = mergeSupplierSources(byResidence.data ?? [], (installed.data ?? []) as unknown as RawSupplierInstallation[])
+    const documentTitles = new Map(docs.map(d => [d.id, d.title]))
+    supplierSheet = buildSheet(
+      'Fornitori',
+      SUPPLIER_EXPORT_HEADERS,
+      supplierExportRows(merged.suppliers, merged.installations, documentTitles),
+      SUPPLIER_SHEET_WIDTHS,
+    )
+  }
+
   const today = todayISO()
   const deadlineItems = itemsRes.data.map(toDeadlineItem)
   const deadlineHeaders = deadlineExportHeaders(includeSupplier)
@@ -105,6 +141,7 @@ export async function GET(req: NextRequest) {
       deadlineExportRows(deadlineItems, { today, includeSupplier }),
       deadlineWidths,
     ),
+    ...(supplierSheet ? [supplierSheet] : []),
     buildSheet('Documenti', DOCUMENT_EXPORT_HEADERS, documentExportRows(docs, units), DOCUMENT_WIDTHS),
   ]
 
