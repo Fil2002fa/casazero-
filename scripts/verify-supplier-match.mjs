@@ -41,9 +41,9 @@
 
 const SOURCE = new URL('../src/lib/document-classification.ts', import.meta.url)
 
-let normalizeCompanyName, normalizeVatNumber, buildSupplierProposal, supplierVatNumberToWrite, resolveInstallerInput
+let normalizeCompanyName, normalizeVatNumber, buildSupplierProposal, supplierVatNumberToWrite, resolveInstallerInput, installerMatchesSupplier
 try {
-  ;({ normalizeCompanyName, normalizeVatNumber, buildSupplierProposal, supplierVatNumberToWrite, resolveInstallerInput } = await import(SOURCE.href))
+  ;({ normalizeCompanyName, normalizeVatNumber, buildSupplierProposal, supplierVatNumberToWrite, resolveInstallerInput, installerMatchesSupplier } = await import(SOURCE.href))
 } catch (err) {
   console.error(
     `\n✗ Impossibile importare ${SOURCE.pathname}: ${err.message}\n` +
@@ -274,6 +274,61 @@ check('LIMITE — senza P.IVA, nome di sole forme societarie: resta nessun match
     fornitori: [A, B, { id: 'n', name: 'S.r.l.', vat_number: null }],
   })),
   { kind: 'nessun_match', id: null, omonimi: null, piva: null })
+
+// ------------------------------------------------------------
+// 6. installerMatchesSupplier — l'impresa del documento è ancora il fornitore
+//    collegato? (avviso di disallineamento in DocCard, R10 7c)
+// ------------------------------------------------------------
+// VERO = nessun avviso. Anche qui i casi negativi contano quanto i positivi:
+// un avviso mancato lascia un collegamento sbagliato senza segnale, un avviso
+// di troppo è rumore che insegna a ignorarlo.
+console.log('\ninstallerMatchesSupplier — P.IVA se ci sono entrambe, altrimenti i nomi')
+const inst = (ragioneSociale, partitaIva = null) => ({ ragioneSociale, partitaIva })
+const forn = (name, vat_number = null) => ({ name, vat_number })
+
+// P.IVA da entrambe le parti: decide la P.IVA, il nome non conta.
+check('P.IVA uguali → nessun avviso',
+  installerMatchesSupplier(inst('Impianti Prova srl', '12345678903'), forn('Impianti Prova srl', '12345678903')), true)
+check('P.IVA uguali con formati diversi (prefisso IT, spazi) → nessun avviso',
+  installerMatchesSupplier(inst('Impianti Prova srl', '12345678903'), forn('Impianti Prova srl', 'IT 123 456 789 03')), true)
+check('P.IVA uguali, nomi diversi → nessun avviso (la P.IVA vince sul nome)',
+  installerMatchesSupplier(inst('Bianchi Elettrica', '12345678903'), forn('Rossi Impianti', '12345678903')), true)
+check('P.IVA diverse, nomi uguali → avviso (la P.IVA vince sul nome)',
+  installerMatchesSupplier(inst('Impianti Prova srl', '12345678903'), forn('Impianti Prova srl', '04512380287')), false)
+check('P.IVA diverse, nomi diversi → avviso',
+  installerMatchesSupplier(inst('Bianchi Elettrica', '12345678903'), forn('Rossi Impianti', '04512380287')), false)
+
+// Una sola P.IVA (o nessuna): si confrontano i nomi, stessa chiave del match.
+check('P.IVA solo sull\'installatore, nomi uguali → nessun avviso',
+  installerMatchesSupplier(inst('Impianti Prova srl', '12345678903'), forn('Impianti Prova srl')), true)
+check('P.IVA solo sul fornitore, nomi uguali → nessun avviso',
+  installerMatchesSupplier(inst('Impianti Prova srl'), forn('Impianti Prova srl', '12345678903')), true)
+check('P.IVA solo sull\'installatore, nomi diversi → avviso',
+  installerMatchesSupplier(inst('Bianchi Elettrica', '12345678903'), forn('Rossi Impianti')), false)
+check('nessuna P.IVA, nomi uguali a meno di forma societaria e punteggiatura → nessun avviso',
+  installerMatchesSupplier(inst('Rossi Impianti S.r.l.'), forn('rossi impianti srl')), true)
+check('nessuna P.IVA, nomi uguali a meno degli accenti → nessun avviso',
+  installerMatchesSupplier(inst('Società Elettrica Perù'), forn('Elettrica Peru')), true)
+check('nessuna P.IVA, nomi diversi → avviso',
+  installerMatchesSupplier(inst('Bianchi Elettrica'), forn('Rossi Impianti')), false)
+check('nessuna P.IVA, nome del fornitore contenuto in quello dell\'installatore → avviso (nessuna somiglianza parziale)',
+  installerMatchesSupplier(inst('Rossi Impianti Elettrici'), forn('Rossi Impianti')), false)
+
+// Nome mancante: nessun avviso, qualunque cosa dica il resto.
+check('nome null → nessun avviso',
+  installerMatchesSupplier(inst(null), forn('Rossi Impianti', '04512380287')), true)
+check('nome vuoto → nessun avviso',
+  installerMatchesSupplier(inst(''), forn('Rossi Impianti', '04512380287')), true)
+check('nome di soli spazi, P.IVA diversa → nessun avviso',
+  installerMatchesSupplier(inst('   ', '12345678903'), forn('Rossi Impianti', '04512380287')), true)
+check('nome null con sola P.IVA → nessun avviso',
+  installerMatchesSupplier(inst(null, '12345678903'), forn('Rossi Impianti')), true)
+
+// Chiave di nome non utilizzabile: non si può distinguere, niente falso allarme.
+check('nome di sole forme societarie → nessun avviso',
+  installerMatchesSupplier(inst('S.r.l.'), forn('Rossi Impianti')), true)
+check('fornitore di sole forme societarie → nessun avviso',
+  installerMatchesSupplier(inst('Rossi Impianti'), forn('S.r.l.')), true)
 
 // ------------------------------------------------------------
 console.log(`\ncasi eseguiti: ${eseguiti} · falliti: ${fallimenti}`)

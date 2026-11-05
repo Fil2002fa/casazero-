@@ -302,6 +302,10 @@ export type SupplierProposalCandidate = {
 export type SupplierInstallationRef = {
   supplier_id: string
   sistema: string
+  // Documento da cui è nato il collegamento (039): serve solo all'avviso di
+  // disallineamento in DocCard. Opzionale: la proposta e la server action non
+  // lo leggono, e le loro select non lo portano.
+  source_document_id?: string | null
 }
 
 export type SupplierProposal =
@@ -431,4 +435,37 @@ export function supplierVatNumberToWrite(proposal: SupplierProposal): string | n
     default:
       return null
   }
+}
+
+// Un'impresa installatrice EFFETTIVA di un documento (correzione > verbale) è
+// ancora il fornitore che quel documento ha collegato? Serve all'avviso di
+// disallineamento in DocCard (R10, 7c): il collegamento nasce dalla proposta e
+// poi non si aggiorna da solo, quindi una correzione successiva dell'impresa
+// può far divergere documento e collegamento. Funzione pura, VERO = nessun
+// avviso.
+//
+//   • nome dell'installatore mancante (o vuoto) → true: senza nome non c'è nulla
+//     da confrontare, e un avviso su un documento senza impresa sarebbe rumore;
+//   • P.IVA presenti da entrambe le parti → si confrontano le P.IVA normalizzate
+//     (la partita IVA identifica l'impresa, il nome è un suggerimento: stessa
+//     precedenza di buildSupplierProposal), il nome non conta;
+//   • altrimenti → si confrontano i nomi con normalizeCompanyName, la stessa
+//     chiave del match della proposta;
+//   • una chiave di nome nulla (nome di sole forme societarie, "S.r.l.") da una
+//     delle due parti non permette di distinguere: true, niente falso allarme.
+export function installerMatchesSupplier(
+  installer: { ragioneSociale: string | null; partitaIva: string | null },
+  supplier: { name: string; vat_number: string | null },
+): boolean {
+  const nome = installer.ragioneSociale?.trim() ?? ''
+  if (nome === '') return true
+
+  const installerVat = normalizeVatNumber(installer.partitaIva)
+  const supplierVat = normalizeVatNumber(supplier.vat_number)
+  if (installerVat !== null && supplierVat !== null) return installerVat === supplierVat
+
+  const installerKey = normalizeCompanyName(nome)
+  const supplierKey = normalizeCompanyName(supplier.name)
+  if (installerKey === null || supplierKey === null) return true
+  return installerKey === supplierKey
 }

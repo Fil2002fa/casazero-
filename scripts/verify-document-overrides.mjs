@@ -42,7 +42,7 @@ try {
 }
 
 const { overridableKeys, overrideRequiresExtraction, normalizeOverrideInput, effectiveExtraction, fieldProvenance, hasCurrentOverrides } = ov
-const { currentExtraction, documentFacts, extractionFacts, canCorrectFields, correctionFields, hasCorrections, correctionsLostOnTypeChange, correctionAuthorIds } = rows
+const { currentExtraction, documentFacts, extractionFacts, canCorrectFields, correctionFields, hasCorrections, correctionsLostOnTypeChange, correctionAuthorIds, installerSupplierMismatches } = rows
 
 let fallimenti = 0
 let eseguiti = 0
@@ -438,6 +438,85 @@ for (const k of ['document_date', 'ambito', 'unita_riferimento', 'inizio', 'dura
     { error: 'Il testo non può superare 300 caratteri.' })
   check('7b: nome di 300 caratteri → ok', w(DICO, vuoto, [], man('x'.repeat(300))),
     { writes: [{ fieldKey: NOME, value: 'x'.repeat(300) }] })
+}
+
+// --- 16. Avviso di disallineamento impresa / fornitore collegato (7c) ---------
+{
+  const DICO = 'dich_conformita_dm37'
+  const NOME = 'ragione_sociale_installatore'
+  const PIVA = 'partita_iva_installatore'
+  const prova = [o(DICO, NOME, 'Impianti Prova srl'), o(DICO, PIVA, '12345678903')]
+  const dicoDoc = (overrides, meta = { ragione_sociale_installatore: null, partita_iva_installatore: null }) =>
+    doc({ id: 'doc-1', doc_type: DICO, extracted_metadata: meta, overrides })
+  const forn = [
+    { id: 's-prova', name: 'Impianti Prova srl', vat_number: '12345678903' },
+    { id: 's-altro', name: 'Termotecnica Colli S.r.l.', vat_number: '04398760284' },
+  ]
+  const link = (supplier_id, sistema, source_document_id) => ({ supplier_id, sistema, source_document_id })
+  const m = (d, links, suppliers = forn) => installerSupplierMismatches(d, links, suppliers)
+
+  check('7c: impresa e fornitore coincidono → nessun avviso',
+    m(dicoDoc(prova), [link('s-prova', 'elettrico', 'doc-1')]), [])
+  check('7c: P.IVA corretta in un\'altra → avviso con dati di fornitore e impresa, sistema leggibile',
+    m(dicoDoc([o(DICO, NOME, 'Impianti Prova srl'), o(DICO, PIVA, '04512380287')]), [link('s-prova', 'elettrico', 'doc-1')]),
+    [{ sistemaLabel: 'Impianto elettrico', supplierName: 'Impianti Prova srl', supplierVat: '12345678903',
+       installerName: 'Impianti Prova srl', installerVat: '04512380287' }])
+  check('7c: impresa corretta in un\'altra (P.IVA null a mano) → avviso per nome, impresa senza P.IVA',
+    m(dicoDoc([o(DICO, NOME, 'Bianchi Elettrica'), o(DICO, PIVA, null)]), [link('s-prova', 'elettrico', 'doc-1')]),
+    [{ sistemaLabel: 'Impianto elettrico', supplierName: 'Impianti Prova srl', supplierVat: '12345678903',
+       installerName: 'Bianchi Elettrica', installerVat: null }])
+  check('7c: solo i collegamenti nati da QUESTO documento',
+    m(dicoDoc([o(DICO, NOME, 'Bianchi Elettrica')]), [link('s-prova', 'elettrico', 'doc-2'), link('s-altro', 'termico', null)]), [])
+  check('7c: due collegamenti dello stesso documento, uno solo disallineato',
+    m(dicoDoc(prova), [link('s-prova', 'elettrico', 'doc-1'), link('s-altro', 'termico', 'doc-1')]),
+    [{ sistemaLabel: 'Impianto termico', supplierName: 'Termotecnica Colli S.r.l.', supplierVat: '04398760284',
+       installerName: 'Impianti Prova srl', installerVat: '12345678903' }])
+  check('7c: installatore senza nome → nessun avviso',
+    m(dicoDoc([]), [link('s-prova', 'elettrico', 'doc-1')]), [])
+  check('7c: nome null a mano → nessun avviso',
+    m(dicoDoc([o(DICO, NOME, null)], { ragione_sociale_installatore: 'Rossi Srl', partita_iva_installatore: null }),
+      [link('s-prova', 'elettrico', 'doc-1')]), [])
+  check('7c: verbale con impresa diversa dal fornitore → avviso anche senza correzioni',
+    m(dicoDoc([], { ragione_sociale_installatore: 'Rossi Impianti', partita_iva_installatore: '01234567891' }),
+      [link('s-prova', 'elettrico', 'doc-1')]),
+    [{ sistemaLabel: 'Impianto elettrico', supplierName: 'Impianti Prova srl', supplierVat: '12345678903',
+       installerName: 'Rossi Impianti', installerVat: '01234567891' }])
+  check('7c: correzione di un altro tipo non conta',
+    m(dicoDoc([o('garanzia', NOME, 'Bianchi Elettrica')]), [link('s-prova', 'elettrico', 'doc-1')]), [])
+  check('7c: documento non DiCo → nessun avviso',
+    m(doc({ id: 'doc-1', doc_type: 'garanzia', overrides: [o('garanzia', NOME, 'Bianchi')] }), [link('s-prova', 'elettrico', 'doc-1')]), [])
+  check('7c: nessun collegamento → nessun avviso', m(dicoDoc(prova), []), [])
+  check('7c: fornitore non in anagrafica caricata → nessun avviso',
+    m(dicoDoc([o(DICO, NOME, 'Bianchi')]), [link('s-prova', 'elettrico', 'doc-1')], []), [])
+  check('7c: sistema fuori elenco → resta la chiave, mai un crash',
+    m(dicoDoc([o(DICO, NOME, 'Bianchi Elettrica')]), [link('s-prova', 'sconosciuto', 'doc-1')]),
+    [{ sistemaLabel: 'sconosciuto', supplierName: 'Impianti Prova srl', supplierVat: '12345678903',
+       installerName: 'Bianchi Elettrica', installerVat: null }])
+  check('7c: P.IVA del fornitore in formato grezzo → mostrata a sole cifre',
+    m(dicoDoc([o(DICO, NOME, 'Bianchi Elettrica')]), [link('s-grezzo', 'elettrico', 'doc-1')],
+      [{ id: 's-grezzo', name: 'Rossi Impianti', vat_number: 'IT 045 123 802 87' }])[0].supplierVat, '04512380287')
+  check('7c: fornitore senza P.IVA → supplierVat null',
+    m(dicoDoc([o(DICO, NOME, 'Bianchi Elettrica')]), [link('s-senza', 'elettrico', 'doc-1')],
+      [{ id: 's-senza', name: 'Rossi Impianti', vat_number: null }])[0].supplierVat, null)
+
+  // Testo dell'avviso (installerMismatchText): cosa è diverso, senza attribuire la causa.
+  const { installerMismatchText } = rows
+  const mm = (over = {}) => ({ sistemaLabel: 'Impianto elettrico', supplierName: 'Impianti Prova srl', supplierVat: '12345678903',
+    installerName: 'Bianchi Elettrica', installerVat: '09876543210', ...over })
+  check('7c testo: entrambe le P.IVA',
+    installerMismatchText(mm()),
+    'Il fornitore collegato per Impianto elettrico è Impianti Prova srl (P.IVA 12345678903), mentre questo documento indica Bianchi Elettrica (P.IVA 09876543210).')
+  check('7c testo: impresa senza P.IVA',
+    installerMismatchText(mm({ installerVat: null })),
+    'Il fornitore collegato per Impianto elettrico è Impianti Prova srl (P.IVA 12345678903), mentre questo documento indica Bianchi Elettrica (senza P.IVA).')
+  check('7c testo: fornitore senza P.IVA',
+    installerMismatchText(mm({ supplierVat: null })),
+    'Il fornitore collegato per Impianto elettrico è Impianti Prova srl (senza P.IVA), mentre questo documento indica Bianchi Elettrica (P.IVA 09876543210).')
+  check('7c testo: entrambi senza P.IVA',
+    installerMismatchText(mm({ supplierVat: null, installerVat: null })),
+    'Il fornitore collegato per Impianto elettrico è Impianti Prova srl (senza P.IVA), mentre questo documento indica Bianchi Elettrica (senza P.IVA).')
+  check('7c testo: nessuna attribuzione di causa ("ora", "non più")',
+    /\b(ora|non più|cambiat)/i.test(installerMismatchText(mm())), false)
 }
 
 // --- esito -------------------------------------------------------------------

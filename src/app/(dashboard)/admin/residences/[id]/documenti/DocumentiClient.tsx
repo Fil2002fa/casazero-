@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { FileText, Download, Upload, X, Loader2, CheckCircle2, AlertCircle, Clock, Sparkles, ChevronDown, FileSearch } from 'lucide-react'
 import type { DocumentCategory } from '@/types/database'
@@ -43,6 +44,8 @@ import {
   canCorrectFields,
   hasCorrections,
   correctionsLostOnTypeChange,
+  installerMismatchText,
+  installerSupplierMismatches,
   validitySubject,
   type DocRow,
   type UnitRow,
@@ -1368,6 +1371,11 @@ function DocCard({ doc, supplierContext, correctedByNames, onClassificationConfi
   const canCorrect = canCorrectFields(doc)
   const formattedDate = formatDateIT(displayDate(doc))
   const facts = extractionFacts(doc)
+  // Impresa del documento diversa dal fornitore che quel documento ha collegato
+  // (R10, 7c). Solo super_admin: supplierContext è null per l'admin.
+  const supplierMismatches = supplierContext
+    ? installerSupplierMismatches(doc, supplierContext.installations, supplierContext.suppliers)
+    : []
   // 'fallita' è un errore di merito dell'AI sul documento, non un errore di
   // servizio (quello rientra in 'non_classificato', vedi route.ts): l'unica
   // via d'uscita automatica sarebbe ritentare la stessa chiamata, che per
@@ -1393,6 +1401,17 @@ function DocCard({ doc, supplierContext, correctedByNames, onClassificationConfi
           </p>
           {facts.length > 0 && (
             <p className="text-xs text-text-secondary mt-0.5">{facts.join(' · ')}</p>
+          )}
+          {supplierMismatches.length > 0 && (
+            <div className="mt-1 space-y-1 break-words">
+              {supplierMismatches.map(m => (
+                <p key={`${m.supplierName}|${m.sistemaLabel}`} className="text-xs text-semantic-amber">
+                  {installerMismatchText(m)}{' '}
+                  {/* Gestione dei collegamenti: solo nella pagina builder (rimuovi/aggiungi). */}
+                  <Link href="/admin/fornitori" className="font-medium underline">Gestisci i collegamenti</Link>
+                </p>
+              ))}
+            </div>
           )}
           {/* Due assi distinti, mai fusi (legge di dominio 024): categoria a
               sinistra, stato/tipo classificazione a destra. */}

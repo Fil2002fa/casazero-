@@ -121,7 +121,9 @@ export default async function ResidenceDocumentiPage({
         .order('name'),
       supabase
         .from('supplier_installations')
-        .select('supplier_id, sistema')
+        // source_document_id: solo per l'avviso di disallineamento in DocCard
+        // (impresa del documento vs fornitore collegato da quel documento).
+        .select('supplier_id, sistema, source_document_id')
         .eq('residence_id', residenceId),
     ])
     suppliers = (rawSuppliers ?? []) as SupplierProposalCandidate[]

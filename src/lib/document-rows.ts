@@ -14,9 +14,14 @@ import type { DocumentCategory } from '@/types/database'
 import { formatDateIT } from './formatDate'
 import {
   DOC_TYPE_LABELS,
+  SISTEMA_LABELS,
+  installerMatchesSupplier,
+  normalizeVatNumber,
   type DocType,
   type Sistema,
   type ClassificationStatus,
+  type SupplierInstallationRef,
+  type SupplierProposalCandidate,
 } from './document-classification'
 import {
   AMBITO_LABELS,
@@ -129,6 +134,54 @@ export function hasCorrections(doc: DocRow): boolean {
 // Avviso di riclassificazione (D6): quante correzioni smetterebbero di valere.
 export function correctionsLostOnTypeChange(doc: DocRow, newType: string | null): number {
   return overridesLostOnTypeChange(doc.doc_type, newType, doc.overrides)
+}
+
+// Collegamenti nati da QUESTO documento (supplier_installations.source_document_id)
+// il cui fornitore non corrisponde più all'impresa installatrice effettiva del
+// documento (correzione > verbale): una correzione successiva può farli
+// divergere, e il collegamento non si aggiorna da solo. Per l'avviso in DocCard
+// (R10, 7c), solo super_admin: chi non riceve il contesto fornitori passa liste
+// vuote e non vede nulla. Il confronto è installerMatchesSupplier.
+export type InstallerSupplierMismatch = {
+  sistemaLabel: string
+  supplierName: string
+  supplierVat: string | null   // a sole cifre, null se il fornitore non ne ha una leggibile
+  installerName: string        // impresa effettiva del documento
+  installerVat: string | null  // idem, già a sole cifre
+}
+
+export function installerSupplierMismatches(
+  doc: DocRow,
+  installations: readonly SupplierInstallationRef[],
+  suppliers: readonly SupplierProposalCandidate[],
+): InstallerSupplierMismatch[] {
+  const installer = effectiveInstaller(doc.doc_type, doc.extracted_metadata, doc.overrides)
+  if (!installer.ragioneSociale) return []
+  const out: InstallerSupplierMismatch[] = []
+  for (const link of installations) {
+    if (link.source_document_id !== doc.id) continue
+    const supplier = suppliers.find(s => s.id === link.supplier_id)
+    // Fornitore non in elenco (nessuna anagrafica caricata): niente da confrontare.
+    if (!supplier || installerMatchesSupplier(installer, supplier)) continue
+    out.push({
+      sistemaLabel: (SISTEMA_LABELS as Record<string, string>)[link.sistema] ?? link.sistema,
+      supplierName: supplier.name,
+      supplierVat: normalizeVatNumber(supplier.vat_number),
+      installerName: installer.ragioneSociale.trim(),
+      installerVat: normalizeVatNumber(installer.partitaIva),
+    })
+  }
+  return out
+}
+
+// Testo dell'avviso: dice COSA è diverso, senza attribuire la causa. Il
+// disallineamento nasce sia da una correzione dell'impresa sul documento sia da
+// una modifica dell'anagrafica del fornitore (updateSupplierAnagrafica), quindi
+// niente "ora"/"non più". P.IVA mancante da una delle due parti: «senza P.IVA».
+export function installerMismatchText(m: InstallerSupplierMismatch): string {
+  const piva = (vat: string | null) => (vat ? `P.IVA ${vat}` : 'senza P.IVA')
+  return `Il fornitore collegato per ${m.sistemaLabel} è ${m.supplierName} (${piva(m.supplierVat)}), `
+    + `mentre questo documento indica ${m.installerName} (${piva(m.installerVat)}).`
 }
 
 // Autori delle correzioni in vigore, per risolvere i nomi nella pagina.
