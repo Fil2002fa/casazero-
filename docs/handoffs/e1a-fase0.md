@@ -262,3 +262,59 @@ Piano commit aggiornato (ordine di esecuzione):
 - e. Assegna/cambia unità di un documento (nuovo, D2).
 - f. Quadro unità × documenti in pagina (ex commit 5).
 - g. Errore tecnico distinto e causa dei fallimenti visibile (ex commit 6, perimetro D6).
+
+## Stato a fine sessione (5/11, sera)
+
+**Push non fatto.** Tutti i commit sono solo locali su `main`, sopra `6415ed0`. Il codice non è
+in produzione: le prove si fanno in locale (`docs/handoffs/e1a-prova-dal-vivo.md`).
+
+### Fatto (commit locali, nell'ordine)
+
+| Piano | Hash | Cosa |
+|---|---|---|
+| docs | `709a319`, `5bd3a42` | Diagnosi e decisioni D1-D6 |
+| a | `dbd2b0d` | Helper export condivisi (`xlsx-helpers`) |
+| b | `734f88b` | Scheda Documenti: file, stato, origine del dato, campi corretti a mano |
+| b2 | `b70ab63` | Confidenza classificazione Alta ≥ 0,8 / Media 0,6-0,79 / Bassa < 0,6 |
+| c | `ade2f2d` | Assegna/cambia/togli unità di un documento (`setDocumentUnit`) |
+| d | `f5a7f3c` | Helper documenti attesi per unità (APE, planimetria, DiCo elettrica) |
+| 1 | `7dda611` | `confirmDocument` valida l'unità sulla stessa residenza |
+| 2 | `41fc8fa` | Migrazione 051 (`documento_unita_cambiata`) applicata, evento scritto e reso |
+| 3a | `3a6328f` | Scheda Scadenze, file a più schede, voci lette a pagine |
+| 3b | `24aff6f` | Scheda Riepilogo unità |
+| 3c | `1d89609` | Scheda Fornitori (solo super_admin) |
+| 4a | `510f1db` | Helper `compareUnitLabels`, `formatKeyData` |
+| 4b | `0fe0e6b` | Quadro unità × documenti attesi in pagina |
+| 5a | `ef70a17` | Errore tecnico distinto da "nessun documento" |
+| 5b | `ff011ed` | Causa dei fallimenti dei batch |
+
+Gate: `npm run build` pulito (5/11), `npm run verify` pulito su ogni commit, script verdi:
+`verify:export` 61, `verify:schede` 60, `verify:unitdocs` 26, `verify:docunit` 18,
+`verify:batch` 14, `verify:overrides` 155, `verify:extraction` 91, `verify:evento` 28.
+
+### Da provare (6/11, con i documenti di prova)
+
+Tutta la UI e la route Excel con una sessione vera: nulla di tutto questo è stato eseguito.
+Lista passo per passo, per super_admin e admin, in `e1a-prova-dal-vivo.md`. Non provabili da UI:
+la pagina "Impossibile caricare i documenti" (guasto di lettura lato server) e la scrittura
+cross-residenza rifiutata da `setDocumentUnit`/`confirmDocument` (coperta da `verify:docunit`).
+Manca ancora un account **admin** nel builder di prova.
+
+### Cosa è cambiato rispetto alla diagnosi
+
+- Il quadro e la scheda Riepilogo usano solo `documents.unit_id`, con avviso per i documenti che
+  citano un'unità senza esservi assegnati. "Da verificare" nel quadro marca la cella solo se la
+  proposta AI non confermata indica quel tipo (più stretto di quanto scritto in §4).
+- La migrazione 051 c'è (la diagnosi diceva "nessuna migrazione"): richiesta da D2 per l'evento.
+- Il file Excel si chiama `dati-<residenza>-<data>.xlsx` (era `documenti-<residenza>.xlsx`).
+- La scheda Scadenze legge le voci a pagine da 1000, perché una richiesta sola sarebbe troncata in
+  silenzio dal tetto di righe.
+
+### Debito segnalato e non toccato
+
+- Etichette di modalità/tipo/stato duplicate in `ui/Badge.tsx` e `formatRegisteredBy.ts`.
+- `sistemaMatches` duplica la regola del sistema di B4 (`document-checklist.ts`).
+- `classify-document` scarta `error` su più letture e update (documento che resta "in corso").
+- Il batch si ferma chiudendo la scheda (nessun cron): P1.
+- `loadResidenceDocumentRows` non ha paginazione.
+- Il tetto `max_rows` del progetto Supabase non è stato verificato.
