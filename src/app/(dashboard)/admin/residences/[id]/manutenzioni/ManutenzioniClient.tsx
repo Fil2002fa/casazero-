@@ -767,7 +767,7 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
                   </p>
                   <p className="text-text-secondary">
                     Le scadenze ripartiranno da oggi
-                    {pendingAction.freqMonths ? ` (+ ${pendingAction.freqMonths} mesi)` : ''}.
+                    {pendingAction.freqMonths ? ` (+ ${pluralize(pendingAction.freqMonths, 'mese', 'mesi')})` : ''}.
                     {pendingAction.hasUndeliveredUnitItems &&
                       ' Le voci delle unità non ancora consegnate partiranno dalla data di consegna.'}
                   </p>
