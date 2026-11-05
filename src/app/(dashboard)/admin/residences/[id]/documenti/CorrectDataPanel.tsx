@@ -93,18 +93,19 @@ function CorrectionRow({ documentId, field, setByName }: {
       {field.kind === 'date' ? (
         <DateField name={field.key} id={inputId} defaultValue={field.effective ?? ''} onChange={edit} />
       ) : field.kind === 'ambito' ? (
-        <select id={inputId} value={draft} onChange={e => edit(e.target.value)} className={INPUT_CLASS}>
+        <select id={inputId} name={field.key} value={draft} onChange={e => edit(e.target.value)} className={INPUT_CLASS}>
           <option value="">Non riportato</option>
           {AMBITI.map(a => <option key={a} value={a}>{AMBITO_LABELS[a]}</option>)}
         </select>
       ) : field.kind === 'classe' ? (
-        <select id={inputId} value={draft} onChange={e => edit(e.target.value)} className={INPUT_CLASS}>
+        <select id={inputId} name={field.key} value={draft} onChange={e => edit(e.target.value)} className={INPUT_CLASS}>
           <option value="">Non riportata</option>
           {CLASSI_ENERGETICHE.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
       ) : (
         <input
           id={inputId}
+          name={field.key}
           type="text"
           inputMode={field.kind === 'int' || field.kind === 'vat' ? 'numeric' : undefined}
           maxLength={field.kind === 'text' ? MAX_TEXT_LENGTH : undefined}
