@@ -238,3 +238,27 @@ Totale 1-5: circa 12 h.
 - **D4** Includere la colonna "Confidenza classificazione" nella scheda Documenti?
 - **D5** Per l'admin: scheda Fornitori omessa e colonna fornitore assente (consigliato)?
 - **D6** Il commit 6 (pulizia errori del flusso) è dentro E1a o a parte?
+
+## Decisioni prese (Filippo, 2026-11-05) e piano aggiornato
+
+- **D1** Tipi attesi per unità: APE, planimetria catastale, dichiarazione di conformità dell'impianto
+  elettrico (`dich_conformita_dm37` con sistema elettrico).
+- **D2** Quadro solo su `documents.unit_id`, con avviso per i documenti che citano un'unità ma non sono
+  assegnati. Si aggiunge un commit "assegna/cambia unità di un documento" **prima** del quadro: action +
+  UI nella riga del documento, stesso gate di `authorizeResidenceActor`, evento nel registro se esiste
+  un tipo adatto; se non esiste, si segnala senza migrazioni.
+- **D3** Promemoria nel foglio Scadenze: data vuota, stato "Consigliata · ogni X mesi".
+- **D4** Colonna confidenza classificazione, espressa come Alta / Media / Bassa.
+- **D5** Admin: niente scheda Fornitori e niente colonna fornitore.
+- **D6** Dentro E1a: solo errore tecnico distinto da "nessun documento" e causa dei fallimenti visibile.
+  Il batch che si ferma chiudendo la scheda resta solo segnalato, backlog P1.
+
+Piano commit aggiornato (ordine di esecuzione):
+
+- a. Helper export condivisi (ex commit 1).
+- b. Scheda Documenti estesa (ex commit 2, con confidenza Alta/Media/Bassa da D4).
+- c. Helper documenti attesi per unità (ex commit 3, con i tre tipi di D1).
+- d. Schede Riepilogo unità, Scadenze e Fornitori (ex commit 4, con D3 e D5).
+- e. Assegna/cambia unità di un documento (nuovo, D2).
+- f. Quadro unità × documenti in pagina (ex commit 5).
+- g. Errore tecnico distinto e causa dei fallimenti visibile (ex commit 6, perimetro D6).
