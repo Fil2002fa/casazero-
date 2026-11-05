@@ -22,7 +22,13 @@
  * '@/' (vedi scripts/ts-resolve-hooks.mjs).
  */
 import type { DocumentFieldOverride } from '../types/database'
-import { DOC_TYPES, normalizeVatNumber } from './document-classification'
+import {
+  DOC_TYPES,
+  normalizeVatNumber,
+  resolveInstallerInput,
+  type ManualInstaller,
+  type ResolvedInstaller,
+} from './document-classification'
 import {
   AMBITI,
   CLASSI_ENERGETICHE,
@@ -266,6 +272,28 @@ export function effectiveInstaller(
     if (o.field_key === 'partita_iva_installatore') out.partitaIva = typeof v === 'string' ? v : null
   }
   return out
+}
+
+/**
+ * Impresa che alimenta la proposta fornitore: l'installatore EFFETTIVO
+ * (correzione > verbale) passato a resolveInstallerInput, così i valori
+ * digitati a mano valgono solo se nome effettivo è vuoto. Fonte unica di due
+ * superfici — il pannello (SupplierProposalSection) e la server action
+ * (confirmSupplierProposal) — che devono vedere la stessa impresa, o l'esito
+ * letto e quello ricalcolato divergono. `nameMissing` = nessun nome effettivo:
+ * il pannello mostra allora i campi a mano.
+ */
+export function resolveProposalInstaller(
+  docType: string | null,
+  metadata: { ragione_sociale_installatore?: string | null; partita_iva_installatore?: string | null } | null,
+  overrides: readonly OverrideRow[] | null | undefined,
+  manual: ManualInstaller | null | undefined,
+): ResolvedInstaller & { nameMissing: boolean } {
+  const effective = effectiveInstaller(docType, metadata, overrides)
+  return {
+    ...resolveInstallerInput(effective, manual),
+    nameMissing: (effective.ragioneSociale?.trim() ?? '') === '',
+  }
 }
 
 // ------------------------------------------------------------

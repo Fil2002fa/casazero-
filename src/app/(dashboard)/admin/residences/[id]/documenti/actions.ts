@@ -6,14 +6,19 @@ import { createServiceClient } from '@/lib/supabase/admin'
 import { requireCaller } from '@/lib/require-caller'
 import { authorizeDocumentActor } from '@/lib/document-access'
 import { extractionIsCurrent } from '@/lib/document-extraction'
-import { normalizeOverrideInput, overridableKeys, overrideRequiresExtraction } from '@/lib/document-overrides'
+import {
+  normalizeOverrideInput,
+  overridableKeys,
+  overrideRequiresExtraction,
+  resolveProposalInstaller,
+  type OverrideRow,
+} from '@/lib/document-overrides'
 import type { DocumentCategory } from '@/types/database'
 import { ALLOWED_DOCUMENT_MIME } from '@/lib/document-upload'
 import {
   DOC_TYPES,
   SISTEMI,
   buildSupplierProposal,
-  resolveInstallerInput,
   supplierVatNumberToWrite,
   type DocType,
   type ManualInstaller,
@@ -537,8 +542,9 @@ function installationInsertError(error: { code?: string; message: string }): str
 export async function confirmSupplierProposal(input: {
   documentId: string
   expected: SupplierProposalExpectation
-  // Impresa digitata a mano: usata SOLO se il verbale non ha ragione sociale
-  // (resolveInstallerInput), altrimenti ignorata. Mai scritta in extracted_metadata.
+  // Impresa digitata a mano: usata SOLO se l'impresa effettiva (correzione >
+  // verbale) non ha ragione sociale (resolveProposalInstaller), altrimenti
+  // ignorata. Mai scritta in extracted_metadata.
   manual?: ManualInstaller | null
 }): Promise<ConfirmSupplierProposalResult> {
   const supabase = await createClient()
@@ -567,17 +573,32 @@ export async function confirmSupplierProposal(input: {
     return { error: 'Il sistema del documento non è valido: correggi prima la classificazione.' }
   }
 
+  // Correzioni manuali del documento (048): l'impresa della proposta è quella
+  // EFFETTIVA, correzione > verbale, come nel pannello (resolveProposalInstaller,
+  // fonte unica). SELECT con il client dell'utente: la RLS della 048 delega a
+  // documents, che il super_admin del builder legge.
+  const { data: overrideRows, error: overridesError } = await supabase
+    .from('document_field_overrides')
+    .select('for_doc_type, field_key, value, set_by, set_at')
+    .eq('document_id', documentId)
+  if (overridesError) {
+    console.error('[confirmSupplierProposal] lettura correzioni fallita', { documentId, overridesError })
+    return { error: 'Errore tecnico nella lettura delle correzioni del documento, riprova.' }
+  }
+
   // Verbale jsonb: letto in difesa, accettate solo stringhe.
   const metadata = (doc.extracted_metadata ?? {}) as Record<string, unknown>
-  const installer = resolveInstallerInput(
+  const installer = resolveProposalInstaller(
+    doc.doc_type,
     {
-      ragioneSociale: typeof metadata.ragione_sociale_installatore === 'string'
+      ragione_sociale_installatore: typeof metadata.ragione_sociale_installatore === 'string'
         ? metadata.ragione_sociale_installatore
         : null,
-      partitaIva: typeof metadata.partita_iva_installatore === 'string'
+      partita_iva_installatore: typeof metadata.partita_iva_installatore === 'string'
         ? metadata.partita_iva_installatore
         : null,
     },
+    (overrideRows ?? []) as OverrideRow[],
     manual,
   )
   if (installer.manualError !== null) return { error: installer.manualError }

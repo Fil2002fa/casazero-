@@ -327,6 +327,53 @@ for (const k of ['document_date', 'ambito', 'unita_riferimento', 'inizio', 'dura
   check('autori: solo correzioni in vigore, unici', correctionAuthorIds([due, g]), ['u-admin', 'u-2'])
 }
 
+// --- 14. Proposta fornitore: impresa effettiva (correzione > verbale) --------
+{
+  const { resolveProposalInstaller } = ov
+  const DICO = 'dich_conformita_dm37'
+  const rossi = { ragione_sociale_installatore: 'Rossi Impianti Srl', partita_iva_installatore: '01234567891' }
+  const vuoto = { ragione_sociale_installatore: null, partita_iva_installatore: null }
+  const man = { ragioneSociale: 'Manuale Srl', partitaIva: '' }
+  const r = (docType, meta, overrides, manual = null) => {
+    const x = resolveProposalInstaller(docType, meta, overrides, manual)
+    return [x.ragioneSociale, x.partitaIva, x.manualError, x.nameMissing]
+  }
+
+  // Senza correzioni = comportamento di oggi (resolveInstallerInput sul verbale).
+  check('proposta: verbale con nome, nessuna correzione', r(DICO, rossi, []), ['Rossi Impianti Srl', '01234567891', null, false])
+  check('proposta: verbale con nome, manuale ignorato', r(DICO, rossi, [], man), ['Rossi Impianti Srl', '01234567891', null, false])
+  check('proposta: verbale vuoto, nessun manuale', r(DICO, vuoto, []), [null, null, null, true])
+  check('proposta: verbale vuoto, manuale usato', r(DICO, vuoto, [], man), ['Manuale Srl', null, null, true])
+  check('proposta: overrides assente', r(DICO, rossi, undefined), ['Rossi Impianti Srl', '01234567891', null, false])
+  check('proposta: metadata null', r(DICO, null, []), [null, null, null, true])
+
+  // f949ac0f: verbale vuoto, installatore corretto a mano.
+  const f949 = [o(DICO, 'ragione_sociale_installatore', 'Impianti Bianchi Srl'), o(DICO, 'partita_iva_installatore', '09876543210')]
+  check('proposta: correzione su verbale vuoto', r(DICO, vuoto, f949), ['Impianti Bianchi Srl', '09876543210', null, false])
+  check('proposta: con correzione il manuale è ignorato', r(DICO, vuoto, f949, man), ['Impianti Bianchi Srl', '09876543210', null, false])
+  check('proposta: correzione del solo nome, P.IVA nulla', r(DICO, vuoto, [f949[0]]), ['Impianti Bianchi Srl', null, null, false])
+
+  // Correzione > verbale, campo per campo.
+  check('proposta: nome corretto, P.IVA del verbale', r(DICO, rossi, [f949[0]]), ['Impianti Bianchi Srl', '01234567891', null, false])
+  check('proposta: P.IVA corretta, nome del verbale', r(DICO, rossi, [f949[1]]), ['Rossi Impianti Srl', '09876543210', null, false])
+  check('proposta: P.IVA null a mano vince sul verbale', r(DICO, rossi, [o(DICO, 'partita_iva_installatore', null)]),
+    ['Rossi Impianti Srl', null, null, false])
+
+  // Nome "non riportato" a mano: il nome effettivo è vuoto, si torna ai campi manuali.
+  check('proposta: nome null a mano = nome mancante', r(DICO, rossi, [o(DICO, 'ragione_sociale_installatore', null)]),
+    [null, null, null, true])
+  check('proposta: nome null a mano + manuale', r(DICO, rossi, [o(DICO, 'ragione_sociale_installatore', null)], man),
+    ['Manuale Srl', null, null, true])
+  check('proposta: manuale con P.IVA non valida', r(DICO, vuoto, [], { ragioneSociale: 'X Srl', partitaIva: '123' }),
+    [null, null, 'La partita IVA deve avere 11 cifre.', true])
+
+  // Correzioni di un altro tipo, o documento non DiCo: nessun effetto.
+  check('proposta: correzione di altro for_doc_type ignorata', r(DICO, vuoto, [o('garanzia', 'ragione_sociale_installatore', 'X')]),
+    [null, null, null, true])
+  check('proposta: documento non DiCo', r('garanzia', rossi, [o('garanzia', 'ragione_sociale_installatore', 'X')]),
+    [null, null, null, true])
+}
+
 // --- esito -------------------------------------------------------------------
 if (fallimenti > 0) {
   console.error(`\n✗ ${fallimenti} su ${eseguiti} casi divergenti`)

@@ -18,7 +18,6 @@ import {
   SISTEMI,
   SISTEMA_LABELS,
   buildSupplierProposal,
-  resolveInstallerInput,
   supplierVatNumberToWrite,
   type DocType,
   type ManualInstaller,
@@ -48,6 +47,7 @@ import {
   type DocRow,
   type UnitRow,
 } from '@/lib/document-rows'
+import { resolveProposalInstaller } from '@/lib/document-overrides'
 import { createClient } from '@/lib/supabase/client'
 
 const CATEGORIES: { value: DocumentCategory; label: string }[] = [
@@ -1601,27 +1601,23 @@ function ReviewPanel({ doc, supplierContext, onDone, onConfirmed }: {
 // pannello: la proposta descrive ciò che verrebbe scritto a partire dalla
 // classificazione salvata, che è anche ciò che la server action riverificherà.
 // Cambiare un select senza confermare non la aggiorna, di proposito.
-// Ragione sociale e P.IVA vengono dal verbale (extracted_metadata), che la
-// conferma umana non riscrive mai.
+// Ragione sociale e P.IVA sono quelle effettive: il verbale (extracted_metadata,
+// che la conferma umana non riscrive mai) con sopra le correzioni manuali.
 function SupplierProposalSection({ doc, context }: { doc: DocRow; context: SupplierContext }) {
   const router = useRouter()
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState<string | null>(null)
 
-  // Impresa digitata a mano, valida solo se il verbale non ha una ragione
-  // sociale (resolveInstallerInput, la stessa funzione della server action).
-  // Vive solo in questo stato e nell'argomento dell'action: mai nel verbale.
+  // Impresa digitata a mano, valida solo se l'impresa effettiva (correzione >
+  // verbale) non ha una ragione sociale (resolveProposalInstaller, la stessa
+  // funzione della server action). Vive solo in questo stato e
+  // nell'argomento dell'action: mai nel verbale.
   const [manualName, setManualName] = useState('')
   const [manualVat, setManualVat]   = useState('')
-  const verbale = {
-    ragioneSociale: doc.extracted_metadata?.ragione_sociale_installatore ?? null,
-    partitaIva: doc.extracted_metadata?.partita_iva_installatore ?? null,
-  }
-  const nameMissing = (verbale.ragioneSociale?.trim() ?? '') === ''
-  const manual: ManualInstaller | null = nameMissing
-    ? { ragioneSociale: manualName, partitaIva: manualVat }
-    : null
-  const installer = resolveInstallerInput(verbale, manual)
+  const manualInput: ManualInstaller = { ragioneSociale: manualName, partitaIva: manualVat }
+  const installer = resolveProposalInstaller(doc.doc_type, doc.extracted_metadata, doc.overrides, manualInput)
+  const nameMissing = installer.nameMissing
+  const manual: ManualInstaller | null = nameMissing ? manualInput : null
 
   const proposal = buildSupplierProposal({
     docType: doc.doc_type,
