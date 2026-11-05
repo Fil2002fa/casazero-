@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/admin'
 
@@ -9,7 +9,7 @@ import { createServiceClient } from '@/lib/supabase/admin'
 // arriva mai (tab chiusa, rete caduta). Solo report, nessuna cancellazione:
 // l'eventuale pulizia resta una decisione manuale di chi legge il report,
 // da fare a mano dalla dashboard Supabase Storage.
-export async function GET(req: NextRequest) {
+export async function GET() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Non autenticato' }, { status: 401 })
