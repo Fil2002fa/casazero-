@@ -2,8 +2,8 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/admin'
-import { resolveRecipientsForMode } from '@/lib/notification-recipients'
-import { sendEmail, emailSollecito } from '@/lib/notifications'
+import { resolveRecipientsForMode, getRolesForProfiles } from '@/lib/notification-recipients'
+import { sendEmail, emailSollecito, maintenanceItemUrl } from '@/lib/notifications'
 import { logActivityEvent } from '@/lib/activity-log'
 import { OBLIGATION_LABELS } from '@/components/MaintenanceBadge'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
@@ -142,17 +142,20 @@ export async function sollecitaItem(itemId: string): Promise<SollecitoResult> {
   const dueDate = item.next_due_date
     ? new Date(item.next_due_date).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })
     : '—'
-  const html = emailSollecito({
+  // Le due shell hanno percorsi diversi per la stessa manutenzione: il link si
+  // sceglie per ruolo del destinatario (maintenanceItemUrl), quindi l'email si
+  // costruisce per ogni destinatario. Ruolo di ripiego, solo se la lettura dei
+  // ruoli fallisce (già loggata): quello che la modalità della voce implica.
+  const buildHtml = (actionUrl: string) => emailSollecito({
     title,
     obligationLabel: obligation ? OBLIGATION_LABELS[obligation] : null,
     residenceName: item.residences?.name ?? 'la residenza',
     unitLabel: item.units ? formatUnitLabel(item.units.label) : null,
     dueDate,
-    // Le due shell hanno percorsi diversi per la stessa manutenzione.
-    actionUrl: mode === 'residente'
-      ? `${APP_URL}/manutenzioni/${itemId}`
-      : `${APP_URL}/admin/manutenzioni/${itemId}`,
+    actionUrl,
   })
+  const fallbackRole = mode === 'residente' ? 'client' : 'admin'
+  const recipientRoles = await getRolesForProfiles(svc, lookup.recipients.map(r => r.profileId))
   const subject = `Sollecito: "${title}" non ancora eseguita`
 
   const cutoff = new Date(Date.now() - DEDUP_WINDOW_HOURS * 3600_000).toISOString()
@@ -182,7 +185,8 @@ export async function sollecitaItem(itemId: string): Promise<SollecitoResult> {
       delivery = 'no_email'
       outcome.withoutEmail++
     } else {
-      const res = await sendEmail({ to: recipient.email, subject, html })
+      const actionUrl = maintenanceItemUrl(APP_URL, recipientRoles.get(recipient.profileId) ?? fallbackRole, itemId)
+      const res = await sendEmail({ to: recipient.email, subject, html: buildHtml(actionUrl) })
       delivery = res.status === 'sent' ? 'sent' : res.status === 'simulated' ? 'simulated' : 'failed'
       if (res.status === 'sent') {
         outcome.sent++

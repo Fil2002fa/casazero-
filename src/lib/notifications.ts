@@ -1,4 +1,5 @@
 import { formatFrequency } from './formatFrequency'
+import type { UserRole } from '@/types/database'
 
 export interface EmailPayload {
   to: string
@@ -58,6 +59,33 @@ export async function sendEmail(payload: EmailPayload): Promise<EmailResult> {
   }
 }
 
+// ── Link alla voce ────────────────────────────────────────────
+
+/**
+ * Link diretto a una manutenzione, scelto dal RUOLO del destinatario e non
+ * dalla modalità della voce: un membro di unità può essere un admin (account di
+ * test), e la shell residente `(app)` rimanda ogni ruolo diverso da client alla
+ * dashboard `/admin` perdendo il percorso ((app)/layout.tsx).
+ *
+ *   client               → /manutenzioni/<id>        (PWA residente)
+ *   admin, super_admin   → /admin/manutenzioni/<id>  (dashboard)
+ *   ruolo mancante       → /manutenzioni             (elenco: il link di prima,
+ *                          che ogni shell sa già rimandare al posto giusto)
+ *
+ * Fonte unica: cron e sollecito manuale. Un admin non assegnato alla residenza
+ * non vede la voce (RLS) e atterra su "non trovato": è voluto.
+ */
+export function maintenanceItemUrl(
+  appUrl: string,
+  role: UserRole | null | undefined,
+  itemId: string,
+): string {
+  const id = encodeURIComponent(itemId)
+  if (role === 'client') return `${appUrl}/manutenzioni/${id}`
+  if (role === 'admin' || role === 'super_admin') return `${appUrl}/admin/manutenzioni/${id}`
+  return `${appUrl}/manutenzioni`
+}
+
 // ── Template email ────────────────────────────────────────────
 
 function emailWrapper(content: string) {
@@ -81,7 +109,7 @@ function emailWrapper(content: string) {
 
 // Scadenza di una voce residente o amministratore. Le promemoria hanno il loro
 // template (emailPromemoriaDue): mai linguaggio di scadenza su quelle voci.
-export function emailMaintenanceDue(title: string, mode: 'residente' | 'amministratore', dueDate: string, appUrl: string) {
+export function emailMaintenanceDue(title: string, mode: 'residente' | 'amministratore', dueDate: string, actionUrl: string) {
   const heading = mode === 'amministratore' ? 'Manutenzione condominiale in scadenza' : 'Manutenzione in scadenza'
   const color = mode === 'amministratore' ? '#854F0B' : '#A32D2D'
   return emailWrapper(`
@@ -89,7 +117,7 @@ export function emailMaintenanceDue(title: string, mode: 'residente' | 'amminist
     <p style="margin:0 0 20px;color:#6B7A74;font-size:14px;line-height:1.5;">
       <strong style="color:${color};">${title}</strong> è scaduta il <strong>${dueDate}</strong>.
     </p>
-    <a href="${appUrl}/manutenzioni"
+    <a href="${actionUrl}"
        style="display:inline-block;background:#04342C;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-size:14px;">
       Vai alle manutenzioni →
     </a>`)
@@ -97,25 +125,25 @@ export function emailMaintenanceDue(title: string, mode: 'residente' | 'amminist
 
 // Promemoria: nessuna data, nessuna scadenza, solo la frequenza consigliata.
 // Stesso testo e stesso blu del PromemoriaBadge (components/ui/Badge.tsx).
-export function emailPromemoriaDue(title: string, frequencyMonths: number | null, appUrl: string) {
+export function emailPromemoriaDue(title: string, frequencyMonths: number | null, actionUrl: string) {
   return emailWrapper(`
     <h2 style="margin:0 0 12px;color:#20302A;font-size:16px;">Manutenzione consigliata</h2>
     <p style="margin:0 0 20px;color:#6B7A74;font-size:14px;line-height:1.5;">
       <strong style="color:#185FA5;">${title}</strong> · Consigliata ${formatFrequency(frequencyMonths)}.
     </p>
-    <a href="${appUrl}/manutenzioni"
+    <a href="${actionUrl}"
        style="display:inline-block;background:#04342C;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-size:14px;">
       Vai alle manutenzioni →
     </a>`)
 }
 
-export function emailMaintenanceReminder(title: string, dueDate: string, appUrl: string) {
+export function emailMaintenanceReminder(title: string, dueDate: string, actionUrl: string) {
   return emailWrapper(`
     <h2 style="margin:0 0 12px;color:#20302A;font-size:16px;">Promemoria manutenzione non eseguita</h2>
     <p style="margin:0 0 20px;color:#6B7A74;font-size:14px;line-height:1.5;">
       <strong>${title}</strong> è scaduta il <strong>${dueDate}</strong> e non è ancora stata completata.
     </p>
-    <a href="${appUrl}/manutenzioni"
+    <a href="${actionUrl}"
        style="display:inline-block;background:#04342C;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-size:14px;">
       Completa ora →
     </a>`)

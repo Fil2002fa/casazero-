@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { CompletionMode } from '@/types/database'
+import type { CompletionMode, UserRole } from '@/types/database'
 
 // Risoluzione dei destinatari di una notifica a partire dalla modalità di
 // completamento di un item. Fonte di verità unica: oggi la stessa query è
@@ -50,6 +50,39 @@ export async function getEmailForProfile(
 ): Promise<string | null> {
   const { data } = await svc.auth.admin.getUserById(profileId)
   return data?.user?.email ?? null
+}
+
+/**
+ * Ruolo di ciascun profilo, per scegliere il link giusto nelle email
+ * (maintenanceItemUrl in notifications.ts). Unico punto di lettura, condiviso
+ * dal cron e dal sollecito manuale.
+ *
+ * Un errore tecnico NON diventa "nessun ruolo" in silenzio: si logga lato
+ * server e si restituisce una mappa vuota, così il chiamante ricade sul ruolo
+ * che la fonte dei destinatari già implica (membro di unità = client, admin
+ * assegnato = admin) invece di non mandare l'email.
+ */
+export async function getRolesForProfiles(
+  svc: SupabaseClient,
+  profileIds: string[]
+): Promise<Map<string, UserRole>> {
+  const roles = new Map<string, UserRole>()
+  if (profileIds.length === 0) return roles
+
+  const { data, error } = await svc
+    .from('profiles')
+    .select('id, role')
+    .in('id', profileIds)
+
+  if (error) {
+    console.error('[notification-recipients] lettura ruoli fallita, link alla voce con ruolo di ripiego', {
+      code: error.code,
+      message: error.message,
+    })
+    return roles
+  }
+  for (const p of data ?? []) roles.set(p.id as string, p.role as UserRole)
+  return roles
 }
 
 async function toRecipients(

@@ -5,7 +5,9 @@ import {
   emailMaintenanceDue,
   emailMaintenanceReminder,
   emailPromemoriaDue,
+  maintenanceItemUrl,
 } from '@/lib/notifications'
+import { getRolesForProfiles } from '@/lib/notification-recipients'
 import { nextDueFrom } from '@/lib/maintenance-due'
 import { todayISO } from '@/lib/maintenance-status'
 import type { CompletionMode } from '@/types/database'
@@ -31,6 +33,9 @@ type ItemRow = {
 }
 
 type EmailContent = { subject: string; html: string }
+// L'email dipende dal destinatario (il link alla voce cambia con il suo ruolo),
+// quindi si costruisce per ogni destinatario a partire dal suo URL.
+type EmailBuilder = (actionUrl: string) => EmailContent
 
 export async function GET(req: NextRequest) {
   // Segreto assente o vuoto = guasto di configurazione, non un rifiuto di accesso:
@@ -99,10 +104,10 @@ export async function GET(req: NextRequest) {
 
           const shouldNotify = await checkDedup(supabase, item.id, 0, 'n1_due')
           if (shouldNotify && item.unit_id) {
-            await notifyUnitMembers(supabase, item.unit_id, item.id, 'n1_due', tpl.title, dueDate, {
+            await notifyUnitMembers(supabase, item.unit_id, item.id, 'n1_due', tpl.title, dueDate, actionUrl => ({
               subject: `Manutenzione consigliata: "${tpl.title}"`,
-              html: emailPromemoriaDue(tpl.title, effectiveFreq, APP_URL),
-            })
+              html: emailPromemoriaDue(tpl.title, effectiveFreq, actionUrl),
+            }))
             results.notified++
           }
         }
@@ -118,15 +123,15 @@ export async function GET(req: NextRequest) {
 
         // Notifica iniziale
         if (mode === 'residente' && item.unit_id) {
-          await notifyUnitMembers(supabase, item.unit_id, item.id, 'n2_due', tpl.title, dueDate, {
+          await notifyUnitMembers(supabase, item.unit_id, item.id, 'n2_due', tpl.title, dueDate, actionUrl => ({
             subject: `Manutenzione in scadenza: "${tpl.title}"`,
-            html: emailMaintenanceDue(tpl.title, 'residente', dueDate, APP_URL),
-          })
+            html: emailMaintenanceDue(tpl.title, 'residente', dueDate, actionUrl),
+          }))
         } else if (mode === 'amministratore') {
-          await notifyResidenceAdmins(supabase, item.residence_id, item.id, 'n3_due', tpl.title, dueDate, {
+          await notifyResidenceAdmins(supabase, item.residence_id, item.id, 'n3_due', tpl.title, dueDate, actionUrl => ({
             subject: `Manutenzione condominiale in scadenza: "${tpl.title}"`,
-            html: emailMaintenanceDue(tpl.title, 'amministratore', dueDate, APP_URL),
-          })
+            html: emailMaintenanceDue(tpl.title, 'amministratore', dueDate, actionUrl),
+          }))
         }
         results.notified++
         continue
@@ -139,17 +144,16 @@ export async function GET(req: NextRequest) {
         const shouldRemind = await checkDedup(supabase, item.id, intervalDays, reminderType)
         if (!shouldRemind) continue
 
-        const html = emailMaintenanceReminder(tpl.title, dueDate, APP_URL)
         if (mode === 'residente' && item.unit_id) {
-          await notifyUnitMembers(supabase, item.unit_id, item.id, 'n2_reminder', tpl.title, dueDate, {
+          await notifyUnitMembers(supabase, item.unit_id, item.id, 'n2_reminder', tpl.title, dueDate, actionUrl => ({
             subject: `Promemoria: "${tpl.title}" non ancora eseguita`,
-            html,
-          })
+            html: emailMaintenanceReminder(tpl.title, dueDate, actionUrl),
+          }))
         } else if (mode === 'amministratore') {
-          await notifyResidenceAdmins(supabase, item.residence_id, item.id, 'n3_reminder', tpl.title, dueDate, {
+          await notifyResidenceAdmins(supabase, item.residence_id, item.id, 'n3_reminder', tpl.title, dueDate, actionUrl => ({
             subject: `Promemoria: "${tpl.title}" condominiale non eseguita`,
-            html,
-          })
+            html: emailMaintenanceReminder(tpl.title, dueDate, actionUrl),
+          }))
         }
         results.notified++
       }
@@ -200,13 +204,18 @@ async function notifyUnitMembers(
   type: string,
   title: string,
   dueDate: string,
-  content: EmailContent,
+  buildContent: EmailBuilder,
 ) {
   const { data: members } = await supabase
     .from('unit_members')
     .select('profile_id')
     .eq('unit_id', unitId)
     .is('ended_at', null)
+
+  // Ruolo di ripiego 'client': un membro di unità è un residente. Vale solo se
+  // la lettura dei ruoli fallisce (già loggata); altrimenti conta il ruolo vero,
+  // che per gli account di test può essere admin.
+  const roles = await getRolesForProfiles(supabase, (members ?? []).map((m: { profile_id: string }) => m.profile_id))
 
   for (const m of members ?? []) {
     await supabase.from('notifications').insert({
@@ -217,7 +226,10 @@ async function notifyUnitMembers(
       status: 'pending',
     })
     const email = await getEmailForProfile(supabase, m.profile_id)
-    if (email) await sendEmail({ to: email, ...content })
+    if (email) {
+      const actionUrl = maintenanceItemUrl(APP_URL, roles.get(m.profile_id) ?? 'client', itemId)
+      await sendEmail({ to: email, ...buildContent(actionUrl) })
+    }
   }
 }
 
@@ -229,12 +241,15 @@ async function notifyResidenceAdmins(
   type: string,
   title: string,
   dueDate: string,
-  content: EmailContent,
+  buildContent: EmailBuilder,
 ) {
   const { data: assignments } = await supabase
     .from('admin_assignments')
     .select('profile_id')
     .eq('residence_id', residenceId)
+
+  // Ruolo di ripiego 'admin': chi è in admin_assignments è un admin.
+  const roles = await getRolesForProfiles(supabase, (assignments ?? []).map((a: { profile_id: string }) => a.profile_id))
 
   for (const a of assignments ?? []) {
     await supabase.from('notifications').insert({
@@ -245,6 +260,9 @@ async function notifyResidenceAdmins(
       status: 'pending',
     })
     const email = await getEmailForProfile(supabase, a.profile_id)
-    if (email) await sendEmail({ to: email, ...content })
+    if (email) {
+      const actionUrl = maintenanceItemUrl(APP_URL, roles.get(a.profile_id) ?? 'admin', itemId)
+      await sendEmail({ to: email, ...buildContent(actionUrl) })
+    }
   }
 }
