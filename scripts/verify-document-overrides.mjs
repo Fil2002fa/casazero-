@@ -374,6 +374,72 @@ for (const k of ['document_date', 'ambito', 'unita_riferimento', 'inizio', 'dura
     [null, null, null, true])
 }
 
+// --- 15. Impresa digitata a mano → correzioni sul documento (7b) -------------
+{
+  const { manualInstallerOverrides } = ov
+  const DICO = 'dich_conformita_dm37'
+  const rossi = { ragione_sociale_installatore: 'Rossi Impianti Srl', partita_iva_installatore: '01234567891' }
+  const vuoto = { ragione_sociale_installatore: null, partita_iva_installatore: null }
+  // Verbale senza nome ma con una P.IVA (l'AI l'ha letta senza la ragione sociale).
+  const soloPiva = { ragione_sociale_installatore: null, partita_iva_installatore: '01234567891' }
+  const NOME = 'ragione_sociale_installatore'
+  const PIVA = 'partita_iva_installatore'
+  const man = (ragioneSociale, partitaIva = '') => ({ ragioneSociale, partitaIva })
+  const w = (docType, meta, overrides, manual) => manualInstallerOverrides(docType, meta, overrides, manual)
+
+  // Caso f949ac0f: verbale vuoto, nessuna correzione.
+  check('7b: nome e P.IVA manuali → due scritture', w(DICO, vuoto, [], man('Impianti Prova srl', '12345678903')),
+    { writes: [{ fieldKey: NOME, value: 'Impianti Prova srl' }, { fieldKey: PIVA, value: '12345678903' }] })
+  check('7b: P.IVA manuale normalizzata a sole cifre', w(DICO, vuoto, [], man('Impianti Prova srl', 'IT 123 456 789 03')),
+    { writes: [{ fieldKey: NOME, value: 'Impianti Prova srl' }, { fieldKey: PIVA, value: '12345678903' }] })
+  check('7b: nome ripulito dagli spazi', w(DICO, vuoto, [], man('  Impianti Prova srl  ', '12345678903')),
+    { writes: [{ fieldKey: NOME, value: 'Impianti Prova srl' }, { fieldKey: PIVA, value: '12345678903' }] })
+
+  // P.IVA manuale vuota: override null SOLO se oggi c'è una P.IVA effettiva.
+  check('7b: P.IVA vuota, nessuna P.IVA effettiva → solo il nome', w(DICO, vuoto, [], man('Impianti Prova srl')),
+    { writes: [{ fieldKey: NOME, value: 'Impianti Prova srl' }] })
+  check('7b: P.IVA vuota con P.IVA del verbale → override null', w(DICO, soloPiva, [], man('Impianti Prova srl')),
+    { writes: [{ fieldKey: NOME, value: 'Impianti Prova srl' }, { fieldKey: PIVA, value: null }] })
+  check('7b: P.IVA vuota con P.IVA da correzione → override null',
+    w(DICO, vuoto, [o(DICO, PIVA, '09876543210')], man('Impianti Prova srl')),
+    { writes: [{ fieldKey: NOME, value: 'Impianti Prova srl' }, { fieldKey: PIVA, value: null }] })
+  check('7b: P.IVA vuota, P.IVA effettiva già null a mano → solo il nome',
+    w(DICO, soloPiva, [o(DICO, PIVA, null)], man('Impianti Prova srl')),
+    { writes: [{ fieldKey: NOME, value: 'Impianti Prova srl' }] })
+  check('7b: P.IVA vuota, P.IVA solo spazi → come vuota', w(DICO, soloPiva, [], man('Impianti Prova srl', '   ')),
+    { writes: [{ fieldKey: NOME, value: 'Impianti Prova srl' }, { fieldKey: PIVA, value: null }] })
+
+  // Nome "non riportato" a mano su un verbale con impresa: il manuale vale e la P.IVA del verbale non segue.
+  check('7b: nome null a mano + P.IVA del verbale, P.IVA vuota → override null',
+    w(DICO, rossi, [o(DICO, NOME, null)], man('Impianti Prova srl')),
+    { writes: [{ fieldKey: NOME, value: 'Impianti Prova srl' }, { fieldKey: PIVA, value: null }] })
+  check('7b: nome null a mano + P.IVA manuale',
+    w(DICO, rossi, [o(DICO, NOME, null)], man('Impianti Prova srl', '12345678903')),
+    { writes: [{ fieldKey: NOME, value: 'Impianti Prova srl' }, { fieldKey: PIVA, value: '12345678903' }] })
+
+  // Nessuna scrittura.
+  check('7b: nome effettivo dal verbale → manuale ignorato', w(DICO, rossi, [], man('Impianti Prova srl', '12345678903')), { writes: [] })
+  check('7b: nome effettivo da correzione → manuale ignorato',
+    w(DICO, vuoto, [o(DICO, NOME, 'Impianti Bianchi Srl')], man('Impianti Prova srl', '12345678903')), { writes: [] })
+  check('7b: nessun manuale', w(DICO, vuoto, [], null), { writes: [] })
+  check('7b: manuale senza nome', w(DICO, vuoto, [], man('   ', '12345678903')), { writes: [] })
+  check('7b: correzione di un altro tipo non conta come nome effettivo',
+    w(DICO, vuoto, [o('garanzia', NOME, 'X')], man('Impianti Prova srl')),
+    { writes: [{ fieldKey: NOME, value: 'Impianti Prova srl' }] })
+  check('7b: documento non DiCo', w('garanzia', vuoto, [], man('Impianti Prova srl', '12345678903')), { writes: [] })
+  check('7b: documento senza tipo', w(null, vuoto, [], man('Impianti Prova srl', '12345678903')), { writes: [] })
+
+  // Errori: non si scrive nulla.
+  check('7b: P.IVA di 10 cifre → errore', w(DICO, vuoto, [], man('Impianti Prova srl', '1234567890')),
+    { error: 'La partita IVA deve avere 11 cifre.' })
+  check('7b: P.IVA non numerica → errore', w(DICO, vuoto, [], man('Impianti Prova srl', 'abc')),
+    { error: 'La partita IVA deve avere 11 cifre.' })
+  check('7b: nome oltre 300 caratteri → errore', w(DICO, vuoto, [], man('x'.repeat(301))),
+    { error: 'Il testo non può superare 300 caratteri.' })
+  check('7b: nome di 300 caratteri → ok', w(DICO, vuoto, [], man('x'.repeat(300))),
+    { writes: [{ fieldKey: NOME, value: 'x'.repeat(300) }] })
+}
+
 // --- esito -------------------------------------------------------------------
 if (fallimenti > 0) {
   console.error(`\n✗ ${fallimenti} su ${eseguiti} casi divergenti`)

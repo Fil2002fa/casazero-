@@ -7,6 +7,7 @@ import { requireCaller } from '@/lib/require-caller'
 import { authorizeDocumentActor } from '@/lib/document-access'
 import { extractionIsCurrent } from '@/lib/document-extraction'
 import {
+  manualInstallerOverrides,
   normalizeOverrideInput,
   overridableKeys,
   overrideRequiresExtraction,
@@ -517,7 +518,13 @@ function installationInsertError(error: { code?: string; message: string }): str
 //   • nessun_match              → crea il fornitore con la P.IVA, poi lo
 //                                  collega.
 //
-// ORDINE (non invertire): P.IVA prima, collegamento dopo. Se la P.IVA del
+// Impresa digitata a mano (manual): oltre a guidare la proposta, alla conferma
+// diventa correzione del documento (document_field_overrides, R10 7b) —
+// ragione sociale e P.IVA, decise da manualInstallerOverrides. Mai in
+// extracted_metadata.
+//
+// ORDINE (non invertire): correzioni del documento per prime, poi P.IVA del
+// fornitore, collegamento per ultimo. Sul fornitore: se la P.IVA del
 // documento risulta già di un altro fornitore (idx_suppliers_builder_vat), il
 // match per nome era sbagliato e si abortisce TUTTO prima che il collegamento
 // esista. Con il collegamento scritto per primo, lo stesso errore lascerebbe
@@ -588,21 +595,24 @@ export async function confirmSupplierProposal(input: {
 
   // Verbale jsonb: letto in difesa, accettate solo stringhe.
   const metadata = (doc.extracted_metadata ?? {}) as Record<string, unknown>
-  const installer = resolveProposalInstaller(
-    doc.doc_type,
-    {
-      ragione_sociale_installatore: typeof metadata.ragione_sociale_installatore === 'string'
-        ? metadata.ragione_sociale_installatore
-        : null,
-      partita_iva_installatore: typeof metadata.partita_iva_installatore === 'string'
-        ? metadata.partita_iva_installatore
-        : null,
-    },
-    (overrideRows ?? []) as OverrideRow[],
-    manual,
-  )
+  const verbaleInstaller = {
+    ragione_sociale_installatore: typeof metadata.ragione_sociale_installatore === 'string'
+      ? metadata.ragione_sociale_installatore
+      : null,
+    partita_iva_installatore: typeof metadata.partita_iva_installatore === 'string'
+      ? metadata.partita_iva_installatore
+      : null,
+  }
+  const currentOverrideRows = (overrideRows ?? []) as OverrideRow[]
+  const installer = resolveProposalInstaller(doc.doc_type, verbaleInstaller, currentOverrideRows, manual)
   if (installer.manualError !== null) return { error: installer.manualError }
   const { ragioneSociale, partitaIva } = installer
+
+  // Correzioni che l'impresa digitata a mano lascia sul documento (R10, 7b).
+  // Decise qui, prima di qualunque scrittura, così un valore non valido rifiuta
+  // tutto; scritte più sotto, prima di fornitore e collegamento.
+  const overridePlan = manualInstallerOverrides(doc.doc_type, verbaleInstaller, currentOverrideRows, manual)
+  if ('error' in overridePlan) return { error: overridePlan.error }
 
   // Stessi due scope di documenti/page.tsx: anagrafica builder-wide,
   // collegamenti della sola residenza del documento.
@@ -654,6 +664,47 @@ export async function confirmSupplierProposal(input: {
     return { error: PROPOSAL_CHANGED_ERROR }
   }
 
+  // PRIMA riga scritta: l'impresa digitata a mano diventa correzione del
+  // documento (document_field_overrides), prima di fornitore e collegamento.
+  // "Collegamento prima, correzione dopo" è il flusso dell'utente, non l'ordine
+  // delle scritture: se il collegamento fallisce, la correzione resta sul
+  // documento (è un dato del documento, vero a prescindere dal collegamento) e
+  // la pagina la mostra; l'ordine inverso lascerebbe un collegamento al
+  // fornitore appena creato con un documento che continua a non riportare
+  // l'impresa. Scrittura col service client: l'accesso al documento è già
+  // provato dalla lettura sopra, sotto RLS, del super_admin del builder.
+  let overridesWritten = 0
+  if (overridePlan.writes.length > 0) {
+    const svc = createServiceClient()
+    for (const w of overridePlan.writes) {
+      const res = await upsertDocumentFieldOverride(svc, {
+        documentId,
+        forDocType: doc.doc_type as string,
+        fieldKey: w.fieldKey,
+        value: w.value,
+        userId: auth.user.id,
+        logTag: '[confirmSupplierProposal]',
+      })
+      if ('error' in res) {
+        if (overridesWritten > 0) revalidatePath(`/admin/residences/${doc.residence_id}/documenti`)
+        return {
+          error: `${res.error} Nessun fornitore è stato creato o collegato.`
+            + (overridesWritten > 0 ? ' Ricarica la pagina: una parte delle correzioni è già salvata sul documento.' : ''),
+        }
+      }
+      overridesWritten++
+    }
+  }
+  const documentiPath = `/admin/residences/${doc.residence_id}/documenti`
+  // Da qui una correzione può essere già scritta: ogni uscita con errore
+  // rinfresca la pagina (il form manuale non c'è più, il nome è effettivo) e lo
+  // dice, così chi legge sa che ritentare non richiede di riscrivere l'impresa.
+  const fail = (error: string): ConfirmSupplierProposalResult => {
+    if (overridesWritten === 0) return { error }
+    revalidatePath(documentiPath)
+    return { error: `${error} L'impresa è già salvata come correzione del documento.` }
+  }
+
   let supplierId: string
   // Cosa è già scritto quando si arriva al collegamento: serve solo al
   // messaggio di un fallimento a metà, che deve dire cosa è rimasto.
@@ -677,11 +728,9 @@ export async function confirmSupplierProposal(input: {
       // Collisione possibile solo per una scrittura concorrente: se il ricalcolo
       // sopra avesse visto quella P.IVA, l'esito sarebbe stato "per P.IVA".
       if (createError && isVatUniqueViolation(createError.message)) {
-        return {
-          error: `Nessun fornitore creato: la partita IVA ${vatNumberToWrite} del documento risulta già di un altro fornitore di questo costruttore. Ricarica la pagina: la proposta lo indicherà.`,
-        }
+        return fail(`Nessun fornitore creato: la partita IVA ${vatNumberToWrite} del documento risulta già di un altro fornitore di questo costruttore. Ricarica la pagina: la proposta lo indicherà.`)
       }
-      return { error: `Errore creazione fornitore: ${createError ? friendlySupplierError(createError.message) : 'sconosciuto'}` }
+      return fail(`Errore creazione fornitore: ${createError ? friendlySupplierError(createError.message) : 'sconosciuto'}`)
     }
     supplierId = created.id as string
     createdName = proposal.ragioneSociale
@@ -703,13 +752,11 @@ export async function confirmSupplierProposal(input: {
 
       if (vatError) {
         if (isVatUniqueViolation(vatError.message)) {
-          return {
-            error: `Collegamento non creato: la partita IVA ${vatNumberToWrite} del documento risulta di un altro fornitore di questo costruttore, quindi ${proposal.supplier.name} non è l'impresa della dichiarazione — il match per nome era sbagliato.`,
-          }
+          return fail(`Collegamento non creato: la partita IVA ${vatNumberToWrite} del documento risulta di un altro fornitore di questo costruttore, quindi ${proposal.supplier.name} non è l'impresa della dichiarazione — il match per nome era sbagliato.`)
         }
-        return { error: `Errore registrazione partita IVA: ${vatError.message}` }
+        return fail(`Errore registrazione partita IVA: ${vatError.message}`)
       }
-      if (!updated || updated.length === 0) return { error: PROPOSAL_CHANGED_ERROR }
+      if (!updated || updated.length === 0) return fail(PROPOSAL_CHANGED_ERROR)
 
       vatRegisteredOn = proposal.supplier.name
     }
@@ -725,8 +772,6 @@ export async function confirmSupplierProposal(input: {
       source_document_id: documentId,
     })
 
-  const documentiPath = `/admin/residences/${doc.residence_id}/documenti`
-
   if (installError) {
     const reason = installationInsertError(installError)
     // Qualcosa ormai è scritto: la pagina va rinfrescata comunque, o la
@@ -734,13 +779,13 @@ export async function confirmSupplierProposal(input: {
     if (createdName !== null) {
       revalidatePath(documentiPath)
       const conPiva = vatNumberToWrite !== null ? ` con partita IVA ${vatNumberToWrite}` : ''
-      return { error: `Fornitore ${createdName} creato${conPiva}, ma collegamento non riuscito. ${reason} Ricarica la pagina per riprovare.` }
+      return fail(`Fornitore ${createdName} creato${conPiva}, ma collegamento non riuscito. ${reason} Ricarica la pagina per riprovare.`)
     }
     if (vatRegisteredOn !== null) {
       revalidatePath(documentiPath)
-      return { error: `Partita IVA ${vatNumberToWrite} registrata su ${vatRegisteredOn}, ma collegamento non riuscito. ${reason} Ricarica la pagina per riprovare.` }
+      return fail(`Partita IVA ${vatNumberToWrite} registrata su ${vatRegisteredOn}, ma collegamento non riuscito. ${reason} Ricarica la pagina per riprovare.`)
     }
-    return { error: reason }
+    return fail(reason)
   }
 
   revalidatePath(documentiPath)
@@ -764,6 +809,37 @@ export type SaveDocumentFieldOverrideResult = { success: true } | { error: strin
 export type ClearDocumentFieldOverrideResult = { success: true } | { error: string }
 
 const OVERRIDE_TECH_ERROR = 'Errore tecnico, riprova.'
+
+// Unica scrittura di una correzione (upsert sulla chiave primaria), usata da
+// "Correggi dati" (saveDocumentFieldOverride) e dalla conferma della proposta
+// fornitore con impresa digitata a mano (confirmSupplierProposal). Non
+// autorizza e non valida: chi chiama ha già verificato l'accesso al documento
+// e normalizzato il valore (normalizeOverrideInput / manualInstallerOverrides).
+// `svc` è il service client: la 048 non concede scritture ad authenticated.
+async function upsertDocumentFieldOverride(
+  svc: ReturnType<typeof createServiceClient>,
+  input: { documentId: string; forDocType: string; fieldKey: string; value: string | null; userId: string; logTag: string },
+): Promise<{ ok: true } | { error: string }> {
+  // set_at va passato: sul conflitto il DO UPDATE aggiorna solo le colonne presenti.
+  const { error: upsertError } = await svc
+    .from('document_field_overrides')
+    .upsert(
+      {
+        document_id: input.documentId,
+        for_doc_type: input.forDocType,
+        field_key: input.fieldKey,
+        value: input.value,
+        set_by: input.userId,
+        set_at: new Date().toISOString(),
+      },
+      { onConflict: 'document_id,for_doc_type,field_key' },
+    )
+  if (upsertError) {
+    console.error(`${input.logTag} upsert fallito`, { documentId: input.documentId, fieldKey: input.fieldKey, upsertError })
+    return { error: OVERRIDE_TECH_ERROR }
+  }
+  return { ok: true }
+}
 
 export async function saveDocumentFieldOverride(input: {
   documentId: string
@@ -806,24 +882,15 @@ export async function saveDocumentFieldOverride(input: {
     }
   }
 
-  // set_at va passato: sul conflitto il DO UPDATE aggiorna solo le colonne presenti.
-  const { error: upsertError } = await svc
-    .from('document_field_overrides')
-    .upsert(
-      {
-        document_id: documentId,
-        for_doc_type: doc.doc_type,
-        field_key: fieldKey,
-        value: normalized.value,
-        set_by: caller.userId,
-        set_at: new Date().toISOString(),
-      },
-      { onConflict: 'document_id,for_doc_type,field_key' },
-    )
-  if (upsertError) {
-    console.error('[saveDocumentFieldOverride] upsert fallito', { documentId, fieldKey, upsertError })
-    return { error: OVERRIDE_TECH_ERROR }
-  }
+  const written = await upsertDocumentFieldOverride(svc, {
+    documentId,
+    forDocType: doc.doc_type as string,
+    fieldKey,
+    value: normalized.value,
+    userId: caller.userId,
+    logTag: '[saveDocumentFieldOverride]',
+  })
+  if ('error' in written) return { error: written.error }
 
   revalidatePath(`/admin/residences/${doc.residence_id}/documenti`)
   return { success: true }

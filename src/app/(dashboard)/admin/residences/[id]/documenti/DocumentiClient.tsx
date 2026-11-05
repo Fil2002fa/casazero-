@@ -1610,8 +1610,9 @@ function SupplierProposalSection({ doc, context }: { doc: DocRow; context: Suppl
 
   // Impresa digitata a mano, valida solo se l'impresa effettiva (correzione >
   // verbale) non ha una ragione sociale (resolveProposalInstaller, la stessa
-  // funzione della server action). Vive solo in questo stato e
-  // nell'argomento dell'action: mai nel verbale.
+  // funzione della server action). Vive in questo stato e nell'argomento
+  // dell'action, che alla conferma lo salva come correzione del documento
+  // (document_field_overrides): mai nel verbale.
   const [manualName, setManualName] = useState('')
   const [manualVat, setManualVat]   = useState('')
   const manualInput: ManualInstaller = { ragioneSociale: manualName, partitaIva: manualVat }

@@ -296,6 +296,53 @@ export function resolveProposalInstaller(
   }
 }
 
+export type PlannedOverrideWrite = { fieldKey: string; value: string | null }
+
+/**
+ * Correzioni da scrivere sul documento quando la proposta fornitore viene
+ * confermata con l'impresa digitata a mano (R10, commit 7b). Funzione pura:
+ * decide COSA scrivere, la server action scrive.
+ *
+ * - nome effettivo presente (correzione o verbale): il manuale è ignorato,
+ *   nessuna scrittura;
+ * - nome effettivo vuoto e nome manuale: ragione sociale = nome manuale
+ *   (normalizeOverrideInput, stessa validazione di "Correggi dati");
+ * - P.IVA manuale presente: P.IVA = quella manuale (11 cifre);
+ * - P.IVA manuale vuota: override null sulla P.IVA SOLO se oggi esiste una
+ *   P.IVA effettiva (correzione o verbale). Nome e P.IVA formano una coppia: a
+ *   nome vuoto la proposta ignora la P.IVA del verbale (resolveInstallerInput),
+ *   e il documento non deve continuare a mostrare in riga ed Excel una P.IVA
+ *   che appartiene a un'altra impresa. Senza una P.IVA effettiva non c'è
+ *   nulla da azzerare: nessuna scrittura;
+ * - in caso di errore di validazione non si scrive nulla.
+ */
+export function manualInstallerOverrides(
+  docType: string | null,
+  metadata: { ragione_sociale_installatore?: string | null; partita_iva_installatore?: string | null } | null,
+  overrides: readonly OverrideRow[] | null | undefined,
+  manual: ManualInstaller | null | undefined,
+): { writes: PlannedOverrideWrite[] } | { error: string } {
+  if (!overridableKeys(docType).includes('ragione_sociale_installatore')) return { writes: [] }
+
+  const resolved = resolveProposalInstaller(docType, metadata, overrides, manual)
+  if (resolved.manualError !== null) return { error: resolved.manualError }
+  // Nome effettivo presente (manuale ignorato) o nessun nome digitato.
+  if (!resolved.nameMissing || resolved.ragioneSociale === null) return { writes: [] }
+
+  const nome = normalizeOverrideInput(docType, 'ragione_sociale_installatore', resolved.ragioneSociale)
+  if ('error' in nome) return { error: nome.error }
+  const writes: PlannedOverrideWrite[] = [{ fieldKey: 'ragione_sociale_installatore', value: nome.value }]
+
+  if (resolved.partitaIva !== null) {
+    const vat = normalizeOverrideInput(docType, 'partita_iva_installatore', resolved.partitaIva)
+    if ('error' in vat) return { error: vat.error }
+    writes.push({ fieldKey: 'partita_iva_installatore', value: vat.value })
+  } else if (effectiveInstaller(docType, metadata, overrides).partitaIva !== null) {
+    writes.push({ fieldKey: 'partita_iva_installatore', value: null })
+  }
+  return { writes }
+}
+
 // ------------------------------------------------------------
 // Provenienza
 // ------------------------------------------------------------
