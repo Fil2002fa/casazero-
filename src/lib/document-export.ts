@@ -14,7 +14,7 @@
 import { humanizeDocumentTitle } from './documentTitle'
 import { formatUnitLabel } from './formatUnitLabel'
 import { DOC_TYPE_LABELS } from './document-classification'
-import { normalizeIsoDate } from './document-extraction'
+import { textCell, dateCell, type ExportCell } from './xlsx-helpers'
 import { displayDate, documentFacts, type DocRow, type UnitRow } from './document-rows'
 
 export const DOCUMENT_EXPORT_HEADERS = [
@@ -32,24 +32,9 @@ export const DOCUMENT_EXPORT_HEADERS = [
   'Oggetto coperto',
 ] as const
 
-// Una data resta una data (ordinabile e filtrabile in Excel), mai una
-// stringa formattata. La partita IVA e il numero di polizza restano testo:
-// come numero Excel perderebbero gli zeri iniziali.
-export type ExportCell =
-  | { type: 'text'; value: string }
-  | { type: 'date'; value: string }   // ISO yyyy-mm-dd
-  | null
-
-function text(value: string | null): ExportCell {
-  return value ? { type: 'text', value } : null
-}
-
-// Primi 10 caratteri, come formatDateIT: la data in riga può essere il
-// created_at (TIMESTAMPTZ) quando il documento non ha altre date.
-function date(value: string | null): ExportCell {
-  const iso = value ? normalizeIsoDate(value.slice(0, 10)) : null
-  return iso ? { type: 'date', value: iso } : null
-}
+// Celle tipizzate e conversione xlsx: src/lib/xlsx-helpers.ts.
+const text = textCell
+const date = dateCell
 
 // Ordinamento naturale per etichetta, come la pagina della residenza:
 // "Unità 2" prima di "Unità 10" (la query ordina label come TEXT).

@@ -31,11 +31,13 @@ register('./ts-resolve-hooks.mjs', import.meta.url)
 
 const EXPORT = new URL('../src/lib/document-export.ts', import.meta.url)
 const ROWS = new URL('../src/lib/document-rows.ts', import.meta.url)
+const XLSX = new URL('../src/lib/xlsx-helpers.ts', import.meta.url)
 
-let exp, rows
+let exp, rows, xlsx
 try {
   exp = await import(EXPORT.href)
   rows = await import(ROWS.href)
+  xlsx = await import(XLSX.href)
 } catch (err) {
   console.error(
     `\n✗ Impossibile importare i moduli: ${err.message}\n` +
@@ -208,6 +210,26 @@ check('validitySubject: polizza → compagnia', validitySubject(polizza), 'Assic
 check('validitySubject: APE → unità citata', validitySubject(ape), 'Unità: interno 3')
 check('validitySubject: non attuale → tipo', validitySubject(nonAttuale), 'Attestato di prestazione energetica')
 check('validitySubject: non classificato → null', validitySubject(nonClassificato), null)
+
+// --- helper xlsx condivisi (src/lib/xlsx-helpers.ts) -----------------------
+{
+  const { textCell, dateCell, toSheetCell, fileSlug } = xlsx
+  check('textCell: stringa vuota e null → null', [textCell(''), textCell(null)], [null, null])
+  check('textCell: testo', textCell('Clima Nordest'), T('Clima Nordest'))
+  check('dateCell: timestamptz → primi 10 caratteri', dateCell('2026-09-10T23:30:00.123456+00:00'), D('2026-09-10'))
+  check('dateCell: data non valida e null → null', [dateCell('2026-13-45'), dateCell(null)], [null, null])
+  check('toSheetCell: null', toSheetCell(null), null)
+  check('toSheetCell: testo', toSheetCell(T('01234567890')), { type: String, value: '01234567890' })
+  {
+    const c = toSheetCell(D('2026-09-10'))
+    check('toSheetCell: data = Date UTC a mezzanotte, formato dd/mm/yyyy',
+      [c.type === Date, c.value instanceof Date ? c.value.toISOString() : null, c.format],
+      [true, '2026-09-10T00:00:00.000Z', 'dd/mm/yyyy'])
+  }
+  check('fileSlug: accenti, spazi e maiuscole', fileSlug('Residenza Cavaccio'), 'residenza-cavaccio')
+  check('fileSlug: lettere accentate e punteggiatura', fileSlug("  Villa Sant'Àgata — Blocco 2 "), 'villa-sant-agata-blocco-2')
+  check('fileSlug: solo simboli → fallback', fileSlug('***'), 'residenza')
+}
 
 // --- esito -----------------------------------------------------------------
 if (fallimenti > 0) {
