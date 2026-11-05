@@ -15,6 +15,7 @@ import { DateField } from '@/components/DateField'
 import { CorrectDataPanel } from './CorrectDataPanel'
 import { AssignUnitPanel } from './AssignUnitPanel'
 import { UnitDocumentMatrix } from './UnitDocumentMatrix'
+import { batchFailureMessage, classifyBatchFailure, type BatchFailureReason } from '@/lib/batch-failures'
 import {
   DOC_TYPES,
   DOC_TYPE_LABELS,
@@ -235,6 +236,8 @@ export function DocumentiClient({
   const [classifying, setClassifying] = useState(false)
   const [classifyProgress, setClassifyProgress] = useState<{ done: number; total: number } | null>(null)
   const [classifyFailures, setClassifyFailures] = useState<number | null>(null)
+  // Cause dei fallimenti del batch (E1a, D6): fisse, mai il testo grezzo della route.
+  const [classifyFailureReasons, setClassifyFailureReasons] = useState<BatchFailureReason[]>([])
   // Servizio (chiave assente/vuota, 5xx, rate limit) vs documento: un banner
   // di pagina sostituisce i badge per-documento solo per questa causa — i
   // documenti restano in stato neutro riprovabile (route.ts rollback a
@@ -247,6 +250,7 @@ export function DocumentiClient({
   const [extracting, setExtracting] = useState(false)
   const [extractProgress, setExtractProgress] = useState<{ done: number; total: number } | null>(null)
   const [extractFailures, setExtractFailures] = useState<number | null>(null)
+  const [extractFailureReasons, setExtractFailureReasons] = useState<BatchFailureReason[]>([])
   const [extractServiceUnavailable, setExtractServiceUnavailable] = useState(false)
   const [reviewOnly, setReviewOnly] = useState(false)
   const [docTypeFilter, setDocTypeFilter] = useState<DocType | 'all'>('all')
@@ -384,9 +388,11 @@ export function DocumentiClient({
     setClassifying(true)
     setClassifyProgress({ done: 0, total: targets.length })
     setClassifyFailures(null)
+    setClassifyFailureReasons([])
     setServiceUnavailable(false)
 
     let failures = 0
+    const reasons: BatchFailureReason[] = []
     // Documenti usciti dalla classificazione con tipo finale ed estraibile:
     // l'estrazione parte da sola su questi, per id esatto (mai indovinati
     // da un refresh dei props), a batch concluso.
@@ -414,10 +420,12 @@ export function DocumentiClient({
           break
         } else {
           failures++
+          reasons.push(classifyBatchFailure({ status: res.status, cause: result?.cause }))
           console.error(`[classifica] ${doc.title} fallita:`, result?.error ?? res.statusText)
         }
       } catch (err) {
         failures++
+        reasons.push(classifyBatchFailure({ status: null, cause: undefined }))
         console.error(`[classifica] ${doc.title} fallita:`, err)
       }
       setClassifyProgress({ done: i + 1, total: targets.length })
@@ -426,6 +434,7 @@ export function DocumentiClient({
     setClassifying(false)
     setClassifyProgress(null)
     setClassifyFailures(failures > 0 ? failures : null)
+    setClassifyFailureReasons(reasons)
     router.refresh()
 
     if (toExtract.length > 0) {
@@ -452,9 +461,11 @@ export function DocumentiClient({
     setExtracting(true)
     setExtractProgress({ done: 0, total: targets.length })
     setExtractFailures(null)
+    setExtractFailureReasons([])
     setExtractServiceUnavailable(false)
 
     let failures = 0
+    const reasons: BatchFailureReason[] = []
     for (const [i, doc] of targets.entries()) {
       try {
         const res = await fetch('/api/extract-document', {
@@ -476,10 +487,12 @@ export function DocumentiClient({
           console.warn(`[estrai] ${doc.title} non estraibile:`, result?.error)
         } else {
           failures++
+          reasons.push(classifyBatchFailure({ status: res.status, cause: result?.cause }))
           console.error(`[estrai] ${doc.title} senza dati:`, result?.error ?? res.statusText)
         }
       } catch (err) {
         failures++
+        reasons.push(classifyBatchFailure({ status: null, cause: undefined }))
         console.error(`[estrai] ${doc.title} senza dati:`, err)
       }
       setExtractProgress({ done: i + 1, total: targets.length })
@@ -488,6 +501,7 @@ export function DocumentiClient({
     setExtracting(false)
     setExtractProgress(null)
     setExtractFailures(failures > 0 ? failures : null)
+    setExtractFailureReasons(reasons)
     router.refresh()
   }
 
@@ -754,14 +768,24 @@ export function DocumentiClient({
           documenti" sopra è la rete di sicurezza a cui rimanda. */}
       {!classifying && classifyFailures !== null && classifyFailures > 0 && (
         <p className="text-xs text-status-inprogress">
-          {pluralize(classifyFailures, 'documento non classificato', 'documenti non classificati')}
-          {' '}— riprova con Classifica documenti.
+          {batchFailureMessage({
+            count: classifyFailures,
+            singular: 'documento non classificato',
+            plural: 'documenti non classificati',
+            retryText: 'riprova con Classifica documenti.',
+            reasons: classifyFailureReasons,
+          })}
         </p>
       )}
       {!extracting && extractFailures !== null && extractFailures > 0 && (
         <p className="text-xs text-status-inprogress">
-          {pluralize(extractFailures, 'documento senza dati estratti', 'documenti senza dati estratti')}
-          {' '}— riprova con Estrai dati.
+          {batchFailureMessage({
+            count: extractFailures,
+            singular: 'documento senza dati estratti',
+            plural: 'documenti senza dati estratti',
+            retryText: 'riprova con Estrai dati.',
+            reasons: extractFailureReasons,
+          })}
         </p>
       )}
 
