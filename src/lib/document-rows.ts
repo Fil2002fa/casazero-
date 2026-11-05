@@ -26,6 +26,7 @@ import {
 import {
   AMBITO_LABELS,
   isTypedDocType,
+  isExtractableDocType,
   extractionIsCurrent,
   validityFormula,
   type DocumentExtractionRow,
@@ -38,8 +39,10 @@ import {
   currentOverrides,
   effectiveExtraction,
   effectiveInstaller,
+  fieldProvenance,
   hasCurrentOverrides,
   overridableKeys,
+  overrideFieldLabel,
   overridesLostOnTypeChange,
   type CorrectionField,
   type OverrideRow,
@@ -129,6 +132,35 @@ export function correctionFields(doc: DocRow): CorrectionField[] {
 // Etichetta discreta "Dati corretti a mano" in riga.
 export function hasCorrections(doc: DocRow): boolean {
   return hasCurrentOverrides(doc.doc_type, doc.overrides)
+}
+
+// Etichette dei campi corretti a mano in vigore, nell'ordine del pannello
+// "Correggi dati". Vuoto se il documento non ha correzioni che valgono.
+export function correctedFieldLabels(doc: DocRow): string[] {
+  const provenance = fieldProvenance(doc.doc_type, doc.overrides)
+  return Object.entries(provenance)
+    .filter(([, p]) => p.source === 'manuale')
+    .map(([key]) => overrideFieldLabel(key) ?? key)
+}
+
+// Origine dei dati del documento, A LIVELLO DI DOCUMENTO (la confidenza per
+// campo non è salvata da nessuna parte: il "da verificare" per campo è E1b).
+// Ordine di precedenza:
+//  da_verificare   classificazione non chiusa (da rivedere, fallita, non
+//                  classificato, in corso);
+//  non_estratto    classificato, tipo estraibile, ma senza estrazione
+//                  corrente completata (mai estratto, saltata, fallita);
+//  corretto_a_mano almeno una correzione in vigore;
+//  ai              estrazione corrente completata, nessuna correzione;
+//  null            tipo non estraibile ('altro'): niente da attribuire.
+export type DataOrigin = 'da_verificare' | 'non_estratto' | 'corretto_a_mano' | 'ai'
+
+export function dataOrigin(doc: DocRow): DataOrigin | null {
+  if (doc.classification_status !== 'completata') return 'da_verificare'
+  if (!isExtractableDocType(doc.doc_type)) return null
+  if (currentExtraction(doc)?.status !== 'completata') return 'non_estratto'
+  if (hasCorrections(doc)) return 'corretto_a_mano'
+  return 'ai'
 }
 
 // Avviso di riclassificazione (D6): quante correzioni smetterebbero di valere.

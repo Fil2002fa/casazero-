@@ -4,7 +4,8 @@
 //       (oppure: npm run verify:export)
 // ------------------------------------------------------------
 // COSA GARANTISCE: che documentExportRow / documentExportRows
-// (src/lib/document-export.ts) diano le 12 celle attese, con il tipo giusto
+// (src/lib/document-export.ts) diano le 16 celle attese (12 di dati estratti
+// più file, stato, origine del dato e campi corretti), con il tipo giusto
 // (data o testo), su casi positivi E negativi: documento senza estrazione,
 // non classificato, DiCo con installatore e P.IVA con zero iniziale,
 // garanzia, polizza senza date (formula), APE di unità, estrazione non
@@ -48,7 +49,11 @@ try {
 }
 
 const { DOCUMENT_EXPORT_HEADERS, documentExportRow, documentExportRows } = exp
-const { documentFacts, extractionFacts, validitySubject } = rows
+const { documentFacts, extractionFacts, validitySubject, dataOrigin, correctedFieldLabels } = rows
+
+// I casi storici verificano le prime 12 colonne (dati estratti); le colonne
+// di origine, stato e file hanno i loro casi più sotto.
+const r12 = (d, unit) => documentExportRow(d, unit).slice(0, 12)
 
 let fallimenti = 0
 let eseguiti = 0
@@ -128,49 +133,124 @@ const saltata = doc({
 })
 
 // --- intestazioni ----------------------------------------------------------
-check('intestazioni: 12 colonne nell\'ordine concordato', DOCUMENT_EXPORT_HEADERS, [
+check('intestazioni: 16 colonne nell\'ordine concordato', DOCUMENT_EXPORT_HEADERS, [
   'Titolo', 'Tipo', 'Ambito', 'Unità', 'Data documento', 'Scadenza o validità',
   'Installatore', 'Partita IVA', 'Compagnia', 'Numero polizza', 'Classe energetica', 'Oggetto coperto',
+  'File', 'Stato classificazione', 'Origine del dato', 'Campi corretti a mano',
 ])
 
 // --- una riga per caso -----------------------------------------------------
 check('non classificato, senza estrazione: solo titolo e data',
-  documentExportRow(nonClassificato, null),
+  r12(nonClassificato, null),
   [T('Scansione 001'), _, _, _, D('2026-05-04'), _, _, _, _, _, _, _])
 check('senza file_date: data dal created_at (primi 10 caratteri, come a schermo)',
-  documentExportRow(soloCaricamento, null),
+  r12(soloCaricamento, null),
   [T('Foto cantiere'), _, _, _, D('2026-09-10'), _, _, _, _, _, _, _])
 check('DiCo: installatore e P.IVA dal verbale, P.IVA come testo',
-  documentExportRow(dico, null),
+  r12(dico, null),
   [T('DiCo impianto VMC'), T('Dichiarazione di conformità DM 37/08'), _, _, D('2025-03-28'), _,
     T('Clima Nordest S.r.l.'), T('01234567890'), _, _, _, _])
 check('DiCo con ragione sociale vuota: celle vuote',
-  documentExportRow(dicoSenzaImpresa, null),
+  r12(dicoSenzaImpresa, null),
   [T('Dico elettrico'), T('Dichiarazione di conformità DM 37/08'), _, _, D('2025-01-15'), _, _, _, _, _, _, _])
 check('garanzia: ambito, data estratta, scadenza come data, oggetto; installatore del verbale ignorato',
-  documentExportRow(garanzia, null),
+  r12(garanzia, null),
   [T('Certificato garanzia caldaia'), T('Garanzia'), T('Parti comuni'), _, D('2025-03-10'), D('2029-03-10'),
     _, _, _, _, _, T('Caldaia a condensazione')])
 check('polizza senza date: formula di validità come testo, compagnia e numero',
-  documentExportRow(polizza, null),
+  r12(polizza, null),
   [T('Polizza decennale postuma'), T('Polizza decennale postuma'), T('Residenza'), _, D('2026-02-01'),
     T('10 anni dalla data di emissione del certificato di collaudo'), _, _,
     T('Assicuratrice Esempio'), T('DEC-2026-0042'), _, _])
 check('APE di unità: ambito con unità citata, unità assegnata, classe',
-  documentExportRow(ape, 'Unità 3'),
+  r12(ape, 'Unità 3'),
   [T('APE interno 3'), T('Attestato di prestazione energetica'), T('Unità: interno 3'), T('Unità 3'),
     D('2024-02-20'), D('2034-02-20'), _, _, _, _, T('A2'), _])
 check('estrazione non attuale (for_doc_type diverso da doc_type): ignorata, data dal file',
-  documentExportRow(nonAttuale, null),
+  r12(nonAttuale, null),
   [T('Ape riclassificato'), T('Attestato di prestazione energetica'), _, _, D('2023-06-30'), _, _, _, _, _, _, _])
 check('estrazione saltata: celle estratte vuote',
-  documentExportRow(saltata, null),
+  r12(saltata, null),
   [T('Manuale caldaia'), T('Manuale'), _, _, D('2025-02-02'), _, _, _, _, _, _, _])
 
 const tutti = [nonClassificato, soloCaricamento, dico, dicoSenzaImpresa, garanzia, polizza, ape, nonAttuale, saltata]
-check('ogni riga ha 12 celle', tutti.map(d => documentExportRow(d, null).length), tutti.map(() => 12))
+check('ogni riga ha 16 celle', tutti.map(d => documentExportRow(d, null).length), tutti.map(() => 16))
 check('nessuna cella testo vuota: vuoto è sempre null',
   tutti.flatMap(d => documentExportRow(d, null)).filter(c => c !== null && c.value === '').length, 0)
+
+// --- File, stato, origine del dato, campi corretti -------------------------
+const ov = (docType, key, value) => ({
+  for_doc_type: docType, field_key: key, value, set_by: 'u1', set_at: '2026-11-04T10:00:00+00:00',
+})
+const garanziaAi = doc({
+  title: 'garanzia_ai', file_name: 'garanzia_ai.pdf', classification_status: 'completata', doc_type: 'garanzia',
+  extraction: ext({ for_doc_type: 'garanzia', document_date: '2025-03-10', valid_until: '2029-03-10', fields: { inizio: '2025-03-10', durata_anni: 4 } }),
+  overrides: [],
+})
+const garanziaCorretta = doc({
+  title: 'garanzia_corretta', file_name: 'garanzia_corretta.pdf', classification_status: 'completata', doc_type: 'garanzia',
+  extraction: ext({ for_doc_type: 'garanzia', document_date: '2025-03-10', valid_until: '2029-03-10', fields: { inizio: '2025-03-10', durata_anni: 4, oggetto: 'Caldaia' } }),
+  overrides: [ov('garanzia', 'durata_anni', '5'), ov('garanzia', 'oggetto', 'Caldaia a condensazione')],
+})
+const garanziaCorrezioneVecchia = doc({
+  title: 'garanzia_vecchia', file_name: 'garanzia_vecchia.pdf', classification_status: 'completata', doc_type: 'garanzia',
+  extraction: ext({ for_doc_type: 'garanzia', fields: { inizio: '2025-03-10', durata_anni: 4 } }),
+  // Correzione di un tipo precedente: non vale, non deve far dire "corretto a mano".
+  overrides: [ov('ape', 'classe_energetica', 'B')],
+})
+const daRivedere = doc({ title: 'da_rivedere', file_name: 'x.pdf', classification_status: 'da_revisionare', doc_type: 'garanzia' })
+const nonClass = doc({ title: 'non_class', file_name: 'y.pdf', classification_status: 'non_classificato' })
+const fallita = doc({ title: 'fallita', file_name: 'z.pdf', classification_status: 'fallita' })
+const inCorso = doc({ title: 'in_corso', file_name: 'w.pdf', classification_status: 'in_corso' })
+const senzaEstrazione = doc({ title: 'ape_senza', file_name: 'ape.pdf', classification_status: 'completata', doc_type: 'ape' })
+const estrazioneSaltata = doc({
+  title: 'manuale', file_name: 'm.pdf', classification_status: 'completata', doc_type: 'manuale',
+  extraction: ext({ for_doc_type: 'manuale', status: 'saltata' }),
+})
+const estrazioneNonAttuale = doc({
+  title: 'riclassificato', file_name: 'r.pdf', classification_status: 'completata', doc_type: 'ape',
+  extraction: ext({ for_doc_type: 'garanzia', status: 'completata' }),
+})
+const altroDoc = doc({ title: 'varie', file_name: 'v.pdf', classification_status: 'completata', doc_type: 'altro' })
+const dicoSoloImpresaCorretta = doc({
+  title: 'dico', file_name: 'dico.pdf', classification_status: 'completata', doc_type: 'dich_conformita_dm37',
+  extracted_metadata: { ragione_sociale_installatore: 'Impresa AI', partita_iva_installatore: '01234567890' },
+  overrides: [ov('dich_conformita_dm37', 'ragione_sociale_installatore', 'Impresa Corretta Srl')],
+})
+
+const origine = d => dataOrigin(d)
+check('origine: estrazione completata senza correzioni → ai', origine(garanziaAi), 'ai')
+check('origine: correzioni in vigore → corretto_a_mano', origine(garanziaCorretta), 'corretto_a_mano')
+check('origine: correzione di un tipo precedente non conta → ai', origine(garanziaCorrezioneVecchia), 'ai')
+check('origine: da_revisionare/non_classificato/fallita/in_corso → da_verificare',
+  [daRivedere, nonClass, fallita, inCorso].map(origine), ['da_verificare', 'da_verificare', 'da_verificare', 'da_verificare'])
+check('origine: classificato senza estrazione → non_estratto', origine(senzaEstrazione), 'non_estratto')
+check('origine: estrazione saltata → non_estratto', origine(estrazioneSaltata), 'non_estratto')
+check('origine: estrazione di un tipo precedente → non_estratto', origine(estrazioneNonAttuale), 'non_estratto')
+check('origine: tipo "altro" → nessuna origine', origine(altroDoc), null)
+check('origine: DiCo senza estrazione ma impresa corretta → non_estratto (precedenza), campo elencato',
+  [origine(dicoSoloImpresaCorretta), correctedFieldLabels(dicoSoloImpresaCorretta)], ['non_estratto', ['Impresa installatrice']])
+
+check('campi corretti: etichette nell\'ordine del pannello', correctedFieldLabels(garanziaCorretta), ['Durata (anni)', 'Oggetto'])
+check('campi corretti: nessuna correzione e correzione vecchia → vuoto',
+  [correctedFieldLabels(garanziaAi), correctedFieldLabels(garanziaCorrezioneVecchia)], [[], []])
+
+check('colonne nuove: AI', documentExportRow(garanziaAi, null).slice(12),
+  [T('garanzia_ai.pdf'), T('Classificato'), T('AI'), _])
+check('colonne nuove: corretto a mano con i campi', documentExportRow(garanziaCorretta, null).slice(12),
+  [T('garanzia_corretta.pdf'), T('Classificato'), T('Corretto a mano'), T('Durata (anni), Oggetto')])
+check('colonne nuove: da rivedere', documentExportRow(daRivedere, null).slice(12),
+  [T('x.pdf'), T('Da rivedere'), T('Da verificare'), _])
+check('colonne nuove: non classificato', documentExportRow(nonClass, null).slice(12),
+  [T('y.pdf'), T('Non classificato'), T('Da verificare'), _])
+check('colonne nuove: non classificabile', documentExportRow(fallita, null).slice(12),
+  [T('z.pdf'), T('Non classificabile'), T('Da verificare'), _])
+check('colonne nuove: non estratto', documentExportRow(senzaEstrazione, null).slice(12),
+  [T('ape.pdf'), T('Classificato'), T('Non estratto'), _])
+check('colonne nuove: "altro" senza origine', documentExportRow(altroDoc, null).slice(12),
+  [T('v.pdf'), T('Classificato'), _, _])
+check('colonne nuove: stato sconosciuto → cella vuota, mai undefined',
+  documentExportRow(doc({ file_name: 'q.pdf', classification_status: 'valore_vecchio' }), null).slice(13, 14), [_])
 
 // --- ordine delle righe ----------------------------------------------------
 {

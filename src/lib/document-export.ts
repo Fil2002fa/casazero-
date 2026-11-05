@@ -13,9 +13,17 @@
  */
 import { humanizeDocumentTitle } from './documentTitle'
 import { formatUnitLabel } from './formatUnitLabel'
-import { DOC_TYPE_LABELS } from './document-classification'
+import { DOC_TYPE_LABELS, type ClassificationStatus } from './document-classification'
 import { textCell, dateCell, type ExportCell } from './xlsx-helpers'
-import { displayDate, documentFacts, type DocRow, type UnitRow } from './document-rows'
+import {
+  correctedFieldLabels,
+  dataOrigin,
+  displayDate,
+  documentFacts,
+  type DataOrigin,
+  type DocRow,
+  type UnitRow,
+} from './document-rows'
 
 export const DOCUMENT_EXPORT_HEADERS = [
   'Titolo',
@@ -30,7 +38,29 @@ export const DOCUMENT_EXPORT_HEADERS = [
   'Numero polizza',
   'Classe energetica',
   'Oggetto coperto',
+  'File',
+  'Stato classificazione',
+  'Origine del dato',
+  'Campi corretti a mano',
 ] as const
+
+// Stato di classificazione: stessa parola della card dove esiste ("Da
+// rivedere"); 'non_classificato' non ha badge a schermo ma nel foglio una
+// cella vuota sarebbe ambigua.
+const CLASSIFICATION_STATUS_LABELS: Record<ClassificationStatus, string> = {
+  completata: 'Classificato',
+  da_revisionare: 'Da rivedere',
+  fallita: 'Non classificabile',
+  in_corso: 'In classificazione',
+  non_classificato: 'Non classificato',
+}
+
+const DATA_ORIGIN_LABELS: Record<DataOrigin, string> = {
+  da_verificare: 'Da verificare',
+  non_estratto: 'Non estratto',
+  corretto_a_mano: 'Corretto a mano',
+  ai: 'AI',
+}
 
 // Celle tipizzate e conversione xlsx: src/lib/xlsx-helpers.ts.
 const text = textCell
@@ -44,6 +74,8 @@ function compareUnitLabels(a: UnitRow, b: UnitRow): number {
 
 export function documentExportRow(doc: DocRow, unitLabel: string | null): ExportCell[] {
   const facts = documentFacts(doc)
+  const origin = dataOrigin(doc)
+  const corrected = correctedFieldLabels(doc)
   return [
     text(humanizeDocumentTitle(doc.title)),
     text(doc.doc_type ? DOC_TYPE_LABELS[doc.doc_type] : null),
@@ -57,6 +89,10 @@ export function documentExportRow(doc: DocRow, unitLabel: string | null): Export
     text(facts.numeroPolizza),
     text(facts.classeEnergetica),
     text(facts.oggetto),
+    text(doc.file_name),
+    text(CLASSIFICATION_STATUS_LABELS[doc.classification_status] ?? null),
+    text(origin ? DATA_ORIGIN_LABELS[origin] : null),
+    text(corrected.length > 0 ? corrected.join(', ') : null),
   ]
 }
 

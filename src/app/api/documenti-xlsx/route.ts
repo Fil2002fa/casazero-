@@ -14,7 +14,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 // Larghezze in caratteri, nell'ordine di DOCUMENT_EXPORT_HEADERS.
-const COLUMN_WIDTHS = [40, 34, 22, 14, 15, 40, 30, 16, 26, 20, 11, 32]
+const COLUMN_WIDTHS = [40, 34, 22, 14, 15, 40, 30, 16, 26, 20, 11, 32, 34, 22, 18, 40]
 
 // GET /api/documenti-xlsx?residenceId=UUID — super_admin del builder proprietario, o admin assegnato alla residenza
 export async function GET(req: NextRequest) {
