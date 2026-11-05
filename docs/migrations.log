@@ -5,3 +5,4 @@
 
 2026-11-02 | 048_document_field_overrides.sql | PASS (V1 colonne, V2 vincoli, V3 RLS e policy SELECT unica, V4 grants authenticated SELECT e anon nessuno, V5 0 righe)
 2026-11-05 | 049_activity_event_documento_corretto.sql | PASS (a CHECK con 10 tipi, b una sola CHECK su event_type, c registro invariato 68 righe, d positivo OK e negativo respinto da activity_events_event_type_check, 0 righe documento_corretto residue)
+2026-11-05 | 050_invites_rls_scoped.sql | PASS (a 4 policy su invites: 3 sostituite e 2 nuove, lettura e delete admin invariate; b INSERT forgiato super_admin con unita di un altro builder respinto 42501, prima accettato; c INSERT client con unita di un altro builder respinto; d INSERT super_admin sulla propria residenza respinto; e INSERT client con unita propria e admin con sola residenza accettati; f pippoloro02 vede ancora 34 inviti, 27 attivi; g dopo i rollback 97 inviti e 0 super_admin)
