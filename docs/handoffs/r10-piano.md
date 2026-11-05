@@ -63,3 +63,23 @@
   - commit 3, merge in `src/lib/document-overrides.ts` + `scripts/verify-document-overrides.mjs` (64 casi): `b54c82b`. Select provata dal vivo su TEST wizard A: pagina Documenti 200 con f949ac0f, export Excel 200, nessun errore in console o nel log del server.
 - **Decisione:** "Correggi dati" si mostra solo con un'estrazione corrente. Le correzioni sopra un documento senza estrazione corrente sono in backlog come **R10b**.
 - **Prossimo:** commit 4 (server action `saveDocumentFieldOverride` e `clearDocumentFieldOverride`; validazione con `normalizeOverrideInput`).
+
+## Commit 7 diviso (5/11)
+
+Il commit 7 (integrazione R3, risposta 1) si divide in tre commit separati, uno per concern. Ognuno: diff + `npm run verify` completo, ok di Filippo, commit, hash.
+
+- **7a, lettura dell'installatore effettivo.** La proposta fornitore usa l'installatore effettivo (correzione > verbale) sia nel pannello (`SupplierProposalSection`) sia in `confirmSupplierProposal`, con un solo helper condiviso (`resolveProposalInstaller` in `src/lib/document-overrides.ts`). Solo lettura: nessuna nuova scrittura. Il server legge `document_field_overrides` con il client utente (`error` destrutturato e loggato). Script `verify-document-overrides` esteso (sezione 14).
+- **7b, valori manuali → override.** I valori digitati a mano nella proposta (ragione sociale e P.IVA) diventano anche correzioni sul documento. L'override si scrive PRIMA del collegamento ("collegamento prima, correzione dopo" era il flusso utente, non l'ordine delle scritture). P.IVA manuale vuota → override null sulla P.IVA solo se oggi c'è una P.IVA effettiva; altrimenti nessuna scrittura.
+- **7c, avviso di disallineamento in `DocCard`.** Testo: «L'impresa installatrice di questo documento non corrisponde più a «{nome fornitore}», collegato per {sistema} in questa residenza. Il collegamento resta: controllalo dalla pagina Fornitori.»
+  - Helper `installerMatchesSupplier`: P.IVA normalizzate se ci sono entrambe, altrimenti `normalizeCompanyName`; nessun avviso se manca il nome.
+  - La select di `page.tsx` aggiunge `source_document_id`.
+  - Visibile solo al super_admin, nessuna modifica RLS.
+
+Prova dal vivo del 7a (su f949ac0f, TEST wizard A): "Correggi dati" con ragione sociale e P.IVA (anche una P.IVA di 10 cifre per l'errore "11 cifre"); dopo il ricarico la proposta mostra l'impresa corretta senza form manuale; "Collega fornitore" e SELECT su `suppliers` e `supplier_installations`; pulizia con "Ripristina valore AI" e DELETE del fornitore di prova (SQL mostrato prima); SELECT finale a 0 override, 0 collegamenti, 0 fornitori. Se l'estrazione non è corrente e "Correggi dati" non si apre: fermarsi, non riclassificare.
+
+## Stato 5/11
+
+- **Fatti e pushati (CI verde, run 42003487377):** commit 4 `bac30a1`, commit 5 `4df30c6` (già in git il 2/11 sera), 7a `ed2981b`, 7b `96318d7`, 7c `22f4634`.
+- **7c** è andato oltre la descrizione sopra in un punto: il testo dell'avviso non attribuisce la causa («Il fornitore collegato per {sistema} è {nome} (P.IVA {piva}), mentre questo documento indica {nome impresa} (P.IVA {piva impresa}).» + link «Gestisci i collegamenti» verso `/admin/fornitori`), perché il disallineamento nasce anche da una modifica dell'anagrafica del fornitore.
+- **Resta il commit 6** (migrazione 049, evento `documento_corretto`, `logActivityEvent` nelle action di scrittura e di ripristino). Le scritture del 7b non loggano ancora nulla: il commit 6 deve coprire anche `confirmSupplierProposal` (override scritti da lì).
+- **Backlog:** pulsante «Collega {impresa effettiva} al posto di {fornitore collegato}» sull'avviso (stima media, vedi handoff del 5/11); R10b (correzioni senza estrazione corrente).
