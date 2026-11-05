@@ -33,8 +33,16 @@ type ItemRow = {
 type EmailContent = { subject: string; html: string }
 
 export async function GET(req: NextRequest) {
+  // Segreto assente o vuoto = guasto di configurazione, non un rifiuto di accesso:
+  // senza questo controllo il template darebbe "Bearer undefined" e quella stringa passerebbe.
+  const cronSecret = process.env.CRON_SECRET
+  if (!cronSecret) {
+    console.error('[cron/daily] CRON_SECRET non configurato, job non eseguito')
+    return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
+  }
+
   const authHeader = req.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
