@@ -89,6 +89,52 @@ Filippo controlla nella dashboard Resend se le email del 5/11 a `lorofilippo2002
 ### Step 7 — Handoff di fine giornata
 Includere: scritture eseguite (SQL e risultati, non in `docs/migrations.log`), esito di Step 1–6, decisioni prese, backlog P1 qui sotto. Generato con `/handoff`. Non modificare CLAUDE.md: le leggi nuove vanno nella sezione "Leggi emerse".
 
+## Aggiornamento 05/11 — audit B23 completo e decisioni
+
+Audit in sola lettura di tutti gli usi del service client (22 file, lista completa). Verificati direttamente da Claude sul codice o sul DB live: A1, A3, A5, A6. Il resto è dal report del subagent (codice e migrazioni 001-049 nel repo, non il DB live).
+
+| # | Dove | Filtra builder | Gravità | Raggiungibile da |
+|---|---|---|---|---|
+| A3 | `administrators/[id]/page.tsx:39-106` | NO | alta | URL con l'UUID di un admin |
+| A1 | `admin-actions.ts:221-231` `getAdminEmail` | NO | alta | richiesta forgiata |
+| A2 | `admin-actions.ts:32-95` `assignAdmin` (`profileId` non validato) | PARZIALE | media | richiesta forgiata |
+| A5 | RLS `invites` (`super_admin full` e `gestisce`) + `accept-invite.ts:55,70-71,82-85` | NO | alta | richiesta forgiata (un super_admin può diventare super_admin di un altro builder) |
+| A6 | `completions` INSERT senza controllo su `item_id` + `czero_recalc_due` | NO | media | richiesta forgiata |
+| A4 | `updateResidencePhoto` (`residences/[id]/actions.ts:36-41`) e storage `residence-photos` | NO | media | richiesta forgiata |
+
+Corretti (con la riga che lo prova): `authorizeResidenceActor` (`document-access.ts:170`), `fascicolo-pdf`, `documenti-xlsx`, `report`, `classify-document`, `extract-document`, `reconcile-documents`, `sollecitaItem` (`:110`), azioni di `units`, `createResidence`, `createAdminInvite`, `removeAdminAssignment`, `(app)/fascicolo`, `(app)/profilo`, lista `/admin/administrators`.
+
+### Blocco fix B23 (un commit per problema, stop prima di ogni commit per l'ok di Filippo, `npm run verify` e diff prima di ognuno)
+
+Pattern comune: il perimetro lo decide la RLS con una lettura di sessione (`createClient()`) PRIMA del service client, come in `createAdminInvite` (`admin-actions.ts:171-184`). Un super_admin vede un admin solo se ha il suo `builder_id` o è assegnato a una sua residenza.
+
+| Commit | Problema | File | Prova |
+|---|---|---|---|
+| docs | questo aggiornamento | `docs/handoffs/n1-account-nicola-piano.md` | `npm run verify` |
+| 1 | A3 | `administrators/[id]/page.tsx`: lettura profilo con sessione, senza riga `notFound()` | con `casazero.prova` (super_admin del builder di prova) aprire `/admin/administrators/7a210c85-7816-4d5f-b802-176505947469` prima e dopo il fix; poi un admin del proprio builder deve aprirsi ancora |
+| 2 | A1 | `admin-actions.ts` `getAdminEmail` | simulazione RLS (sotto) e `npm run verify` |
+| 3 | A2 | `admin-actions.ts` `assignAdmin`: `profileId` deve essere `role='admin'` visibile via RLS | simulazione RLS e `npm run verify` |
+| 4 | A5 lato codice | `accept-invite.ts` `checkInviteForUser`: invito `super_admin` mai accettabile; se `unit_id` e `residence_id` sono entrambi presenti devono coincidere | `npm run verify` |
+| migrazione 050 | A5 lato DB | policy `invites`: vincolo su `role` (solo `client` e `admin`) e coerenza unità/residenza nel proprio builder | SQL intero mostrato a Filippo PRIMA di applicarla (DROP e CREATE di policy: conferma esplicita); poi probe con simulazione RLS e riga in `docs/migrations.log` |
+
+Simulazione RLS (approvata da Filippo): `BEGIN; SET LOCAL ROLE authenticated; SELECT set_config('request.jwt.claims', ...); SELECT ...; ROLLBACK;` tutto nella stessa chiamata, e subito dopo una SELECT che mostra che nulla è cambiato.
+
+Commit 4 e migrazione 050: entrambi PRIMA della consegna a Nicola.
+
+### Scritture eseguite sul DB (05/11, per l'handoff di fine giornata, non in `docs/migrations.log`)
+
+1. V0 su `casazero.prova@gmail.com` (id `3b68770c-6341-4543-99fc-42f6a4fc0939`): confermata, `client`, `builder_id` NULL, 0 unità, 0 assegnazioni, 0 inviti, 0 completamenti, 0 eventi, 0 notifiche; nessun builder "TEST prova Nicola" esistente.
+2. `INSERT INTO builders` → `c71e9e4e-b90e-479b-85d7-cb352b798b5e`, "TEST prova Nicola", contact_email `casazero.prova@gmail.com`, `primary_color` default `#04342C`.
+3. `UPDATE profiles SET role='super_admin', builder_id=<c71e9e4e...>` su `3b68770c...` (1 riga).
+4. V1: 1 builder. V2: `casazero.prova@gmail.com` super_admin di "TEST prova Nicola". V3: 0 residenze, 1 profilo. V4: Archivio pre-demo admin 2; Furlan srl admin 1, client 5, super_admin 1; TEST prova Nicola super_admin 1.
+5. V5 (identità Google collegata) e prova di A3 prima del fix: da fare.
+
+### Nuovi in backlog P1 (fuori da questo blocco)
+
+- A6, insieme a B17 (WITH CHECK su `completions`): FASE 0 a sé, perché tocca la policy INSERT del fascicolo.
+- Storage `builder-logos` e `residence-photos`, A4 (`updateResidencePhoto`).
+- B1 `storage_path` fidato dalla riga `documents` e scaricato col service client in `classify-document` e `extract-document`; B2 mass-assignment in `updateMaintenanceItemConfig` (`fornitori/actions.ts:155`); B3 `documents.unit_id` non validato; B5 filename non sanificato in `fascicolo-pdf/route.ts:91`; B6 confronto del segreto del cron non a tempo costante (`cron/daily/route.ts:50`).
+
 ## Backlog P1 (non in questa sessione)
 
 - `accept-invite.ts:125`: `onConflict` non corrisponde a nessun indice unico sul DB (probabile errore 42P10, con profilo già promosso).
