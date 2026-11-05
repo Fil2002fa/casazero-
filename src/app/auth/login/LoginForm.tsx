@@ -98,7 +98,9 @@ export function LoginForm({ invite, error, next, activeSession }: {
                 <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
+                  name="email"
                   type="email"
+                  autoComplete="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="nome@esempio.com"
