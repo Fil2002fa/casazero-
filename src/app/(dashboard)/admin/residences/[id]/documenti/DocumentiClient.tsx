@@ -14,6 +14,7 @@ import { humanizeDocumentTitle } from '@/lib/documentTitle'
 import { DateField } from '@/components/DateField'
 import { CorrectDataPanel } from './CorrectDataPanel'
 import { AssignUnitPanel } from './AssignUnitPanel'
+import { UnitDocumentMatrix } from './UnitDocumentMatrix'
 import {
   DOC_TYPES,
   DOC_TYPE_LABELS,
@@ -763,6 +764,9 @@ export function DocumentiClient({
           {' '}— riprova con Estrai dati.
         </p>
       )}
+
+      {/* -------- Quadro unità × documenti attesi -------- */}
+      <UnitDocumentMatrix docs={docs} units={units} />
 
       {/* -------- Da caricare + Escluse dalla consegna -------- */}
       <MissingDocumentsSection
