@@ -8,6 +8,7 @@ import {
 import { requireRole } from '@/lib/auth'
 import { PageHeader } from '@/components/PageHeader'
 import { createClient } from '@/lib/supabase/server'
+import { checkAdminInScope } from '@/lib/admin-scope'
 import { createServiceClient } from '@/lib/supabase/admin'
 import {
   overdueLive, todayISO,
@@ -43,19 +44,12 @@ export default async function AdminDetailPage({ params }: { params: Params }) {
   // lettura con il service client (che la RLS non vede). Un super_admin vede un
   // admin solo se ha il suo builder_id o è assegnato a una sua residenza
   // (policy su profiles). Stesso pattern di createAdminInvite in admin-actions.ts.
-  const supabase = await createClient()
-  const { data: visibleAdmin, error: visibleError } = await supabase
-    .from('profiles')
-    .select('id')
-    .eq('id', profileId)
-    .eq('role', 'admin')
-    .maybeSingle()
-  if (visibleError) {
+  const scope = await checkAdminInScope(await createClient(), profileId)
+  if (scope === 'error') {
     // Guasto tecnico, non "non trovato": lasciarlo salire all'error boundary.
-    console.error('AdminDetailPage: errore lettura perimetro admin', { profileId, visibleError })
     throw new Error('Errore temporaneo nella lettura dell\'amministratore, riprova.')
   }
-  if (!visibleAdmin) notFound()
+  if (scope === 'out_of_scope') notFound()
 
   const svc = createServiceClient()
   const today = todayISO()

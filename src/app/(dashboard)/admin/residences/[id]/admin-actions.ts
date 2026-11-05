@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/admin'
 import { logActivityEvent } from '@/lib/activity-log'
+import { checkAdminInScope } from '@/lib/admin-scope'
 import type { UserRole } from '@/types/database'
 
 // Identità del super_admin che compie l'atto, letta lato server dalla
@@ -223,6 +224,12 @@ export async function getAdminEmail(
 ): Promise<{ email?: string; error?: string }> {
   const caller = await assertSuperAdmin()
   if ('error' in caller) return { error: caller.error }
+
+  // Perimetro PRIMA del service client: senza questo, qualunque super_admin
+  // otteneva l'email di qualunque utente conoscendone l'UUID.
+  const scope = await checkAdminInScope(await createClient(), profileId)
+  if (scope === 'error') return { error: 'Errore temporaneo nella verifica dell\'amministratore, riprova.' }
+  if (scope === 'out_of_scope') return { error: 'Amministratore non trovato' }
 
   const svc = createServiceClient()
   const { data, error } = await svc.auth.admin.getUserById(profileId)
