@@ -257,6 +257,30 @@ export async function confirmDocument(input: ConfirmDocumentInput): Promise<Conf
     return { error: 'Percorso storage incoerente con la residenza indicata' }
   }
 
+  // L'unità scelta deve essere della stessa residenza: la FK su units(id) e la
+  // policy di scrittura di documents non lo controllano. Stessa regola di
+  // setDocumentUnit (checkUnitAssignment), applicata prima di toccare lo
+  // storage. Letta col client di sessione: un'unità fuori dal perimetro
+  // dell'utente è "non trovata", un errore di lettura è tecnico.
+  if (unitId !== null) {
+    if (typeof unitId !== 'string' || unitId === '') return { error: 'Parametri non validi' }
+    const { data: unitRow, error: unitError } = await supabase
+      .from('units')
+      .select('id, residence_id')
+      .eq('id', unitId)
+      .maybeSingle()
+    if (unitError && unitError.code !== PG_INVALID_TEXT_REPRESENTATION) {
+      console.error('[confirmDocument] lettura unità fallita', { unitId, code: unitError.code, message: unitError.message })
+      return { error: 'Errore tecnico, riprova.' }
+    }
+    const unitCheck = checkUnitAssignment(
+      { residence_id: residenceId, unit_id: null },
+      unitId,
+      unitError ? null : (unitRow as { id: string; residence_id: string } | null),
+    )
+    if (!unitCheck.ok) return { error: unitCheck.error }
+  }
+
   const lastSlash = storagePath.lastIndexOf('/')
   const folder = storagePath.slice(0, lastSlash)
   const objectName = storagePath.slice(lastSlash + 1)
