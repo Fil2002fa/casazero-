@@ -2,6 +2,12 @@ export function unitHasNoActiveAccount(members: { ended_at: string | null }[]): 
   return members.length === 0 || !members.some(m => m.ended_at === null)
 }
 
+// Ordinamento naturale per etichetta: "Unità 2" prima di "Unità 10" (la query
+// ordina label come TEXT). Fonte unica per quadro in pagina ed Excel.
+export function compareUnitLabels(a: string, b: string): number {
+  return a.localeCompare(b, 'it', { numeric: true, sensitivity: 'base' })
+}
+
 export function unitNotDelivered(deliveryDate: string | null): boolean {
   return deliveryDate === null
 }

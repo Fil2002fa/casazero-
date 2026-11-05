@@ -20,6 +20,7 @@ import {
   type ConfidenceBand,
 } from './document-classification'
 import { textCell, dateCell, type ExportCell } from './xlsx-helpers'
+import { compareUnitLabels } from './unit-utils'
 import {
   correctedFieldLabels,
   dataOrigin,
@@ -80,8 +81,8 @@ const date = dateCell
 
 // Ordinamento naturale per etichetta, come la pagina della residenza:
 // "Unità 2" prima di "Unità 10" (la query ordina label come TEXT).
-function compareUnitLabels(a: UnitRow, b: UnitRow): number {
-  return a.label.localeCompare(b.label, 'it', { numeric: true, sensitivity: 'base' })
+function compareUnitRows(a: UnitRow, b: UnitRow): number {
+  return compareUnitLabels(a.label, b.label)
 }
 
 export function documentExportRow(doc: DocRow, unitLabel: string | null): ExportCell[] {
@@ -120,7 +121,7 @@ export function documentExportRows(docs: DocRow[], units: UnitRow[]): ExportCell
   for (const doc of docs) {
     if (doc.unit_id === null) rows.push(documentExportRow(doc, null))
   }
-  const sortedUnits = [...units].sort(compareUnitLabels)
+  const sortedUnits = [...units].sort(compareUnitRows)
   const known = new Set(sortedUnits.map(u => u.id))
   for (const unit of sortedUnits) {
     for (const doc of docs) {

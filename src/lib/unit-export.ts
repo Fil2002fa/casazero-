@@ -19,12 +19,11 @@
  *
  * Import relativi tra moduli di lib: vedi document-rows.ts.
  */
-import { formatDateIT } from './formatDate'
 import { formatUnitLabel } from './formatUnitLabel'
 import type { DeadlineItem } from './deadline-export'
 import { isCountable, isOverdueLive, resolveCompletionMode, todayISO } from './maintenance-status'
-import { UNIT_EXPECTATIONS, unitDocumentRows, type KeyDatum, type UnitDocState } from './unit-documents'
-import { unitHasNoActiveAccount, unitNotDelivered } from './unit-utils'
+import { UNIT_EXPECTATIONS, formatKeyData, unitDocumentRows, type UnitDocState } from './unit-documents'
+import { compareUnitLabels, unitHasNoActiveAccount, unitNotDelivered } from './unit-utils'
 import type { DocRow } from './document-rows'
 import { normalizeEmbed } from './postgrest-embed'
 import { dateCell, numberCell, textCell, type ExportCell } from './xlsx-helpers'
@@ -107,17 +106,6 @@ function residentText(members: UnitExportMember[]): string {
   return ordered.find(m => m.full_name)?.full_name ?? 'Account attivo'
 }
 
-function keyDataText(keyData: KeyDatum[]): string | null {
-  if (keyData.length === 0) return null
-  return keyData
-    .map(k => `${k.label}: ${k.kind === 'date' ? formatDateIT(k.value) : k.value}`)
-    .join(' · ')
-}
-
-function compareLabels(a: string, b: string): number {
-  return a.localeCompare(b, 'it', { numeric: true, sensitivity: 'base' })
-}
-
 export function unitExportRows(
   units: UnitExportUnit[],
   items: DeadlineItem[],
@@ -125,7 +113,7 @@ export function unitExportRows(
   opts: { today?: string } = {},
 ): ExportCell[][] {
   const today = opts.today ?? todayISO()
-  const sorted = [...units].sort((a, b) => compareLabels(a.label, b.label))
+  const sorted = [...units].sort((a, b) => compareUnitLabels(a.label, b.label))
   const docRows = new Map(
     unitDocumentRows(docs, sorted.map(u => ({ id: u.id, label: u.label }))).map(r => [r.unit.id, r]),
   )
@@ -159,7 +147,7 @@ export function unitExportRows(
       dateCell(nextDue),
       ...(docRow?.cells ?? []).flatMap(cell => [
         textCell(STATE_LABELS[cell.state]),
-        textCell(keyDataText(cell.keyData)),
+        textCell(formatKeyData(cell.keyData)),
       ]),
     ]
   })

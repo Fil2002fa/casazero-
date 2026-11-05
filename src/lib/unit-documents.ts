@@ -24,6 +24,7 @@ import {
   type DocType,
   type Sistema,
 } from './document-classification'
+import { formatDateIT } from './formatDate'
 import {
   currentExtraction,
   dataOrigin,
@@ -125,6 +126,14 @@ export function unitKeyData(key: UnitExpectationKey, doc: DocRow): KeyDatum[] {
         ...dateDatum('Data documento', displayDate(doc)),
       ]
   }
+}
+
+/** "Classe energetica: A2 · Valida fino al: 20 feb 2034"; null se non c'è nessun dato. */
+export function formatKeyData(keyData: KeyDatum[]): string | null {
+  if (keyData.length === 0) return null
+  return keyData
+    .map(k => `${k.label}: ${k.kind === 'date' ? formatDateIT(k.value) : k.value}`)
+    .join(' · ')
 }
 
 function buildCell(unitDocs: DocRow[], exp: UnitExpectation): UnitDocumentCell {
