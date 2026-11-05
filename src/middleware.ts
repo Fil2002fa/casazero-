@@ -58,6 +58,7 @@ export async function middleware(request: NextRequest) {
   const isPublicPath =
     pathname.startsWith('/auth') ||
     pathname.startsWith('/welcome') ||
+    pathname.startsWith('/api/cron/') ||
     pathname === '/offline.html'
 
   // Codice di accesso arrivato fuori dalla callback: succede quando l'URL di
