@@ -37,6 +37,13 @@ export async function assignAdmin(
   const caller = await assertSuperAdmin()
   if ('error' in caller) return { error: caller.error }
 
+  // `profileId` arriva dal client e l'upsert sotto non lo valida (la RLS di
+  // admin_assignments controlla solo la residenza). Prima di scrivere e di
+  // leggere nomi con il service client: deve essere un admin del perimetro.
+  const scope = await checkAdminInScope(await createClient(), profileId)
+  if (scope === 'error') return { error: 'Errore temporaneo nella verifica dell\'amministratore, riprova.' }
+  if (scope === 'out_of_scope') return { error: 'Amministratore non trovato' }
+
   const svc = createServiceClient()
 
   // Letta PRIMA dell'upsert: con onConflict su residence_id l'upsert
