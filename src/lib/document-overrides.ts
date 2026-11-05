@@ -22,6 +22,7 @@
  * '@/' (vedi scripts/ts-resolve-hooks.mjs).
  */
 import type { DocumentFieldOverride } from '../types/database'
+import type { ActivityPayload } from './activity-log'
 import {
   DOC_TYPES,
   normalizeVatNumber,
@@ -447,4 +448,82 @@ export function overridesLostOnTypeChange(
   overrides: readonly OverrideRow[] | null | undefined,
 ): number {
   return newType === docType ? 0 : currentOverrides(docType, overrides).length
+}
+
+// ------------------------------------------------------------
+// Registro attività (evento documento_corretto, migrazione 049)
+// ------------------------------------------------------------
+
+/** Etichetta del campo come nel pannello "Correggi dati"; null se la chiave non è nota. */
+export function overrideFieldLabel(key: string): string | null {
+  return Object.prototype.hasOwnProperty.call(FIELD_LABELS, key) ? FIELD_LABELS[key] : null
+}
+
+/** Da dove nasce la correzione: il pannello "Correggi dati" o la proposta fornitore. */
+export type CorrectionSource = 'correggi_dati' | 'proposta_fornitore'
+
+/**
+ * La correzione manuale che c'era PRIMA dell'atto (mai il valore AI).
+ * `known: false` = la lettura è fallita: il registro lo dice con had_previous null.
+ */
+export type PreviousOverride =
+  | { known: false }
+  | { known: true; exists: false }
+  | { known: true; exists: true; value: string | null }
+
+/** Salvare lo stesso valore già corretto a mano non è un atto: nessun evento. */
+export function isNoopCorrection(previous: PreviousOverride, value: string | null): boolean {
+  return previous.known && previous.exists && previous.value === value
+}
+
+/**
+ * Payload dell'evento documento_corretto (contratto in
+ * 049_activity_event_documento_corretto.sql): solo dati, mai frasi. `value`
+ * c'è solo per "impostato" (null = il documento non riporta il campo).
+ */
+export function documentCorrectionPayload(input: {
+  documentId: string
+  title: string | null
+  docType: string
+  fieldKey: string
+  action: 'impostato' | 'ripristinato'
+  value: string | null
+  previous: PreviousOverride
+  source: CorrectionSource
+}): ActivityPayload {
+  const { previous } = input
+  const payload: ActivityPayload = {
+    document_id: input.documentId,
+    title: input.title,
+    doc_type: input.docType,
+    field_key: input.fieldKey,
+    action: input.action,
+    had_previous: previous.known ? previous.exists : null,
+    previous: previous.known && previous.exists ? previous.value : null,
+    source: input.source,
+  }
+  if (input.action === 'impostato') payload.value = input.value
+  return payload
+}
+
+/** Etichetta neutra del tipo, usata anche come ripiego della frase. */
+export const DOCUMENT_CORRECTED_NEUTRAL_LABEL = 'Dato del documento corretto a mano'
+
+function payloadString(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null
+}
+
+/**
+ * Frase a schermo di un evento documento_corretto, costruita a lettura dal
+ * payload (il registro è immutabile, non contiene testo pronto). Ogni chiave è
+ * letta in modo difensivo: una riga con chiavi mancanti non rompe la pagina.
+ */
+export function documentCorrectionText(payload: Record<string, unknown>): string {
+  const restored = payload.action === 'ripristinato'
+  const title = payloadString(payload.title)
+  const fieldKey = payloadString(payload.field_key)
+  const label = fieldKey === null ? null : overrideFieldLabel(fieldKey)
+  const detail = [title === null ? null : `«${title}»`, label].filter((p): p is string => p !== null)
+  if (detail.length === 0) return restored ? 'Valore AI ripristinato' : DOCUMENT_CORRECTED_NEUTRAL_LABEL
+  return `${restored ? 'Valore AI ripristinato' : 'Dato corretto a mano'}: ${detail.join(', ')}`
 }

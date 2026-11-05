@@ -170,6 +170,7 @@ export type ActivityEventType =
   | 'documento_classificato'
   | 'voce_archiviata'
   | 'data_consegna_modificata'
+  | 'documento_corretto'
 
 /**
  * Riga del registro attività. Append-only: la 037 non ha policy UPDATE né

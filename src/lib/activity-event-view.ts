@@ -1,8 +1,9 @@
 import {
-  Send, Mail, UserCheck, UserPlus, UserMinus, FileText, FileCheck, Archive, CalendarClock,
+  Send, Mail, UserCheck, UserPlus, UserMinus, FileText, FileCheck, Archive, CalendarClock, PencilLine,
   type LucideIcon,
 } from 'lucide-react'
 import type { ActivityEvent, ActivityEventType } from '@/types/database'
+import { DOCUMENT_CORRECTED_NEUTRAL_LABEL, documentCorrectionText } from '@/lib/document-overrides'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import { pluralize } from '@/lib/pluralize'
 
@@ -18,7 +19,7 @@ import { pluralize } from '@/lib/pluralize'
  */
 
 /**
- * Tipizzata `Record<ActivityEventType, ...>`: la completezza sui 9 tipi la
+ * Tipizzata `Record<ActivityEventType, ...>`: la completezza sui 10 tipi la
  * impone il compilatore, non la diligenza. Non ha nulla a che vedere con la
  * mappa della pagina demo di portafoglio, che serve i suoi tipi finti — i due
  * insiemi sono disgiunti.
@@ -33,6 +34,7 @@ export const ACTIVITY_EVENT_ICON: Record<ActivityEventType, LucideIcon> = {
   documento_classificato: FileCheck,
   voce_archiviata:        Archive,
   data_consegna_modificata: CalendarClock,
+  documento_corretto:     PencilLine,
 }
 
 /**
@@ -58,6 +60,8 @@ const NEUTRAL_LABEL: Record<ActivityEventType, string> = {
   // Solo etichetta neutra: la frase dal payload (livello, vecchio -> nuovo,
   // voci ricalcolate) arriva con la UI della modale, non con il produttore.
   data_consegna_modificata: 'Data di consegna modificata',
+  // Ripiego della frase piena (documentCorrectionText, document-overrides.ts).
+  documento_corretto:     DOCUMENT_CORRECTED_NEUTRAL_LABEL,
 }
 
 // Il payload è JSONB non vincolato dal DB: ogni chiave va letta in modo
@@ -146,6 +150,13 @@ export function describeActivityEvent(event: ActivityEvent): string {
     // payload: il nome lo rende la colonna attore, qui solo l'atto.
     const role = asString(event.payload.role_acquired)
     return role === 'admin' ? 'Invito amministratore accettato' : NEUTRAL_LABEL.invito_accettato
+  }
+
+  if (event.event_type === 'documento_corretto') {
+    // Un evento per CAMPO (action impostato | ripristinato, field_key, title nel
+    // payload). La frase vive accanto alle etichette dei campi, che servono anche
+    // al pannello "Correggi dati": una sola fonte, verificata da script.
+    return documentCorrectionText(event.payload)
   }
 
   return NEUTRAL_LABEL[event.event_type]

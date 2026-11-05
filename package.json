@@ -14,6 +14,7 @@
     "verify:extraction": "node --experimental-strip-types --no-warnings scripts/verify-extraction.mjs",
     "verify:export": "node --experimental-strip-types --no-warnings scripts/verify-document-export.mjs",
     "verify:overrides": "node --experimental-strip-types --no-warnings scripts/verify-document-overrides.mjs",
+    "verify:evento": "node --experimental-strip-types --no-warnings scripts/verify-correction-event.mjs",
     "verify:due": "node --experimental-strip-types --no-warnings scripts/verify-maintenance-due.mjs",
     "verify:basis": "node --experimental-strip-types --no-warnings scripts/verify-maintenance-basis.mjs",
     "verify:consegna": "node --experimental-strip-types --no-warnings scripts/verify-delivery-recalc.mjs"

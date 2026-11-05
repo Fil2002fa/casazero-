@@ -29,6 +29,7 @@ export type DocumentForAction = {
   title: string
   storage_path: string
   residence_id: string
+  unit_id: string | null
   doc_type: string | null
   classification_status: string
 }
@@ -59,7 +60,7 @@ export async function authorizeDocumentActor(
 
   const { data: doc, error: docError } = await admin
     .from('documents')
-    .select('id, title, storage_path, residence_id, doc_type, classification_status')
+    .select('id, title, storage_path, residence_id, unit_id, doc_type, classification_status')
     .eq('id', documentId)
     .maybeSingle()
 

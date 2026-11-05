@@ -7,14 +7,19 @@ import { requireCaller } from '@/lib/require-caller'
 import { authorizeDocumentActor } from '@/lib/document-access'
 import { extractionIsCurrent } from '@/lib/document-extraction'
 import {
+  documentCorrectionPayload,
+  isNoopCorrection,
   manualInstallerOverrides,
   normalizeOverrideInput,
   overridableKeys,
   overrideRequiresExtraction,
   resolveProposalInstaller,
+  type CorrectionSource,
   type OverrideRow,
+  type PreviousOverride,
 } from '@/lib/document-overrides'
-import type { DocumentCategory } from '@/types/database'
+import { logActivityEvent } from '@/lib/activity-log'
+import type { DocumentCategory, UserRole } from '@/types/database'
 import { ALLOWED_DOCUMENT_MIME } from '@/lib/document-upload'
 import {
   DOC_TYPES,
@@ -99,13 +104,13 @@ async function getAuthorizedChecklistManager(
 // invece di un rifiuto pulito.
 async function getAuthorizedSupplierLinker(
   supabase: Awaited<ReturnType<typeof createClient>>
-): Promise<{ user: { id: string }; builderId: string } | AuthError> {
+): Promise<{ user: { id: string }; builderId: string; fullName: string | null } | AuthError> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Non autenticato' }
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, builder_id')
+    .select('role, builder_id, full_name')
     .eq('id', user.id)
     .single()
 
@@ -114,7 +119,10 @@ async function getAuthorizedSupplierLinker(
   }
   if (!profile.builder_id) return { error: 'Nessun builder associato al tuo account' }
 
-  return { user, builderId: profile.builder_id as string }
+  // `fullName` serve al registro attività, che congela l'attore al momento
+  // dell'atto (confirmSupplierProposal → documento_corretto). Il ruolo è
+  // sempre super_admin: il ramo sopra rifiuta tutto il resto.
+  return { user, builderId: profile.builder_id as string, fullName: (profile.full_name as string | null) ?? null }
 }
 
 // Unica fonte di verità per il path storage di un documento: stesso
@@ -565,7 +573,7 @@ export async function confirmSupplierProposal(input: {
   // dal costruttore dell'utente torna come nessuna riga, non come errore.
   const { data: doc, error: docError } = await supabase
     .from('documents')
-    .select('residence_id, doc_type, sistema, extracted_metadata')
+    .select('residence_id, unit_id, title, doc_type, sistema, extracted_metadata')
     .eq('id', documentId)
     .maybeSingle()
 
@@ -684,6 +692,14 @@ export async function confirmSupplierProposal(input: {
         value: w.value,
         userId: auth.user.id,
         logTag: '[confirmSupplierProposal]',
+        audit: {
+          residenceId: doc.residence_id as string,
+          unitId: (doc.unit_id as string | null) ?? null,
+          title: (doc.title as string | null) ?? null,
+          actorRole: 'super_admin',
+          actorName: auth.fullName,
+          source: 'proposta_fornitore',
+        },
       })
       if ('error' in res) {
         if (overridesWritten > 0) revalidatePath(`/admin/residences/${doc.residence_id}/documenti`)
@@ -796,7 +812,8 @@ export async function confirmSupplierProposal(input: {
 // Correzioni manuali dei campi estratti (R10, tabella
 // document_field_overrides, migrazione 048). Vivono sopra i due verbali AI,
 // che non si toccano mai: salvare = upsert, ripristinare il valore AI =
-// DELETE (stato corrente, lo storico sarà in activity_events al commit 6).
+// DELETE (stato corrente, lo storico sta in activity_events: evento
+// documento_corretto, migrazione 049).
 //
 // Autorizzazione: admin e super_admin con lo scope di authorizeDocumentActor
 // (residenza assegnata / builder). Scrittura solo via service role: la 048
@@ -816,10 +833,47 @@ const OVERRIDE_TECH_ERROR = 'Errore tecnico, riprova.'
 // autorizza e non valida: chi chiama ha già verificato l'accesso al documento
 // e normalizzato il valore (normalizeOverrideInput / manualInstallerOverrides).
 // `svc` è il service client: la 048 non concede scritture ad authenticated.
+//
+// Scrive anche l'evento documento_corretto (un evento per CAMPO, 049). Il
+// registro non blocca mai l'atto: logActivityEvent non solleva (activity-log.ts)
+// e la lettura della correzione precedente, se fallisce, si logga e l'override si
+// scrive lo stesso (had_previous null). L'attore viene dal chiamante, che lo ha
+// letto dalla sessione: mai da input.
+type CorrectionAudit = {
+  residenceId: string
+  unitId: string | null
+  title: string | null
+  actorRole: UserRole | null
+  actorName: string | null
+  source: CorrectionSource
+}
+
 async function upsertDocumentFieldOverride(
   svc: ReturnType<typeof createServiceClient>,
-  input: { documentId: string; forDocType: string; fieldKey: string; value: string | null; userId: string; logTag: string },
+  input: {
+    documentId: string; forDocType: string; fieldKey: string; value: string | null
+    userId: string; logTag: string; audit: CorrectionAudit
+  },
 ): Promise<{ ok: true } | { error: string }> {
+  // Correzione manuale precedente, per il registro (mai il valore AI). Lettura
+  // e upsert non sono atomici: due salvataggi concorrenti possono lasciare un
+  // `previous` datato nel registro; accettato.
+  let previous: PreviousOverride = { known: false }
+  const { data: previousRow, error: previousError } = await svc
+    .from('document_field_overrides')
+    .select('value')
+    .eq('document_id', input.documentId)
+    .eq('for_doc_type', input.forDocType)
+    .eq('field_key', input.fieldKey)
+    .maybeSingle()
+  if (previousError) {
+    console.error(`${input.logTag} lettura correzione precedente fallita`, { documentId: input.documentId, fieldKey: input.fieldKey, previousError })
+  } else {
+    previous = previousRow
+      ? { known: true, exists: true, value: (previousRow.value as string | null) ?? null }
+      : { known: true, exists: false }
+  }
+
   // set_at va passato: sul conflitto il DO UPDATE aggiorna solo le colonne presenti.
   const { error: upsertError } = await svc
     .from('document_field_overrides')
@@ -837,6 +891,29 @@ async function upsertDocumentFieldOverride(
   if (upsertError) {
     console.error(`${input.logTag} upsert fallito`, { documentId: input.documentId, fieldKey: input.fieldKey, upsertError })
     return { error: OVERRIDE_TECH_ERROR }
+  }
+
+  // Stesso valore già corretto a mano: l'override è riscritto (set_by/set_at),
+  // ma non è un atto da registrare.
+  if (!isNoopCorrection(previous, input.value)) {
+    await logActivityEvent(svc, {
+      residenceId: input.audit.residenceId,
+      unitId: input.audit.unitId,
+      eventType: 'documento_corretto',
+      actorId: input.userId,
+      actorRole: input.audit.actorRole,
+      actorName: input.audit.actorName,
+      payload: documentCorrectionPayload({
+        documentId: input.documentId,
+        title: input.audit.title,
+        docType: input.forDocType,
+        fieldKey: input.fieldKey,
+        action: 'impostato',
+        value: input.value,
+        previous,
+        source: input.audit.source,
+      }),
+    })
   }
   return { ok: true }
 }
@@ -889,6 +966,14 @@ export async function saveDocumentFieldOverride(input: {
     value: normalized.value,
     userId: caller.userId,
     logTag: '[saveDocumentFieldOverride]',
+    audit: {
+      residenceId: doc.residence_id,
+      unitId: doc.unit_id,
+      title: doc.title,
+      actorRole: caller.role,
+      actorName: caller.fullName,
+      source: 'correggi_dati',
+    },
   })
   if ('error' in written) return { error: written.error }
 
@@ -919,15 +1004,40 @@ export async function clearDocumentFieldOverride(input: {
 
   // Solo la correzione del tipo attuale: quelle di altri tipi (D6) restano.
   // Nessuna riga corrispondente = già al valore AI, esito positivo.
-  const { error: deleteError } = await svc
+  const { data: deleted, error: deleteError } = await svc
     .from('document_field_overrides')
     .delete()
     .eq('document_id', documentId)
     .eq('for_doc_type', doc.doc_type as string)
     .eq('field_key', fieldKey)
+    .select('value')
   if (deleteError) {
     console.error('[clearDocumentFieldOverride] delete fallito', { documentId, fieldKey, deleteError })
     return { error: OVERRIDE_TECH_ERROR }
+  }
+
+  // Un evento solo se una correzione è stata davvero tolta (come voce_archiviata
+  // con count 0): "già al valore AI" non è un atto. Il registro non blocca mai
+  // l'atto già compiuto (logActivityEvent non solleva).
+  if (deleted && deleted.length > 0) {
+    await logActivityEvent(svc, {
+      residenceId: doc.residence_id,
+      unitId: doc.unit_id,
+      eventType: 'documento_corretto',
+      actorId: caller.userId,
+      actorRole: caller.role,
+      actorName: caller.fullName,
+      payload: documentCorrectionPayload({
+        documentId,
+        title: doc.title,
+        docType: doc.doc_type as string,
+        fieldKey,
+        action: 'ripristinato',
+        value: null,
+        previous: { known: true, exists: true, value: (deleted[0].value as string | null) ?? null },
+        source: 'correggi_dati',
+      }),
+    })
   }
 
   revalidatePath(`/admin/residences/${doc.residence_id}/documenti`)

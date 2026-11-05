@@ -4,3 +4,4 @@
 # ricostruzione è un lavoro separato, non ancora fatto.
 
 2026-11-02 | 048_document_field_overrides.sql | PASS (V1 colonne, V2 vincoli, V3 RLS e policy SELECT unica, V4 grants authenticated SELECT e anon nessuno, V5 0 righe)
+2026-11-05 | 049_activity_event_documento_corretto.sql | PASS (a CHECK con 10 tipi, b una sola CHECK su event_type, c registro invariato 68 righe, d positivo OK e negativo respinto da activity_events_event_type_check, 0 righe documento_corretto residue)
