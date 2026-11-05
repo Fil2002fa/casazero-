@@ -40,6 +40,14 @@ export async function checkInviteForUser(token: string, userId: string): Promise
   }
   if (!invite || new Date(invite.expires_at) < new Date()) return { status: 'invalid' }
 
+  // Nessuna UI crea inviti super_admin e un invito non deve mai dare staff di un
+  // builder: un super_admin è creato solo a mano (SQL). Un invito super_admin può
+  // esistere solo se forgiato (la RLS di invites non vincola `role`).
+  if (invite.role === 'super_admin') {
+    console.warn('accept: invito super_admin rifiutato', { inviteId: invite.id })
+    return { status: 'invalid' }
+  }
+
   const { data: profile, error: profileError } = await admin
     .from('profiles')
     .select('role')
@@ -60,6 +68,14 @@ export async function checkInviteForUser(token: string, userId: string): Promise
     residences: { name: string; builder_id: string } | null
   } | null
   const directResidence = invite.residences as unknown as { name: string } | null
+
+  // Con unit_id e residence_id entrambi presenti devono coincidere: sotto, builder e
+  // residenza si risolvono dall'unità, e un invito forgiato con la residenza di un
+  // builder e l'unità di un altro finirebbe nel secondo.
+  if (unitData && invite.residence_id && unitData.residence_id !== invite.residence_id) {
+    console.warn('accept: invito con unità e residenza incoerenti rifiutato', { inviteId: invite.id })
+    return { status: 'invalid' }
+  }
 
   return {
     status: 'ok',
