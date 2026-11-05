@@ -7,7 +7,7 @@
  *
  * Import relativi tra moduli di lib: vedi document-rows.ts.
  */
-import type { Cell } from 'write-excel-file/node'
+import type { Cell, SheetData } from 'write-excel-file/node'
 import { normalizeIsoDate } from './document-extraction'
 
 // Una data resta una data (ordinabile e filtrabile in Excel), mai una
@@ -39,6 +39,14 @@ export function toSheetCell(cell: ExportCell): Cell {
     return { type: Date, value: new Date(Date.UTC(y, m - 1, d)), format: 'dd/mm/yyyy' }
   }
   return { type: String, value: cell.value }
+}
+
+// Una scheda del file: intestazione in grassetto e bloccata, larghezze in
+// caratteri nell'ordine delle colonne. `rows` sono celle del modulo puro.
+export function buildSheet(name: string, headers: readonly string[], rows: ExportCell[][], widths: number[]) {
+  const header: Cell[] = headers.map(value => ({ value, fontWeight: 'bold' }))
+  const data: SheetData = [header, ...rows.map(row => row.map(toSheetCell))]
+  return { sheet: name, data, stickyRowsCount: 1, columns: widths.map(width => ({ width })) }
 }
 
 // Nome file solo ASCII: un carattere accentato nel nome della residenza

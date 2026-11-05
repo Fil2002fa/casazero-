@@ -14,6 +14,7 @@
     "verify:extraction": "node --experimental-strip-types --no-warnings scripts/verify-extraction.mjs",
     "verify:export": "node --experimental-strip-types --no-warnings scripts/verify-document-export.mjs",
     "verify:unitdocs": "node --experimental-strip-types --no-warnings scripts/verify-unit-documents.mjs",
+    "verify:schede": "node --experimental-strip-types --no-warnings scripts/verify-residence-export.mjs",
     "verify:docunit": "node --experimental-strip-types --no-warnings scripts/verify-document-unit.mjs",
     "verify:overrides": "node --experimental-strip-types --no-warnings scripts/verify-document-overrides.mjs",
     "verify:evento": "node --experimental-strip-types --no-warnings scripts/verify-correction-event.mjs",

@@ -1,16 +1,9 @@
 import type { CompletionMode, ObligationType, MaintenanceStatus } from '@/types/database'
+import { MODE_LABELS, OBLIGATION_LABELS } from '@/lib/maintenance-labels'
 
-const MODE_LABELS: Record<CompletionMode, string> = {
-  residente:      'Residente',
-  amministratore: 'Amministratore',
-  promemoria:     'Promemoria',
-}
-
-export const OBLIGATION_LABELS: Record<ObligationType, string> = {
-  A: 'Obbligo di legge',
-  B: 'Raccomandata',
-  C: 'Consiglio',
-}
+// Etichette in src/lib/maintenance-labels.ts; ri-esportate perché altri file
+// le importano ancora da qui.
+export { OBLIGATION_LABELS }
 
 const STATUS_STYLES: Record<MaintenanceStatus, string> = {
   in_attesa:  'bg-background text-text-secondary',
