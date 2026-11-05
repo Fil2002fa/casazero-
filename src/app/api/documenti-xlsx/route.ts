@@ -9,6 +9,7 @@ import { loadResidenceDocumentRows } from '@/lib/document-rows.server'
 import { DOCUMENT_EXPORT_HEADERS, documentExportRows } from '@/lib/document-export'
 import { deadlineExportHeaders, deadlineExportRows, toDeadlineItem, type RawDeadlineItem } from '@/lib/deadline-export'
 import { todayISO } from '@/lib/maintenance-status'
+import { toUnitExportUnit, unitExportHeaders, unitExportRows, type RawUnitExportUnit } from '@/lib/unit-export'
 import { buildSheet, fileSlug } from '@/lib/xlsx-helpers'
 
 // Runtime Node.js: write-excel-file/node produce un Buffer con node:stream.
@@ -16,6 +17,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 // Larghezze in caratteri, nell'ordine delle intestazioni di ogni scheda.
+const UNIT_WIDTHS = [16, 8, 16, 28, 12, 12, 10, 10, 16, 22, 40, 22, 40, 22, 40]
 const DOCUMENT_WIDTHS = [40, 34, 22, 14, 15, 40, 30, 16, 26, 20, 11, 32, 34, 22, 16, 18, 40]
 const DEADLINE_WIDTHS = [18, 44, 22, 16, 18, 16, 16, 28]
 const SUPPLIER_WIDTH = 28
@@ -71,15 +73,36 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Errore tecnico, riprova' }, { status: 500 })
   }
 
+  // Anagrafica e membri delle unità (stessa select della pagina residenza).
+  const unitsRes = await fetchAllRows<RawUnitExportUnit>((from, to) =>
+    supabase
+      .from('units')
+      .select('id, label, floor, delivery_date, unit_members!left(ended_at, is_primary, profiles(full_name))')
+      .eq('residence_id', residenceId)
+      .order('id')
+      .range(from, to) as unknown as PromiseLike<{ data: RawUnitExportUnit[] | null; error: { message: string; code?: string } | null }>
+  )
+  if (unitsRes.error) {
+    console.error('[documenti-xlsx] lettura unità fallita:', unitsRes.error.message)
+    return NextResponse.json({ error: 'Errore tecnico, riprova' }, { status: 500 })
+  }
+
   const today = todayISO()
+  const deadlineItems = itemsRes.data.map(toDeadlineItem)
   const deadlineHeaders = deadlineExportHeaders(includeSupplier)
   const deadlineWidths = includeSupplier ? [...DEADLINE_WIDTHS, SUPPLIER_WIDTH] : DEADLINE_WIDTHS
 
   const sheets = [
     buildSheet(
+      'Riepilogo unità',
+      unitExportHeaders(),
+      unitExportRows(unitsRes.data.map(toUnitExportUnit), deadlineItems, docs, { today }),
+      UNIT_WIDTHS,
+    ),
+    buildSheet(
       'Scadenze',
       deadlineHeaders,
-      deadlineExportRows(itemsRes.data.map(toDeadlineItem), { today, includeSupplier }),
+      deadlineExportRows(deadlineItems, { today, includeSupplier }),
       deadlineWidths,
     ),
     buildSheet('Documenti', DOCUMENT_EXPORT_HEADERS, documentExportRows(docs, units), DOCUMENT_WIDTHS),

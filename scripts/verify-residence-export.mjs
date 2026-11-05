@@ -28,12 +28,14 @@ register('./ts-resolve-hooks.mjs', import.meta.url)
 const DEADLINE = new URL('../src/lib/deadline-export.ts', import.meta.url)
 const FETCH_ALL = new URL('../src/lib/supabase/fetch-all.ts', import.meta.url)
 const XLSX = new URL('../src/lib/xlsx-helpers.ts', import.meta.url)
+const UNIT_EXPORT = new URL('../src/lib/unit-export.ts', import.meta.url)
 
-let deadline, fetchAll, xlsxHelpers, writeXlsxFile
+let deadline, fetchAll, xlsxHelpers, writeXlsxFile, unitExport
 try {
   deadline = await import(DEADLINE.href)
   fetchAll = await import(FETCH_ALL.href)
   xlsxHelpers = await import(XLSX.href)
+  unitExport = await import(UNIT_EXPORT.href)
   writeXlsxFile = (await import('write-excel-file/node')).default
 } catch (err) {
   console.error(
@@ -46,7 +48,8 @@ try {
 
 const { deadlineExportHeaders, deadlineExportRows, toDeadlineItem } = deadline
 const { fetchAllRows } = fetchAll
-const { buildSheet } = xlsxHelpers
+const { buildSheet, toSheetCell, numberCell } = xlsxHelpers
+const { unitExportHeaders, unitExportRows, toUnitExportUnit, NO_ACCOUNT_LABEL, NOT_DELIVERED_LABEL } = unitExport
 
 let fallimenti = 0
 let eseguiti = 0
@@ -185,6 +188,94 @@ check('senza includeSupplier il nome del fornitore non compare in nessuna cella'
   check('toDeadlineItem: embed come array o come oggetto', [it.maintenance_templates.title, it.unitLabel, it.supplierName], ['Da array', 'Unità 1', 'Termo Srl'])
   const senza = toDeadlineItem({ ...raw, units: null, suppliers: undefined })
   check('toDeadlineItem: embed assenti → null', [senza.unitLabel, senza.supplierName], [null, null])
+}
+
+// --- scheda Riepilogo unità -------------------------------------------------
+const N = value => ({ type: 'number', value })
+const member = (over = {}) => ({ ended_at: null, is_primary: true, full_name: 'Maria Rossi', ...over })
+const unit = (over = {}) => ({ id: 'u1', label: 'Unità 1', floor: 1, delivery_date: '2026-06-01', members: [member()], ...over })
+const docOf = (over = {}) => ({
+  id: 'doc', title: 'documento', category: 'tecnici', file_name: 'doc.pdf', storage_path: 'r/doc.pdf', file_date: null,
+  unit_id: null, created_at: '2026-09-10T10:00:00+00:00', classification_status: 'completata', doc_type: null, sistema: null,
+  classification_confidence: null, extracted_metadata: null, extraction: null, overrides: [], ...over,
+})
+const apeOf = unitId => docOf({
+  id: 'ape-' + unitId, unit_id: unitId, doc_type: 'ape', file_date: '2024-02-01',
+  extraction: {
+    for_doc_type: 'ape', status: 'completata', document_date: '2024-02-20', ambito: null, unita_riferimento: null,
+    valid_until: '2034-02-20', fields: { classe_energetica: 'A2', valida_fino_al: '2034-02-20' },
+  },
+})
+const uRows = (units, items = [], docs = []) => unitExportRows(units, items, docs, { today: TODAY })
+
+check('riepilogo: 15 intestazioni (9 + 2 per ognuno dei 3 documenti attesi)', unitExportHeaders().length, 15)
+check('riepilogo: intestazioni di base', unitExportHeaders().slice(0, 9),
+  ['Unità', 'Piano', 'Consegna', 'Residente', 'Documenti assegnati', 'Documenti da verificare', 'Voci attive', 'Voci scadute', 'Prossima scadenza'])
+check('riepilogo: una colonna dati per ogni documento atteso',
+  unitExportHeaders().slice(9).filter((h, i) => i % 2 === 1).every(h => h.endsWith('(dati)')), true)
+
+{
+  const items = [
+    item({ unit_id: 'u1', next_due_date: '2026-10-01' }),                                                   // scaduta
+    item({ unit_id: 'u1', next_due_date: '2027-03-01' }),                                                   // futura
+    item({ unit_id: 'u1', completion_mode: 'promemoria', status: 'scaduta', next_due_date: '2025-01-01' }), // promemoria: mai scaduta, mai "prossima"
+    item({ unit_id: 'u1', status: 'completata', next_due_date: '2026-09-01' }),                             // completata: non è "prossima"
+    item({ unit_id: 'u1', activation_status: 'archiviata', next_due_date: '2026-08-01' }),                  // fuori dal piano
+    item({ unit_id: 'u2', next_due_date: '2026-10-01' }),                                                   // altra unità
+    item({ unit_id: null, next_due_date: '2026-10-01' }),                                                   // parti comuni
+  ]
+  const [r] = uRows([unit()], items, [apeOf('u1')])
+  check('riepilogo: anagrafica e residente', r.slice(0, 4), [T('Unità 1'), N(1), D('2026-06-01'), T('Maria Rossi')])
+  check('riepilogo: documenti assegnati e da verificare', r.slice(4, 6), [N(1), N(0)])
+  check('riepilogo: voci attive = piano attivo della sola unità (4)', r[6], N(4))
+  check('riepilogo: voci scadute live, promemoria esclusa', r[7], N(1))
+  check('riepilogo: prossima scadenza = la più vicina tra le aperte non promemoria', r[8], D('2026-10-01'))
+  check('riepilogo: APE presente con dati chiave, planimetria e DiCo mancanti',
+    r.slice(9), [T('Presente'), T('Classe energetica: A2 · Valida fino al: 20 feb 2034'), T('Mancante'), _, T('Mancante'), _])
+}
+{
+  const [r] = uRows([unit()], [item({ unit_id: 'u1', completion_mode: 'promemoria', next_due_date: '2025-01-01' })])
+  check('riepilogo: solo promemoria → nessuna prossima scadenza, nessuna scaduta', [r[6], r[7], r[8]], [N(1), N(0), _])
+}
+{
+  const [r] = uRows([unit({ id: 'u9', floor: null, delivery_date: null, members: [] })])
+  check('riepilogo: non consegnata, senza piano e senza account', [r[1], r[2], r[3]], [_, T(NOT_DELIVERED_LABEL), T(NO_ACCOUNT_LABEL)])
+  check('riepilogo: unità vuota → conteggi a zero e nessuna scadenza', [r[4], r[5], r[6], r[7], r[8]], [N(0), N(0), N(0), N(0), _])
+}
+check('riepilogo: solo membri terminati → Nessun account',
+  uRows([unit({ members: [member({ ended_at: '2026-01-01' })] })])[0][3], T(NO_ACCOUNT_LABEL))
+check('riepilogo: il primario attivo prevale, i membri terminati non contano',
+  uRows([unit({ members: [member({ ended_at: '2026-01-01', full_name: 'Ex Inquilino' }), member({ is_primary: false, full_name: 'Luca Bianchi' }), member({ full_name: 'Maria Rossi' })] })])[0][3],
+  T('Maria Rossi'))
+check('riepilogo: account attivo senza nome → "Account attivo"',
+  uRows([unit({ members: [member({ full_name: null })] })])[0][3], T('Account attivo'))
+check('riepilogo: unità in ordine naturale (2 prima di 10)',
+  uRows([unit({ id: 'a', label: 'Unità 10' }), unit({ id: 'b', label: 'Unità 2' })]).map(r => r[0].value), ['Unità 2', 'Unità 10'])
+{
+  const daRivedere = docOf({ id: 'x', unit_id: 'u1', classification_status: 'da_revisionare', extracted_metadata: { doc_type: 'ape' } })
+  const [r] = uRows([unit()], [], [daRivedere])
+  check('riepilogo: documento da rivedere → da verificare nel conteggio e nella cella APE', [r[4], r[5], r[9]], [N(1), N(1), T('Da verificare')])
+}
+{
+  const u = toUnitExportUnit({
+    id: 'u1', label: 'Unità 1', floor: 2, delivery_date: null,
+    unit_members: [
+      { ended_at: null, is_primary: true, profiles: [{ full_name: 'Maria Rossi' }] },
+      { ended_at: '2026-01-01', is_primary: false, profiles: null },
+    ],
+  })
+  check('toUnitExportUnit: profilo come array o assente', u.members, [
+    { ended_at: null, is_primary: true, full_name: 'Maria Rossi' },
+    { ended_at: '2026-01-01', is_primary: false, full_name: null },
+  ])
+  check('toUnitExportUnit: unit_members assente → nessun membro',
+    toUnitExportUnit({ id: 'u', label: 'U', floor: null, delivery_date: null, unit_members: null }).members, [])
+}
+check('numberCell: numeri validi, il resto → null',
+  [numberCell(0), numberCell(3), numberCell(null), numberCell(undefined), numberCell(Number.NaN)], [N(0), N(3), _, _, _])
+{
+  const c = toSheetCell(N(7))
+  check('toSheetCell: numero → cella numerica', [c.type === Number, c.value], [true, 7])
 }
 
 // --- file xlsx vero ----------------------------------------------------------

@@ -16,6 +16,7 @@ import { normalizeIsoDate } from './document-extraction'
 export type ExportCell =
   | { type: 'text'; value: string }
   | { type: 'date'; value: string }   // ISO yyyy-mm-dd
+  | { type: 'number'; value: number } // conteggi e piano: ordinabili e sommabili in Excel
   | null
 
 export function textCell(value: string | null): ExportCell {
@@ -29,6 +30,10 @@ export function dateCell(value: string | null): ExportCell {
   return iso ? { type: 'date', value: iso } : null
 }
 
+export function numberCell(value: number | null | undefined): ExportCell {
+  return typeof value === 'number' && Number.isFinite(value) ? { type: 'number', value } : null
+}
+
 // Cella del modulo puro → cella di write-excel-file. La data è costruita in
 // UTC: la libreria converte con getTime(), quindi il giorno resta quello
 // scritto, a qualunque fuso del server.
@@ -38,6 +43,7 @@ export function toSheetCell(cell: ExportCell): Cell {
     const [y, m, d] = cell.value.split('-').map(Number)
     return { type: Date, value: new Date(Date.UTC(y, m - 1, d)), format: 'dd/mm/yyyy' }
   }
+  if (cell.type === 'number') return { type: Number, value: cell.value }
   return { type: String, value: cell.value }
 }
 
