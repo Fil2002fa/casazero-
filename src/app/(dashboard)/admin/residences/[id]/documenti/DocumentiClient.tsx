@@ -190,6 +190,10 @@ interface Props {
   // revisione solo dentro supplierContext, che è null quando il booleano è
   // false. residenceName serve alla frase che dichiara il collegamento.
   canLinkSuppliers: boolean
+  // true ⇒ la lettura dell'anagrafica è fallita per un guasto tecnico (non è un
+  // "vuoto"): canLinkSuppliers è già false e la proposta non si rende, qui serve
+  // solo a dirlo all'utente con un Riprova. Obbligatoria, come le due sopra.
+  supplierDataUnavailable: boolean
   suppliers: SupplierProposalCandidate[]
   supplierInstallations: SupplierInstallationRef[]
   residenceName: string
@@ -208,7 +212,7 @@ type SupplierContext = {
 
 export function DocumentiClient({
   residenceId, docs, units, checklist, today, markedByNames, correctedByNames, canManageChecklist,
-  canLinkSuppliers, suppliers, supplierInstallations, residenceName,
+  canLinkSuppliers, supplierDataUnavailable, suppliers, supplierInstallations, residenceName,
 }: Props) {
   const supplierContext: SupplierContext | null = canLinkSuppliers
     ? { residenceName, suppliers, installations: supplierInstallations }
@@ -513,6 +517,20 @@ export function DocumentiClient({
       {extractServiceUnavailable && (
         <div className="bg-neutral-600/7 border border-neutral-600/20 rounded-xl px-4 py-3 text-sm text-neutral-600">
           Estrazione dei dati non disponibile al momento. Riprova più tardi con Estrai dati.
+        </div>
+      )}
+      {supplierDataUnavailable && (
+        <div className="bg-neutral-600/7 border border-neutral-600/20 rounded-xl px-4 py-3 text-sm text-neutral-600 flex items-center gap-3">
+          <p className="flex-1 min-w-0">
+            Anagrafica fornitori non disponibile al momento: la proposta del fornitore dai documenti è sospesa.
+          </p>
+          <button
+            type="button"
+            onClick={() => router.refresh()}
+            className="flex-shrink-0 px-3 py-2 border border-brand-medium rounded-lg text-xs font-medium text-brand-dark"
+          >
+            Riprova
+          </button>
         </div>
       )}
 

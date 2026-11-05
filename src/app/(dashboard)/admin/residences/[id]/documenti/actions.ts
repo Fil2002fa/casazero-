@@ -108,12 +108,21 @@ async function getAuthorizedSupplierLinker(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Non autenticato' }
 
-  const { data: profile } = await supabase
+  // maybeSingle: "nessun profilo" è un esito di dominio (data null, error null),
+  // un errore di rete o di RLS no — non devono collassare nello stesso messaggio.
+  const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('role, builder_id, full_name')
     .eq('id', user.id)
-    .single()
+    .maybeSingle()
 
+  if (profileError) {
+    console.error('[documenti] lettura profilo fallita in getAuthorizedSupplierLinker', {
+      code: profileError.code,
+      message: profileError.message,
+    })
+    return { error: 'Errore tecnico, riprova.' }
+  }
   if (!profile || profile.role !== 'super_admin') {
     return { error: 'Permessi insufficienti' }
   }

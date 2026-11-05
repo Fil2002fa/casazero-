@@ -59,10 +59,13 @@ export default async function ResidenceDocumentiPage({
     : []
   const markedByNames: Record<string, string | null> = {}
   if (markedByIds.length > 0) {
-    const { data: markers } = await supabase
+    const { data: markers, error: markersError } = await supabase
       .from('profiles')
       .select('id, full_name')
       .in('id', markedByIds)
+    if (markersError) {
+      console.error('[documenti] lettura nomi di chi ha escluso le voci fallita', markersError)
+    }
     for (const m of markers ?? []) {
       markedByNames[m.id as string] = (m.full_name as string | null) ?? null
     }
@@ -108,12 +111,20 @@ export default async function ResidenceDocumentiPage({
   // dicesse "nessun match" su una lista vuota per un difetto di profilo
   // spingerebbe a creare un doppione.
   const builderId = profile.role === 'super_admin' ? profile.builder_id : null
-  const canLinkSuppliers = builderId !== null
 
   let suppliers: SupplierProposalCandidate[] = []
   let supplierInstallations: SupplierInstallationRef[] = []
+  // Lettura dell'anagrafica fallita (guasto tecnico, non "anagrafica vuota"):
+  // la proposta si sospende invece di girare su liste vuote, che darebbero
+  // "nessun match" e spingerebbero a creare un doppione di un fornitore che
+  // esiste. Stesso gate dell'admin (canLinkSuppliers false ⇒ supplierContext
+  // null), più un banner con Riprova.
+  let supplierDataUnavailable = false
   if (builderId !== null) {
-    const [{ data: rawSuppliers }, { data: rawInstallations }] = await Promise.all([
+    const [
+      { data: rawSuppliers, error: suppliersError },
+      { data: rawInstallations, error: installationsError },
+    ] = await Promise.all([
       supabase
         .from('suppliers')
         .select('id, name, vat_number')
@@ -126,9 +137,22 @@ export default async function ResidenceDocumentiPage({
         .select('supplier_id, sistema, source_document_id')
         .eq('residence_id', residenceId),
     ])
-    suppliers = (rawSuppliers ?? []) as SupplierProposalCandidate[]
-    supplierInstallations = (rawInstallations ?? []) as SupplierInstallationRef[]
+    const supplierFailures = [
+      { table: 'suppliers', error: suppliersError },
+      { table: 'supplier_installations', error: installationsError },
+    ].filter(f => f.error)
+    if (supplierFailures.length > 0) {
+      console.error('[documenti] lettura anagrafica fornitori fallita, proposta fornitore sospesa', {
+        residenceId,
+        failures: supplierFailures.map(f => ({ table: f.table, code: f.error?.code, message: f.error?.message })),
+      })
+      supplierDataUnavailable = true
+    } else {
+      suppliers = (rawSuppliers ?? []) as SupplierProposalCandidate[]
+      supplierInstallations = (rawInstallations ?? []) as SupplierInstallationRef[]
+    }
   }
+  const canLinkSuppliers = builderId !== null && !supplierDataUnavailable
 
   return (
     <>
@@ -176,6 +200,7 @@ export default async function ResidenceDocumentiPage({
         correctedByNames={correctedByNames}
         canManageChecklist={profile.role === 'super_admin'}
         canLinkSuppliers={canLinkSuppliers}
+        supplierDataUnavailable={supplierDataUnavailable}
         residenceName={residence.name}
         suppliers={suppliers}
         supplierInstallations={supplierInstallations}
