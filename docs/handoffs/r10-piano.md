@@ -83,3 +83,7 @@ Prova dal vivo del 7a (su f949ac0f, TEST wizard A): "Correggi dati" con ragione 
 - **7c** è andato oltre la descrizione sopra in un punto: il testo dell'avviso non attribuisce la causa («Il fornitore collegato per {sistema} è {nome} (P.IVA {piva}), mentre questo documento indica {nome impresa} (P.IVA {piva impresa}).» + link «Gestisci i collegamenti» verso `/admin/fornitori`), perché il disallineamento nasce anche da una modifica dell'anagrafica del fornitore.
 - **Resta il commit 6** (migrazione 049, evento `documento_corretto`, `logActivityEvent` nelle action di scrittura e di ripristino). Le scritture del 7b non loggano ancora nulla: il commit 6 deve coprire anche `confirmSupplierProposal` (override scritti da lì).
 - **Backlog:** pulsante «Collega {impresa effettiva} al posto di {fornitore collegato}» sull'avviso (stima media, vedi handoff del 5/11); R10b (correzioni senza estrazione corrente).
+
+## Stato finale 5/11
+
+Stato finale 5/11: R10 chiuso, commit 6 9830cf2, CI 42006698614.
