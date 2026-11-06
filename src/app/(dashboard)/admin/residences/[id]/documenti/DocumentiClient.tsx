@@ -1446,19 +1446,26 @@ function DocCard({ doc, supplierContext, selected, onOpen }: {
     ? installerSupplierMismatches(doc, supplierContext.installations, supplierContext.suppliers)
     : []
   return (
-    <div className={`bg-surface rounded-xl border ${selected ? 'border-brand-medium' : 'border-border'}`}>
+    // relative: la card è il riquadro che il bottone del nome copre con il suo
+    // ::after ("stretched link"), così tutta la card apre il pannello senza che
+    // un elemento interattivo ne contenga un altro.
+    <div className={`relative bg-surface rounded-xl border transition-colors hover:bg-background ${selected ? 'border-brand-medium' : 'border-border'}`}>
       <div className="p-4 flex items-center gap-3">
         <div className="w-10 h-10 bg-background rounded-lg flex items-center justify-center flex-shrink-0">
           <FileText className="w-5 h-5 text-text-secondary" strokeWidth={1.6} />
         </div>
         <div className="flex-1 min-w-0">
           {/* Il nome apre il pannello laterale: tipo, unità, dati letti e
-              revisione stanno tutti lì, non più in pannelli sotto la card. */}
+              revisione stanno tutti lì, non più in pannelli sotto la card.
+              Il bottone NON è posizionato: il suo ::after (absolute, inset-0)
+              si ancora alla card e ne copre l'intera superficie. Download e
+              link interni restano sopra (relative z-10), quindi cliccabili da
+              soli. Il focus da tastiera si disegna sulla card intera. */}
           <button
             type="button"
             onClick={() => onOpen(doc.id)}
             aria-pressed={selected}
-            className="block max-w-full text-left text-sm font-medium text-text-primary break-words lg:truncate hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium rounded"
+            className="block max-w-full text-left text-sm font-medium text-text-primary break-words lg:truncate cursor-pointer hover:underline focus:outline-none after:absolute after:inset-0 after:rounded-xl focus-visible:after:ring-2 focus-visible:after:ring-brand-medium"
           >
             {humanizeDocumentTitle(doc.title)}
           </button>
@@ -1476,7 +1483,7 @@ function DocCard({ doc, supplierContext, selected, onOpen }: {
                 <p key={`${m.supplierName}|${m.sistemaLabel}`} className="text-xs text-semantic-amber">
                   {installerMismatchText(m)}{' '}
                   {/* Gestione dei collegamenti: solo nella pagina builder (rimuovi/aggiungi). */}
-                  <Link href="/admin/fornitori" className="font-medium underline">Gestisci i collegamenti</Link>
+                  <Link href="/admin/fornitori" className="relative z-10 font-medium underline">Gestisci i collegamenti</Link>
                 </p>
               ))}
             </div>
@@ -1497,7 +1504,7 @@ function DocCard({ doc, supplierContext, selected, onOpen }: {
         </div>
         <a
           href={`/api/download?bucket=documents&path=${encodeURIComponent(doc.storage_path)}`}
-          className="p-2 rounded-lg text-brand-medium flex-shrink-0 hover:bg-brand-light transition-colors"
+          className="relative z-10 p-2 rounded-lg text-brand-medium flex-shrink-0 hover:bg-brand-light transition-colors"
           title="Scarica documento"
         >
           <Download className="w-5 h-5" strokeWidth={1.6} />
