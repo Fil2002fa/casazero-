@@ -5,8 +5,12 @@ eseguire comandi git che mutino stato. Nessun commit.
 
 ## Delega a subagent
 
-Delega l'esplorazione del codice a un subagent read-only con brief
-ristretto. Formato di ritorno obbligatorio per ogni riscontro:
+Per mappare file, punti di chiamata e usi di un campo delega a
+esploratore (subagent_type: esploratore). RLS, migrazioni, storage,
+invarianti di CLAUDE.md, query SQL e git log restano alla sessione
+principale. Prima di basare il piano su un'EVIDENCE chiave, aprila tu
+e verifica path e riga. Brief ristretto. Formato di ritorno
+obbligatorio per ogni riscontro:
   FINDING: una riga
   EVIDENCE: path:riga + estratto di codice reale
   CONFIDENCE: alta | media | bassa
