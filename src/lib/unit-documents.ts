@@ -13,14 +13,15 @@
  *
  * La checklist della residenza (document-checklist.ts, B4) non vede lo scope
  * 'unit': questo modulo non la tocca. La regola del sistema (null da una
- * delle due parti = compatibile) è la stessa del match di B4 e per ora è
- * duplicata in sistemaMatches: unificarla è un commit a sé.
+ * delle due parti = compatibile) è la stessa del match di B4 e vive in
+ * sistemaMatches (document-classification.ts), usata da entrambi.
  *
  * Import relativi tra moduli di lib: vedi document-rows.ts.
  */
 import {
   DOC_TYPE_LABELS,
   SISTEMA_LABELS,
+  sistemaMatches,
   type DocType,
   type Sistema,
 } from './document-classification'
@@ -30,6 +31,7 @@ import {
   dataOrigin,
   displayDate,
   documentFacts,
+  isReviewClosed,
   type DocRow,
   type UnitRow,
 } from './document-rows'
@@ -77,14 +79,12 @@ export type UnitDocumentRow = {
   toVerifyCount: number
 }
 
-// Stessa regola del match di B4: se uno dei due sistemi non è noto, combacia.
-export function sistemaMatches(expected: Sistema | null, actual: Sistema | null): boolean {
-  return expected === null || actual === null || expected === actual
-}
+// Riesportata per chi la importava da qui: la copia unica è in document-classification.ts.
+export { sistemaMatches }
 
 // "Presente" legge solo le colonne confermate, come B4: il verbale AI non conta.
 function isConfirmedMatch(doc: DocRow, exp: UnitExpectation): boolean {
-  return doc.classification_status === 'completata'
+  return isReviewClosed(doc)
     && doc.doc_type === exp.docType
     && sistemaMatches(exp.sistema, doc.sistema)
 }
@@ -93,7 +93,7 @@ function isConfirmedMatch(doc: DocRow, exp: UnitExpectation): boolean {
 // AI) indica proprio questo tipo. Un documento senza proposta non marca nessuna
 // cella: finisce nel conteggio toVerifyCount della riga.
 function isUnconfirmedProposal(doc: DocRow, exp: UnitExpectation): boolean {
-  if (doc.classification_status === 'completata') return false
+  if (isReviewClosed(doc)) return false
   const proposedType = doc.doc_type ?? doc.extracted_metadata?.doc_type ?? null
   const proposedSistema = doc.sistema ?? doc.extracted_metadata?.sistema ?? null
   return proposedType === exp.docType && sistemaMatches(exp.sistema, proposedSistema)

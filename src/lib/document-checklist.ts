@@ -17,6 +17,7 @@ import type { CompletionMode, ItemActivation } from '@/types/database'
 import {
   DOC_TYPE_LABELS,
   SISTEMA_LABELS,
+  sistemaMatches,
   type DocType,
   type Sistema,
 } from '@/lib/document-classification'
@@ -359,7 +360,7 @@ export async function computeResidenceChecklist(
         continue
       }
       const docSistema = (doc.sistema ?? null) as Sistema | null
-      if (exp.sistema !== null && docSistema !== null && docSistema !== exp.sistema) continue
+      if (!sistemaMatches(exp.sistema, docSistema)) continue
       exp.matchingDocuments.push({
         id: doc.id as string,
         label: (doc.title as string | null) ?? (doc.file_name as string),

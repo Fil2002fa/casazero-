@@ -177,6 +177,13 @@ export const SISTEMA_LABELS: Record<Sistema, string> = {
   altro:            'Altro impianto',
 }
 
+// Regola del sistema (impianto) nel match tra un documento e un'attesa: se uno
+// dei due non è noto, combacia (asimmetria voluta, decisione B4). Fonte unica
+// per la checklist della residenza e per il quadro delle unità.
+export function sistemaMatches(expected: Sistema | null, actual: Sistema | null): boolean {
+  return expected === null || actual === null || expected === actual
+}
+
 // Stati della pipeline di classificazione (025_documents_classification_status_review.sql,
 // CHECK su documents.classification_status). Fonte unica del tipo lato TS.
 export type ClassificationStatus =

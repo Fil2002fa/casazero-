@@ -143,6 +143,34 @@ export function correctedFieldLabels(doc: DocRow): string[] {
     .map(([key]) => overrideFieldLabel(key) ?? key)
 }
 
+// --- Stato di revisione: UNICA definizione di "classificazione chiusa" ------
+// Fonte unica per badge della card, contatore e filtro "Da rivedere", celle del
+// quadro unità e origine dei dati. Nessuna superficie confronta
+// classification_status con 'completata' o 'da_revisionare' per conto suo.
+//  chiusa          completata: classificazione confermata (dall'AI sopra
+//                  soglia o da una persona).
+//  da_rivedere     da_revisionare: l'AI ha proposto ma sotto soglia, serve una
+//                  persona. È l'unico stato che il badge "Da rivedere" mostra.
+//  in_lavorazione  non_classificato, in_corso, fallita: nessuna proposta
+//                  utilizzabile. Non è "chiusa", quindi conta come da verificare.
+export type ReviewState = 'chiusa' | 'da_rivedere' | 'in_lavorazione'
+
+export const REVIEW_LABEL = 'Da rivedere'
+
+export function reviewState(doc: Pick<DocRow, 'classification_status'>): ReviewState {
+  switch (doc.classification_status) {
+    case 'completata': return 'chiusa'
+    case 'da_revisionare': return 'da_rivedere'
+    case 'non_classificato':
+    case 'in_corso':
+    case 'fallita': return 'in_lavorazione'
+  }
+}
+
+export function isReviewClosed(doc: Pick<DocRow, 'classification_status'>): boolean {
+  return reviewState(doc) === 'chiusa'
+}
+
 // Origine dei dati del documento, A LIVELLO DI DOCUMENTO (la confidenza per
 // campo non è salvata da nessuna parte: il "da verificare" per campo è E1b).
 // Ordine di precedenza:
@@ -156,7 +184,7 @@ export function correctedFieldLabels(doc: DocRow): string[] {
 export type DataOrigin = 'da_verificare' | 'non_estratto' | 'corretto_a_mano' | 'ai'
 
 export function dataOrigin(doc: DocRow): DataOrigin | null {
-  if (doc.classification_status !== 'completata') return 'da_verificare'
+  if (!isReviewClosed(doc)) return 'da_verificare'
   if (!isExtractableDocType(doc.doc_type)) return null
   if (currentExtraction(doc)?.status !== 'completata') return 'non_estratto'
   if (hasCorrections(doc)) return 'corretto_a_mano'

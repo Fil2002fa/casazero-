@@ -209,6 +209,22 @@ check('sistemaMatches: sistemi diversi non combaciano', sistemaMatches('elettric
     documentsMentioningUnitWithoutAssignment([corretto]).map(d => d.id), [])
 }
 
+// --- reviewState: unica definizione di "classificazione chiusa" -----------------
+{
+  const rows = await import(new URL('../src/lib/document-rows.ts', import.meta.url).href)
+  const stato = s => rows.reviewState({ classification_status: s })
+  check('reviewState: completata è chiusa', stato('completata'), 'chiusa')
+  check('reviewState: da_revisionare è da rivedere', stato('da_revisionare'), 'da_rivedere')
+  check('reviewState: gli altri tre stati sono in lavorazione',
+    ['non_classificato', 'in_corso', 'fallita'].map(stato), ['in_lavorazione', 'in_lavorazione', 'in_lavorazione'])
+  check('isReviewClosed: solo completata',
+    ['completata', 'da_revisionare', 'non_classificato', 'in_corso', 'fallita'].map(s => rows.isReviewClosed({ classification_status: s })),
+    [true, false, false, false, false])
+  // Stessa regola per la cella del quadro: un documento fallito con unità è "da verificare".
+  const [r] = unitDocumentRows([doc({ id: 'f', unit_id: 'u1', classification_status: 'fallita', doc_type: 'ape' })], [U('u1')])
+  check('cella: fallita con tipo APE non è "presente"', r.cells[0].state, 'da_verificare')
+}
+
 // --- esito -------------------------------------------------------------------
 if (fallimenti > 0) {
   console.error(`\n✗ ${fallimenti} su ${eseguiti} casi divergenti`)

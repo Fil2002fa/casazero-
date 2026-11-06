@@ -49,6 +49,8 @@ import {
   correctionsLostOnTypeChange,
   installerMismatchText,
   installerSupplierMismatches,
+  reviewState,
+  REVIEW_LABEL,
   validitySubject,
   type DocRow,
   type UnitRow,
@@ -265,7 +267,7 @@ export function DocumentiClient({
   const pendingClassification = docs.filter(d =>
     d.classification_status === 'non_classificato' || d.classification_status === 'fallita'
   )
-  const reviewCount = docs.filter(d => d.classification_status === 'da_revisionare').length
+  const reviewCount = docs.filter(d => reviewState(d) === 'da_rivedere').length
   // Da estrarre: regola unica in document-extraction.ts (classificazione
   // finale, tipo estraibile, nessuna estrazione corrente). Stessa lista per
   // il contatore del bottone e per il batch — mai due calcoli (bug class).
@@ -298,7 +300,7 @@ export function DocumentiClient({
   const filtered = useMemo(() => {
     let result = docs
     if (docTypeFilter !== 'all') result = result.filter(d => d.doc_type === docTypeFilter)
-    if (reviewOnly) result = result.filter(d => d.classification_status === 'da_revisionare')
+    if (reviewOnly) result = result.filter(d => reviewState(d) === 'da_rivedere')
     if (ambitoFilter !== 'all') result = result.filter(d => currentExtraction(d)?.ambito === ambitoFilter)
     if (withValidityOnly) result = result.filter(hasValidity)
     if (search.trim()) {
@@ -826,7 +828,7 @@ export function DocumentiClient({
                 : 'bg-surface text-text-secondary border-border hover:bg-background'
             }`}
           >
-            Da rivedere ({reviewCount})
+            {REVIEW_LABEL} ({reviewCount})
           </button>
         )}
 
@@ -1370,7 +1372,7 @@ function classificationBadgeInfo(
       }
     }
     case 'da_revisionare':
-      return { label: 'Da rivedere', className: 'bg-status-inprogress/8 text-status-inprogress' }
+      return { label: REVIEW_LABEL, className: 'bg-status-inprogress/8 text-status-inprogress' }
     case 'fallita':
       // Non più "Errore, riprova": dopo il rollback a 'non_classificato' per
       // gli errori di servizio (route.ts), 'fallita' significa solo che
