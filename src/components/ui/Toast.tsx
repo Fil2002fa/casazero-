@@ -2,16 +2,26 @@
 
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { AlertCircle, CheckCircle2, XCircle } from 'lucide-react'
+import { AlertCircle, CheckCircle2, X, XCircle } from 'lucide-react'
 import { cn } from '@/lib/cn'
 
 // 'warning' = avviso che chiede un controllo senza essere un errore (ambra, non rosso).
 type ToastKind = 'success' | 'error' | 'warning'
 
+// Opzioni facoltative. `persistent`: non si chiude da solo, ha la X e resta finché
+// qualcuno lo chiude (per gli avvisi che chiedono un controllo e non devono
+// sparire mentre si guarda altrove). `action`: un bottone che esegue il gesto e
+// chiude il toast.
+export interface ToastOptions {
+  persistent?: boolean
+  action?: { label: string; onClick: () => void }
+}
+
 interface ToastState {
   id: number
   kind: ToastKind
   message: string
+  options?: ToastOptions
 }
 
 const DURATIONS: Record<ToastKind, number> = {
@@ -33,7 +43,7 @@ const PLACEMENT_STYLES: Record<ToastPlacement, string> = {
 }
 
 interface ToastContextValue {
-  showToast: (kind: ToastKind, message: string) => void
+  showToast: (kind: ToastKind, message: string, options?: ToastOptions) => void
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null)
@@ -48,14 +58,24 @@ export function ToastProvider({ children, placement = 'app' }: { children: React
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const idRef = useRef(0)
 
-  const showToast = useCallback((kind: ToastKind, message: string) => {
+  const showToast = useCallback((kind: ToastKind, message: string, options?: ToastOptions) => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
     idRef.current += 1
     const id = idRef.current
-    setToast({ id, kind, message })
+    setToast({ id, kind, message, options })
+    if (options?.persistent) {
+      timeoutRef.current = null
+      return
+    }
     timeoutRef.current = setTimeout(() => {
       setToast((current) => (current?.id === id ? null : current))
     }, DURATIONS[kind])
+  }, [])
+
+  const dismiss = useCallback(() => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    timeoutRef.current = null
+    setToast(null)
   }, [])
 
   return (
@@ -79,6 +99,29 @@ export function ToastProvider({ children, placement = 'app' }: { children: React
               <XCircle className="w-4 h-4 flex-shrink-0 text-status-overdue" strokeWidth={1.8} />
             )}
             <span className="text-neutral-900">{toast.message}</span>
+            {toast.options?.action && (
+              <button
+                type="button"
+                onClick={() => {
+                  const action = toast.options?.action
+                  dismiss()
+                  action?.onClick()
+                }}
+                className="flex-shrink-0 rounded-md border border-brand-medium px-2.5 py-1 text-xs font-medium text-brand-dark hover:bg-brand-light focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium"
+              >
+                {toast.options.action.label}
+              </button>
+            )}
+            {toast.options?.persistent && (
+              <button
+                type="button"
+                onClick={dismiss}
+                aria-label="Chiudi avviso"
+                className="flex-shrink-0 rounded-md p-1 text-text-secondary hover:bg-background focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium"
+              >
+                <X className="w-3.5 h-3.5" strokeWidth={1.8} />
+              </button>
+            )}
           </div>,
           document.body
         )}

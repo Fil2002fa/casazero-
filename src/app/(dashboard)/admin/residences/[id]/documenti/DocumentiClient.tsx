@@ -417,7 +417,7 @@ export function DocumentiClient({
     const toExtract: { id: string; title: string }[] = []
     // Tipo letto diverso dal tipo atteso della cella: il documento resta sull'unità
     // ma in revisione, e a fine batch un solo avviso lo dice.
-    const mismatches: { expected: DocType; actual: DocType }[] = []
+    const mismatches: { expected: DocType; actual: DocType; documentId: string }[] = []
     for (const [i, doc] of targets.entries()) {
       try {
         const res = await fetch('/api/classify-document', {
@@ -431,7 +431,7 @@ export function DocumentiClient({
         const result = await res.json().catch(() => null)
         if (res.ok) {
           if (result?.mismatch === true && typeof result.expected_doc_type === 'string' && typeof result.actual_doc_type === 'string') {
-            mismatches.push({ expected: result.expected_doc_type as DocType, actual: result.actual_doc_type as DocType })
+            mismatches.push({ expected: result.expected_doc_type as DocType, actual: result.actual_doc_type as DocType, documentId: doc.id })
           }
           console.log(`[classifica] ${doc.title}:`, result)
           if (result?.status === 'completata' && isExtractableDocType(typeof result.doc_type === 'string' ? result.doc_type : null)) {
@@ -465,7 +465,15 @@ export function DocumentiClient({
     router.refresh()
 
     const mismatchMessage = expectedMismatchMessage(mismatches)
-    if (mismatchMessage) showToast('warning', mismatchMessage)
+    if (mismatchMessage) {
+      // Non si chiude da solo: ha la X e un "Apri" che porta il documento (il primo, se
+      // sono più d'uno) nel pannello. Il pannello compare appena il refresh lo porta in docs.
+      const firstId = mismatches[0].documentId
+      showToast('warning', mismatchMessage, {
+        persistent: true,
+        action: { label: 'Apri', onClick: () => setSelectedId(firstId) },
+      })
+    }
 
     if (toExtract.length > 0) {
       void extractDocuments(toExtract)
