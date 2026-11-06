@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Download } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
-import { setDocumentUnit } from './actions'
+import { getDocumentsDownloadUrls, setDocumentUnit } from './actions'
 import { DOC_TYPE_LABELS, SISTEMA_LABELS, type DocType } from '@/lib/document-classification'
 import { displayDate, reviewState, type DocRow, type ReviewState, type UnitRow } from '@/lib/document-rows'
 import {
@@ -21,8 +21,12 @@ import {
   sortedUnits,
   splitBulkAssign,
   summarizeBulkAssign,
+  summarizeZip,
   tableStateLabel,
   toggleSelectAll,
+  zipBlockReason,
+  zipEntryNames,
+  zipFileName,
   type BulkFailure,
   type TableFilters,
   type TableStateFilter,
@@ -48,8 +52,15 @@ import { pluralize } from '@/lib/pluralize'
 // documenti che non si vedono. "Assegna unità" fa un ciclo sequenziale di
 // setDocumentUnit senza rigenerare la pagina a ogni passo, un solo refresh
 // alla fine, un solo toast; dopo il ciclo restano selezionati solo i falliti.
+//
+// "Scarica in ZIP" (7a-4): la server action restituisce solo signed URL brevi
+// (con gate di ruolo e controllo residenza su ogni id), i file si scaricano nel
+// browser con poche richieste in parallelo e fflate li comprime. Un file che
+// non si scarica non blocca gli altri: ZIP con quelli riusciti e un toast
+// persistente coi nomi mancanti. Oltre ZIP_MAX_FILES il bottone è disabilitato.
 
 const NO_UNIT = '__none__'
+const ZIP_PARALLEL_DOWNLOADS = 4
 
 const PILL_BY_STATE: Record<ReviewState, string> = {
   da_rivedere: 'bg-semantic-amber-bg text-semantic-amber',
@@ -89,7 +100,8 @@ function FilterSelect({ label, value, active, width, onChange, children }: {
   )
 }
 
-export function DocumentsTable({ docs, units, selectedId, onOpen }: {
+export function DocumentsTable({ residenceId, docs, units, selectedId, onOpen }: {
+  residenceId: string
   docs: DocRow[]
   units: UnitRow[]
   selectedId: string | null
@@ -109,6 +121,11 @@ export function DocumentsTable({ docs, units, selectedId, onOpen }: {
   const [target, setTarget] = useState('')
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const assigning = progress !== null
+  const [zipProgress, setZipProgress] = useState<{ done: number; total: number } | null>(null)
+  const zipping = zipProgress !== null
+  // Un solo lavoro alla volta sulla selezione: assegnare mentre si prepara lo
+  // ZIP cambierebbe le unità di documenti già in viaggio.
+  const busy = assigning || zipping
 
   // Una selezione non sopravvive alla riga che sparisce (filtro, assegnazione).
   useEffect(() => {
@@ -132,7 +149,7 @@ export function DocumentsTable({ docs, units, selectedId, onOpen }: {
   }
 
   async function assignSelected() {
-    if (target === '' || assigning || selectedDocs.length === 0) return
+    if (target === '' || busy || selectedDocs.length === 0) return
     const unitId = target === NO_UNIT ? null : target
     const targetLabel = unitId === null ? null : formatUnitLabel(unitLabels.get(unitId) ?? 'Unità')
     const { toApply, alreadyThere } = splitBulkAssign(selectedDocs, unitId)
@@ -160,6 +177,74 @@ export function DocumentsTable({ docs, units, selectedId, onOpen }: {
     setSelected(failedIds)
     if (failures.length === 0) setTarget('')
     router.refresh()
+  }
+
+  const zipBlocked = zipBlockReason(selectedDocs.length)
+
+  async function downloadZip() {
+    if (busy || selectedDocs.length === 0 || zipBlocked !== null) return
+    const picked = selectedDocs
+    const total = picked.length
+    setZipProgress({ done: 0, total })
+    try {
+      const res = await getDocumentsDownloadUrls({ residenceId, documentIds: picked.map(d => d.id) })
+      if ('error' in res) {
+        showToast('error', res.error, { persistent: true })
+        return
+      }
+
+      const nameOf = new Map(picked.map(d => [d.id, humanizeDocumentTitle(d.title)]))
+      const bytes = new Map<string, Uint8Array>()
+      const failures: BulkFailure[] = []
+      let done = 0
+      const queue = [...res.files]
+      const worker = async () => {
+        for (let f = queue.shift(); f !== undefined; f = queue.shift()) {
+          const name = nameOf.get(f.id) ?? f.id
+          if ('error' in f) {
+            failures.push({ name, error: f.error })
+          } else {
+            try {
+              const r = await fetch(f.url)
+              if (!r.ok) throw new Error(`HTTP ${r.status}`)
+              bytes.set(f.id, new Uint8Array(await r.arrayBuffer()))
+            } catch (err) {
+              console.error('[downloadZip] scaricamento fallito', { documentId: f.id, err })
+              failures.push({ name, error: 'Scaricamento non riuscito, riprova.' })
+            }
+          }
+          done += 1
+          setZipProgress({ done, total })
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(ZIP_PARALLEL_DOWNLOADS, queue.length) }, worker))
+
+      const summary = summarizeZip({ added: bytes.size, failures })
+      if (bytes.size > 0) {
+        // Nell'ordine della tabella, non in quello di arrivo.
+        const entryNames = zipEntryNames(picked.filter(d => bytes.has(d.id)).map(d => ({ id: d.id, fileName: d.file_name })))
+        const entries: Record<string, Uint8Array> = {}
+        for (const [id, entryName] of entryNames) entries[entryName] = bytes.get(id)!
+        const { zip } = await import('fflate')
+        const data = await new Promise<Uint8Array>((resolve, reject) => {
+          zip(entries, { level: 6 }, (err, out) => (err ? reject(err) : resolve(out)))
+        })
+        const url = URL.createObjectURL(new Blob([data as BlobPart], { type: 'application/zip' }))
+        const a = document.createElement('a')
+        a.href = url
+        a.download = zipFileName(res.residenceName, new Date())
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+        setTimeout(() => URL.revokeObjectURL(url), 10_000)
+      }
+      showToast(summary.kind, summary.message, summary.persistent ? { persistent: true } : undefined)
+    } catch (err) {
+      console.error('[downloadZip] preparazione fallita', err)
+      showToast('error', 'Non sono riuscito a preparare lo ZIP, riprova.', { persistent: true })
+    } finally {
+      setZipProgress(null)
+    }
   }
 
   return (
@@ -252,15 +337,28 @@ export function DocumentsTable({ docs, units, selectedId, onOpen }: {
           <button
             type="button"
             onClick={assignSelected}
-            disabled={target === '' || assigning}
+            disabled={target === '' || busy}
             className="rounded-xl bg-brand-dark px-4 py-2 text-sm font-medium text-white disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium focus-visible:ring-offset-1"
           >
             {assigning ? `Assegno… (${progress.done}/${progress.total})` : 'Assegna'}
           </button>
           <button
             type="button"
+            onClick={downloadZip}
+            disabled={busy || zipBlocked !== null}
+            aria-describedby={zipBlocked !== null ? 'zip-block-reason' : undefined}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-brand-medium bg-surface px-4 py-2 text-sm font-medium text-brand-dark disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium focus-visible:ring-offset-1"
+          >
+            <Download className="w-4 h-4" strokeWidth={1.8} aria-hidden="true" />
+            {zipping ? `Preparo lo ZIP… (${zipProgress.done}/${zipProgress.total})` : 'Scarica in ZIP'}
+          </button>
+          {zipBlocked !== null && (
+            <span id="zip-block-reason" className="text-xs text-semantic-amber">{zipBlocked}</span>
+          )}
+          <button
+            type="button"
             onClick={() => setSelected(new Set())}
-            disabled={assigning}
+            disabled={busy}
             className="ml-auto text-sm text-text-secondary hover:underline disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium rounded"
           >
             Deseleziona
@@ -285,7 +383,7 @@ export function DocumentsTable({ docs, units, selectedId, onOpen }: {
                     type="checkbox"
                     checked={allState === 'all'}
                     onChange={() => setSelected(toggleSelectAll(selected, rows))}
-                    disabled={assigning}
+                    disabled={busy}
                     aria-label={allState === 'all' ? 'Deseleziona tutti i documenti visibili' : 'Seleziona tutti i documenti visibili'}
                     className="h-4 w-4 accent-brand-medium"
                   />
@@ -317,7 +415,7 @@ export function DocumentsTable({ docs, units, selectedId, onOpen }: {
                         type="checkbox"
                         checked={checked}
                         onChange={() => toggleOne(doc.id)}
-                        disabled={assigning}
+                        disabled={busy}
                         aria-label={`Seleziona ${humanizeDocumentTitle(doc.title)}`}
                         className="h-4 w-4 accent-brand-medium"
                       />

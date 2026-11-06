@@ -36,6 +36,7 @@ import {
 import { friendlySupplierError, isVatUniqueViolation } from '@/lib/supplier-errors'
 import { computeResidenceChecklist } from '@/lib/document-checklist'
 import { PREVIEW_URL_TTL_SECONDS, previewKind, type PreviewKind } from '@/lib/document-preview'
+import { ZIP_MAX_FILES, ZIP_URL_TTL_SECONDS } from '@/lib/document-table'
 
 type AuthorizedUser = { user: { id: string } }
 type AuthError = { error: string }
@@ -1225,4 +1226,80 @@ export async function getDocumentPreviewUrl(input: { documentId: string }): Prom
   }
 
   return { url: data.signedUrl, kind, expiresInSeconds: PREVIEW_URL_TTL_SECONDS }
+}
+
+// ============================================================
+// Signed URL per "Scarica in ZIP" (E1b, 7a-4). Il browser scarica i file da
+// questi URL e compone lo ZIP: nessun byte passa da qui.
+//
+// Tutto o niente sull'autorizzazione: ogni id passa da authorizeDocumentActor
+// (stesso perimetro di anteprima e assegnazione) E deve appartenere alla
+// residenza corrente. Basta un id fuori perimetro o inesistente perché
+// l'action risponda con un errore e NESSUN URL: una selezione con un id
+// estraneo non è un errore dell'utente ma un client manomesso o uno stato
+// vecchio, e non si scarica niente "a metà". Il fallimento di una singola firma
+// (file assente dallo storage) invece è per-file: il resto si scarica.
+// Le firme si fanno col client di SESSIONE, così la policy di lettura del bucket
+// documents resta la seconda barriera (come in getDocumentPreviewUrl).
+// ============================================================
+
+export type DocumentDownloadFile = { id: string; url: string } | { id: string; error: string }
+export type DocumentDownloadUrlsResult =
+  | { residenceName: string; files: DocumentDownloadFile[] }
+  | { error: string }
+
+export async function getDocumentsDownloadUrls(input: {
+  residenceId: string
+  documentIds: string[]
+}): Promise<DocumentDownloadUrlsResult> {
+  const { residenceId, documentIds } = input ?? {}
+  if (typeof residenceId !== 'string' || !UUID_RE.test(residenceId)) return { error: 'Parametri non validi' }
+  if (!Array.isArray(documentIds) || documentIds.length === 0) return { error: 'Parametri non validi' }
+  if (documentIds.some(id => typeof id !== 'string' || !UUID_RE.test(id))) return { error: 'Parametri non validi' }
+  const ids = [...new Set(documentIds)]
+  if (ids.length > ZIP_MAX_FILES) {
+    return { error: `Si possono scaricare al massimo ${ZIP_MAX_FILES} documenti alla volta.` }
+  }
+
+  const caller = await requireCaller('getDocumentsDownloadUrls', ['admin', 'super_admin'])
+  if ('error' in caller) return { error: caller.error }
+
+  const svc = createServiceClient()
+  const actors = await Promise.all(
+    ids.map(id => authorizeDocumentActor(svc, caller.userId, id, '[getDocumentsDownloadUrls]')),
+  )
+  const technical = actors.find(a => !a.ok && a.status >= 500)
+  if (technical && !technical.ok) return { error: technical.error }
+  if (actors.some(a => !a.ok || a.doc.residence_id !== residenceId)) {
+    return { error: 'Alcuni documenti non sono di questa residenza o non sono accessibili. Nessun file scaricato.' }
+  }
+  const docs = actors.flatMap(a => (a.ok ? [a.doc] : []))
+
+  const { data: residence, error: residenceError } = await svc
+    .from('residences')
+    .select('name')
+    .eq('id', residenceId)
+    .maybeSingle()
+  if (residenceError || !residence) {
+    console.error('[getDocumentsDownloadUrls] lettura residences fallita', { residenceId, message: residenceError?.message })
+    return { error: 'Errore tecnico, riprova' }
+  }
+
+  const supabase = await createClient()
+  const { data: signed, error: signError } = await supabase.storage
+    .from('documents')
+    .createSignedUrls(docs.map(d => d.storage_path), ZIP_URL_TTL_SECONDS)
+  if (signError || !signed) {
+    console.error('[getDocumentsDownloadUrls] firma fallita', { residenceId, message: signError?.message })
+    return { error: 'Download non disponibile per un problema tecnico, riprova.' }
+  }
+
+  const byPath = new Map(signed.map(s => [s.path, s]))
+  const files: DocumentDownloadFile[] = docs.map(d => {
+    const s = byPath.get(d.storage_path)
+    if (s?.signedUrl) return { id: d.id, url: s.signedUrl }
+    console.error('[getDocumentsDownloadUrls] firma del file fallita', { documentId: d.id, message: s?.error })
+    return { id: d.id, error: 'File non trovato nello storage' }
+  })
+  return { residenceName: residence.name as string, files }
 }

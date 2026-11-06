@@ -28,6 +28,7 @@ const {
   documentNameText, filterTableDocs, isTableFiltered, presentDocTypes,
   sortTableDocs, sortedUnits, tableStateLabel,
   pruneSelection, selectAllState, toggleSelectAll, splitBulkAssign, summarizeBulkAssign,
+  ZIP_MAX_FILES, zipBlockReason, zipFileName, zipEntryNames, summarizeZip,
 } = T
 
 let fallimenti = 0
@@ -186,6 +187,34 @@ check('riepilogo: tutti falliti è un errore persistente', ok({ failures: [f1, f
   { kind: 'error', message: 'Nessun documento assegnato, 2 falliti: A, B. Motivo: Errore tecnico, riprova.', persistent: true })
 check('riepilogo: oltre 3 nomi, "e altri N"', ok({ assigned: 1, failures: ['A', 'B', 'C', 'D', 'E'].map(name => ({ name, error: 'x' })) }).message, '1 assegnato, 5 falliti: A, B, C e altri 2. Motivo: x.')
 check('riepilogo: parziale con già lì', ok({ assigned: 1, alreadyThere: 1, failures: [f3] }).message, '1 assegnato, 1 fallito: C. Motivo: Documento non trovato o non accessibile (1 era già in Unità 2).')
+
+// --- Scarica in ZIP (7a-4) -------------------------------------------------
+check('zip: il tetto è 50', ZIP_MAX_FILES, 50)
+check('zip: 50 file passano', zipBlockReason(50), null)
+check('zip: 1 file passa', zipBlockReason(1), null)
+check('zip: 51 file bloccati, col numero', zipBlockReason(51), 'Si possono scaricare al massimo 50 documenti alla volta: ne hai selezionati 51.')
+check('zip: nome con data locale', zipFileName('Residenza Cavaccio', new Date(2026, 10, 6)), 'Residenza-Cavaccio_documenti_2026-11-06.zip')
+check('zip: giorno e mese a due cifre', zipFileName('TEST wizard A', new Date(2026, 0, 3)), 'TEST-wizard-A_documenti_2026-01-03.zip')
+check('zip: accenti e simboli tolti', zipFileName("Villa dell'Orto / Più", new Date(2026, 10, 6)), 'Villa-dell-Orto-Piu_documenti_2026-11-06.zip')
+check('zip: residenza senza caratteri usabili', zipFileName('???', new Date(2026, 10, 6)), 'residenza_documenti_2026-11-06.zip')
+const names = (files) => [...zipEntryNames(files)].map(([, n]) => n)
+check('nomi zip: distinti restano uguali', names([{ id: '1', fileName: 'a.pdf' }, { id: '2', fileName: 'b.pdf' }]), ['a.pdf', 'b.pdf'])
+check('nomi zip: doppio prende (2) prima dell\'estensione', names([{ id: '1', fileName: 'a.pdf' }, { id: '2', fileName: 'a.pdf' }, { id: '3', fileName: 'a.pdf' }]), ['a.pdf', 'a (2).pdf', 'a (3).pdf'])
+check('nomi zip: maiuscole contano come doppio', names([{ id: '1', fileName: 'A.PDF' }, { id: '2', fileName: 'a.pdf' }]), ['A.PDF', 'a (2).pdf'])
+check('nomi zip: senza estensione', names([{ id: '1', fileName: 'nota' }, { id: '2', fileName: 'nota' }]), ['nota', 'nota (2)'])
+check('nomi zip: separatori di percorso ripuliti', names([{ id: '1', fileName: '../x/y\\z.pdf' }]), ['_x_y_z.pdf'])
+check('nomi zip: nome vuoto diventa documento', names([{ id: '1', fileName: '  ' }]), ['documento'])
+check('nomi zip: chiave per id, non per posizione', zipEntryNames([{ id: 'x', fileName: 'a.pdf' }, { id: 'y', fileName: 'a.pdf' }]).get('y'), 'a (2).pdf')
+const zf = (name) => ({ name, error: 'File non trovato nello storage' })
+check('zip riepilogo: tutto bene', summarizeZip({ added: 3, failures: [] }), { kind: 'success', message: 'ZIP pronto: 3 file.', persistent: false })
+check('zip riepilogo: un file', summarizeZip({ added: 1, failures: [] }).message, 'ZIP pronto: 1 file.')
+check('zip riepilogo: parziale persistente e ambra', summarizeZip({ added: 2, failures: [zf('A')] }),
+  { kind: 'warning', message: 'ZIP creato con 2 file, 1 file non scaricato: A. Motivo: File non trovato nello storage.', persistent: true })
+check('zip riepilogo: più mancanti, nomi e motivo unico', summarizeZip({ added: 1, failures: [zf('A'), zf('B')] }).message, 'ZIP creato con 1 file, 2 file non scaricati: A, B. Motivo: File non trovato nello storage.')
+check('zip riepilogo: motivi diversi non ne mostra nessuno', summarizeZip({ added: 1, failures: [zf('A'), { name: 'B', error: 'altro' }] }).message, 'ZIP creato con 1 file, 2 file non scaricati: A, B.')
+check('zip riepilogo: oltre 3 nomi, "e altri N"', summarizeZip({ added: 1, failures: ['A', 'B', 'C', 'D', 'E'].map(zf) }).message, 'ZIP creato con 1 file, 5 file non scaricati: A, B, C e altri 2. Motivo: File non trovato nello storage.')
+check('zip riepilogo: nessun file è errore e niente ZIP', summarizeZip({ added: 0, failures: [zf('A'), zf('B')] }),
+  { kind: 'error', message: 'Nessun file scaricato, ZIP non creato: A, B. Motivo: File non trovato nello storage.', persistent: true })
 
 if (fallimenti > 0) {
   console.error(`\n✗ ${fallimenti} su ${eseguiti} casi divergenti`)

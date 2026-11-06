@@ -215,3 +215,81 @@ export function summarizeBulkAssign(input: {
     persistent: true,
   }
 }
+
+// ============================================================
+// Scarica in ZIP (E1b, 7a-4). Lo ZIP si compone nel browser (fflate): una server
+// action con gate di ruolo restituisce solo signed URL brevi, i byte non
+// passano dalle funzioni (limite di risposta e timeout di Vercel). Qui le
+// regole pure: tetto, nome dello ZIP, nomi dei file dentro, riepilogo.
+// ============================================================
+
+export const ZIP_MAX_FILES = 50
+// Abbastanza per scaricare 50 file con poche richieste in parallelo, abbastanza
+// poco perché un URL copiato non serva più dopo pochi minuti.
+export const ZIP_URL_TTL_SECONDS = 300
+
+export function zipBlockReason(count: number): string | null {
+  if (count <= ZIP_MAX_FILES) return null
+  return `Si possono scaricare al massimo ${ZIP_MAX_FILES} documenti alla volta: ne hai selezionati ${count}.`
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, '0')
+}
+
+// <residenza>_documenti_<aaaa-mm-gg>.zip. La residenza diventa una parola
+// sicura per qualunque filesystem: niente accenti, spazi o simboli.
+export function zipFileName(residenceName: string, date: Date): string {
+  const slug = residenceName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Za-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  const day = `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
+  return `${slug === '' ? 'residenza' : slug}_documenti_${day}.zip`
+}
+
+// Un nome per ogni documento dentro lo ZIP: il file originale, ripulito dai
+// caratteri che un percorso non ammette, e con " (2)", " (3)"… davanti
+// all'estensione se due file hanno lo stesso nome (maiuscole comprese: Windows
+// li considera uguali). Mantiene l'ordine di ingresso.
+export function zipEntryNames(files: readonly { id: string; fileName: string }[]): Map<string, string> {
+  const used = new Set<string>()
+  const out = new Map<string, string>()
+  for (const f of files) {
+    const clean = f.fileName.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').trim().replace(/^\.+/, '')
+    const base = clean === '' ? 'documento' : clean
+    const dot = base.lastIndexOf('.')
+    const stem = dot > 0 ? base.slice(0, dot) : base
+    const ext = dot > 0 ? base.slice(dot) : ''
+    let candidate = base
+    for (let n = 2; used.has(candidate.toLowerCase()); n++) candidate = `${stem} (${n})${ext}`
+    used.add(candidate.toLowerCase())
+    out.set(f.id, candidate)
+  }
+  return out
+}
+
+// Un solo messaggio a fine preparazione. Con file mancanti il toast è
+// persistente (i nomi vanno letti); senza nessun file lo ZIP non si crea.
+export function summarizeZip(input: {
+  added: number
+  failures: readonly BulkFailure[]
+}): BulkAssignSummary {
+  const { added, failures } = input
+  if (failures.length === 0) {
+    return { kind: 'success', message: `ZIP pronto: ${pluralize(added, 'file', 'file')}.`, persistent: false }
+  }
+  const reasons = new Set(failures.map(f => f.error))
+  const reason = reasons.size === 1 ? ` Motivo: ${[...reasons][0]}` : ''
+  const names = namesList(failures.map(f => f.name))
+  const missing = pluralize(failures.length, 'file non scaricato', 'file non scaricati')
+  if (added === 0) {
+    return { kind: 'error', message: endSentence(`Nessun file scaricato, ZIP non creato: ${names}.${reason}`), persistent: true }
+  }
+  return {
+    kind: 'warning',
+    message: endSentence(`ZIP creato con ${pluralize(added, 'file', 'file')}, ${missing}: ${names}.${reason}`),
+    persistent: true,
+  }
+}

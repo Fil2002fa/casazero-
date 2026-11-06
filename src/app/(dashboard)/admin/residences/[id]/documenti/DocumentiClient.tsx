@@ -1022,7 +1022,7 @@ export function DocumentiClient({
 
       {/* Sempre montata e nascosta quando non attiva: i filtri non si perdono cambiando tab. */}
       <div id={tabPanelId('tutti')} role="tabpanel" aria-labelledby={tabId('tutti')} hidden={tab !== 'tutti'}>
-        <DocumentsTable docs={docs} units={units} selectedId={selectedId} onOpen={setSelectedId} />
+        <DocumentsTable residenceId={residenceId} docs={docs} units={units} selectedId={selectedId} onOpen={setSelectedId} />
       </div>
     </div>
 
