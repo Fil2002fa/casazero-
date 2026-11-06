@@ -169,7 +169,7 @@ function endSentence(text: string): string {
   return text.endsWith('.') ? text : text + '.'
 }
 
-function namesList(names: readonly string[]): string {
+export function namesList(names: readonly string[]): string {
   const shown = names.slice(0, MAX_NAMES_IN_MESSAGE).join(', ')
   const rest = names.length - MAX_NAMES_IN_MESSAGE
   return rest > 0 ? `${shown} e altri ${rest}` : shown

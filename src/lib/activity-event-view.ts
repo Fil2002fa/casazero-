@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import type { ActivityEvent, ActivityEventType } from '@/types/database'
 import { DOCUMENT_CORRECTED_NEUTRAL_LABEL, documentCorrectionText } from '@/lib/document-overrides'
+import { documentDeletedText, documentFileNotRemovedText } from '@/lib/document-delete'
 import { documentUnitChangeText } from '@/lib/document-unit'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import { pluralize } from '@/lib/pluralize'
@@ -170,6 +171,14 @@ export function describeActivityEvent(event: ActivityEvent): string {
     // Frase dal payload piatto (051): titolo, da/a unità. Le etichette delle
     // unità non sono nel payload: il soggetto della riga le dà già.
     return documentUnitChangeText(event.payload) ?? NEUTRAL_LABEL.documento_unita_cambiata
+  }
+
+  if (event.event_type === 'documento_eliminato') {
+    return documentDeletedText(event.payload) ?? NEUTRAL_LABEL.documento_eliminato
+  }
+
+  if (event.event_type === 'documento_file_non_rimosso') {
+    return documentFileNotRemovedText(event.payload) ?? NEUTRAL_LABEL.documento_file_non_rimosso
   }
 
   return NEUTRAL_LABEL[event.event_type]

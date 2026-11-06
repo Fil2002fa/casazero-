@@ -23,6 +23,7 @@
     "verify:schede": "node --experimental-strip-types --no-warnings scripts/verify-residence-export.mjs",
     "verify:batch": "node --experimental-strip-types --no-warnings scripts/verify-batch-failures.mjs",
     "verify:docunit": "node --experimental-strip-types --no-warnings scripts/verify-document-unit.mjs",
+    "verify:docdelete": "node --experimental-strip-types --no-warnings scripts/verify-document-delete.mjs",
     "verify:overrides": "node --experimental-strip-types --no-warnings scripts/verify-document-overrides.mjs",
     "verify:evento": "node --experimental-strip-types --no-warnings scripts/verify-correction-event.mjs",
     "verify:due": "node --experimental-strip-types --no-warnings scripts/verify-maintenance-due.mjs",

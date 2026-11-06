@@ -37,6 +37,16 @@ import { friendlySupplierError, isVatUniqueViolation } from '@/lib/supplier-erro
 import { computeResidenceChecklist } from '@/lib/document-checklist'
 import { PREVIEW_URL_TTL_SECONDS, previewKind, type PreviewKind } from '@/lib/document-preview'
 import { ZIP_MAX_FILES, ZIP_URL_TTL_SECONDS } from '@/lib/document-table'
+import {
+  DELETE_MAX_DOCUMENTS,
+  DOCUMENT_SNAPSHOT_COLUMNS,
+  documentDeletedPayload,
+  documentFileNotRemovedPayload,
+  fileRemovalFailures,
+  findDeleteBlockers,
+  type DeleteBlocker,
+  type DocumentSnapshot,
+} from '@/lib/document-delete'
 
 type AuthorizedUser = { user: { id: string } }
 type AuthError = { error: string }
@@ -1302,4 +1312,225 @@ export async function getDocumentsDownloadUrls(input: {
     return { id: d.id, error: 'File non trovato nello storage' }
   })
   return { residenceName: residence.name as string, files }
+}
+
+// ============================================================
+// Elimina documenti (E1b, 7b). Azione irreversibile, singola o multipla: le due
+// action sotto valgono per entrambe. Regole pure in document-delete.ts
+// (verify:docdelete).
+//
+// Il DB non blocca niente (supplier_installations SET NULL, attachments
+// CASCADE), quindi il blocco è qui: checkDocumentsDeletable lo calcola
+// all'apertura della finestra di conferma, che su un bloccato non offre il
+// bottone Elimina; deleteDocuments lo ripete, perché il client non è una barriera
+// e lo stato può essere cambiato nel frattempo. Basta un bloccato e non si
+// elimina niente.
+//
+// Sequenza di deleteDocuments, nell'ordine:
+//   1. DELETE in un solo statement col client di SESSIONE: atomico (tutto il
+//      multiplo o niente) e la policy "documents: admin e super_admin
+//      gestiscono" resta la seconda barriera. Estrazioni e correzioni spariscono
+//      in CASCADE.
+//   2. Un evento documento_eliminato per documento, con lo snapshot: scritto
+//      PRIMA di toccare il file, così il path resta tracciato anche se il
+//      processo si interrompe.
+//   3. Rimozione dei file col client di SESSIONE (policy "documents bucket:
+//      delete scoped residenza"), solo per i documenti il cui evento è stato
+//      scritto: senza evento il file resta, ed è l'unica traccia
+//      (/api/reconcile-documents lo mostra come orfano).
+// Il registro è append-only, quindi un file non rimosso è una riga a sé
+// (documento_file_non_rimosso). Nessun rollback: il documento è già eliminato.
+//
+// Finestra nota e accettata: un'installazione collegata tra il controllo e il
+// DELETE finirebbe a NULL senza errore.
+// ============================================================
+
+const DELETE_TECH_ERROR = 'Errore tecnico, nessun documento eliminato. Riprova.'
+const DELETE_NOT_ACCESSIBLE_ERROR = 'Alcuni documenti non sono di questa residenza o non sono accessibili. Nessun documento eliminato.'
+
+type DeleteTarget = { userId: string; role: UserRole; fullName: string | null; ids: string[] }
+
+// Input, ruolo e perimetro, condivisi dalle due action. Tutto o niente: basta un
+// id fuori residenza o inesistente perché l'action risponda con un errore.
+async function authorizeDelete(
+  svc: ReturnType<typeof createServiceClient>,
+  action: string,
+  input: { residenceId: string; documentIds: string[] },
+): Promise<DeleteTarget | { error: string }> {
+  const { residenceId, documentIds } = input ?? {}
+  if (typeof residenceId !== 'string' || !UUID_RE.test(residenceId)) return { error: 'Parametri non validi' }
+  if (!Array.isArray(documentIds) || documentIds.length === 0) return { error: 'Parametri non validi' }
+  if (documentIds.some(id => typeof id !== 'string' || !UUID_RE.test(id))) return { error: 'Parametri non validi' }
+  const ids = [...new Set(documentIds)]
+  if (ids.length > DELETE_MAX_DOCUMENTS) {
+    return { error: `Si possono eliminare al massimo ${DELETE_MAX_DOCUMENTS} documenti alla volta.` }
+  }
+
+  const caller = await requireCaller(action, ['admin', 'super_admin'])
+  if ('error' in caller) return { error: caller.error }
+
+  const actors = await Promise.all(ids.map(id => authorizeDocumentActor(svc, caller.userId, id, `[${action}]`)))
+  const technical = actors.find(a => !a.ok && a.status >= 500)
+  if (technical && !technical.ok) return { error: technical.error }
+  if (actors.some(a => !a.ok || a.doc.residence_id !== residenceId)) return { error: DELETE_NOT_ACCESSIBLE_ERROR }
+
+  return { userId: caller.userId, role: caller.role, fullName: caller.fullName, ids }
+}
+
+// Chi blocca l'eliminazione. Service client: il blocco deve vedere ogni riga,
+// anche quelle che la RLS nasconderebbe a chi agisce.
+async function readDeleteBlockers(
+  svc: ReturnType<typeof createServiceClient>,
+  docs: readonly { id: string; title: string }[],
+  action: string,
+): Promise<{ blockers: DeleteBlocker[] } | { error: string }> {
+  const ids = docs.map(d => d.id)
+  const [installations, attachments] = await Promise.all([
+    svc.from('supplier_installations').select('source_document_id').in('source_document_id', ids),
+    svc.from('attachments').select('document_id').in('document_id', ids),
+  ])
+  if (installations.error || attachments.error) {
+    console.error(`[${action}] lettura dei blocchi fallita`, {
+      installations: installations.error?.message,
+      attachments: attachments.error?.message,
+    })
+    return { error: DELETE_TECH_ERROR }
+  }
+  return {
+    blockers: findDeleteBlockers(
+      docs,
+      (installations.data ?? []).map(r => r.source_document_id as string),
+      (attachments.data ?? []).map(r => r.document_id as string),
+    ),
+  }
+}
+
+export type DocumentsDeletableResult = { blockers: DeleteBlocker[] } | { error: string }
+
+// Sola lettura: all'apertura della finestra di conferma.
+export async function checkDocumentsDeletable(input: {
+  residenceId: string
+  documentIds: string[]
+}): Promise<DocumentsDeletableResult> {
+  const svc = createServiceClient()
+  const target = await authorizeDelete(svc, 'checkDocumentsDeletable', input)
+  if ('error' in target) return { error: target.error }
+
+  const { data, error } = await svc.from('documents').select('id, title').in('id', target.ids)
+  if (error || !data) {
+    console.error('[checkDocumentsDeletable] lettura documents fallita', { message: error?.message })
+    return { error: 'Errore tecnico, riprova.' }
+  }
+  return readDeleteBlockers(svc, data as { id: string; title: string }[], 'checkDocumentsDeletable')
+}
+
+export type DeleteDocumentsResult =
+  // Almeno un bloccato: non è stato eliminato niente.
+  | { blockers: DeleteBlocker[] }
+  | { error: string }
+  // Titoli grezzi: li rende summarizeDocumentDelete.
+  | { deleted: number; notDeleted: string[]; notLogged: string[]; filesLeft: string[] }
+
+export async function deleteDocuments(input: {
+  residenceId: string
+  documentIds: string[]
+}): Promise<DeleteDocumentsResult> {
+  const svc = createServiceClient()
+  const target = await authorizeDelete(svc, 'deleteDocuments', input)
+  if ('error' in target) return { error: target.error }
+  const { residenceId } = input
+  const { ids } = target
+
+  const { data: rows, error: readError } = await svc
+    .from('documents')
+    .select(DOCUMENT_SNAPSHOT_COLUMNS)
+    .in('id', ids)
+    .eq('residence_id', residenceId)
+  if (readError || !rows) {
+    console.error('[deleteDocuments] lettura snapshot fallita', { residenceId, message: readError?.message })
+    return { error: DELETE_TECH_ERROR }
+  }
+  const snapshots = rows as unknown as DocumentSnapshot[]
+  if (snapshots.length !== ids.length) return { error: DELETE_NOT_ACCESSIBLE_ERROR }
+
+  const blocked = await readDeleteBlockers(svc, snapshots, 'deleteDocuments')
+  if ('error' in blocked) return { error: blocked.error }
+  if (blocked.blockers.length > 0) return { blockers: blocked.blockers }
+
+  const supabase = await createClient()
+  const { data: deletedRows, error: deleteError } = await supabase
+    .from('documents')
+    .delete()
+    .in('id', ids)
+    .eq('residence_id', residenceId)
+    .select('id')
+  if (deleteError) {
+    console.error('[deleteDocuments] delete fallito', { residenceId, ids, code: deleteError.code, message: deleteError.message })
+    return { error: DELETE_TECH_ERROR }
+  }
+  // Da qui l'atto è irreversibile: nessun errore oltre questo punto fa fallire
+  // l'action, ogni esito finisce nel riepilogo. La RLS può filtrare le righe
+  // senza errore: vale solo ciò che è tornato.
+  const deletedIds = new Set((deletedRows ?? []).map(r => r.id as string))
+  const deleted = snapshots.filter(d => deletedIds.has(d.id))
+  const notDeleted = snapshots.filter(d => !deletedIds.has(d.id)).map(d => d.title)
+  if (notDeleted.length > 0) {
+    console.error('[deleteDocuments] righe non eliminate', { residenceId, ids: snapshots.filter(d => !deletedIds.has(d.id)).map(d => d.id) })
+  }
+
+  const logged: DocumentSnapshot[] = []
+  const notLogged: string[] = []
+  for (const doc of deleted) {
+    const ok = await logActivityEvent(svc, {
+      residenceId,
+      unitId: doc.unit_id,
+      eventType: 'documento_eliminato',
+      actorId: target.userId,
+      actorRole: target.role,
+      actorName: target.fullName,
+      payload: documentDeletedPayload(doc),
+    })
+    if (ok) {
+      logged.push(doc)
+    } else {
+      // Evento perso: il log è l'unica traccia del path, e il file resta.
+      console.error('[deleteDocuments] evento non scritto, file lasciato nel bucket', { documentId: doc.id, storagePath: doc.storage_path })
+      notLogged.push(doc.title)
+    }
+  }
+
+  const filesLeft: string[] = []
+  if (logged.length > 0) {
+    const paths = logged.map(d => d.storage_path)
+    let removedNames: string[] | null = null
+    try {
+      const { data: removed, error: removeError } = await supabase.storage.from('documents').remove(paths)
+      if (removeError) console.error('[deleteDocuments] rimozione file fallita', { residenceId, message: removeError.message })
+      else removedNames = (removed ?? []).map(o => o.name)
+    } catch (err) {
+      console.error('[deleteDocuments] rimozione file fallita', { residenceId, err })
+    }
+
+    const failures = fileRemovalFailures(paths, removedNames)
+    for (const doc of logged) {
+      const reason = failures.get(doc.storage_path)
+      if (!reason) continue
+      filesLeft.push(doc.title)
+      console.error('[deleteDocuments] file non rimosso', { documentId: doc.id, storagePath: doc.storage_path, reason })
+      await logActivityEvent(svc, {
+        residenceId,
+        unitId: doc.unit_id,
+        eventType: 'documento_file_non_rimosso',
+        actorId: target.userId,
+        actorRole: target.role,
+        actorName: target.fullName,
+        payload: documentFileNotRemovedPayload(doc, reason),
+      })
+    }
+  }
+
+  // La pagina residenza legge anch'essa i documenti (page.tsx).
+  revalidatePath(`/admin/residences/${residenceId}/documenti`)
+  revalidatePath(`/admin/residences/${residenceId}`)
+  return { deleted: deleted.length, notDeleted, notLogged, filesLeft }
 }

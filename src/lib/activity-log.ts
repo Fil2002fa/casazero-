@@ -64,17 +64,21 @@ export type ActivityEventInput = {
 /**
  * Scrive una riga nel registro. Richiede un client SERVICE ROLE.
  *
- * NON solleva mai e non restituisce esito: il registro documenta un atto che
- * a questo punto è già avvenuto ed è irreversibile (un'email partita, un admin
- * rimosso). Trasformare il fallimento della riga di registro nel fallimento
- * dell'azione peggiorerebbe le cose — l'atto resterebbe compiuto e il
- * chiamante riceverebbe un errore falso. Il fallimento va quindi a console,
- * dove il monitoraggio lo può vedere, e l'azione prosegue.
+ * NON solleva mai: il registro documenta un atto che a questo punto è già
+ * avvenuto ed è irreversibile (un'email partita, un admin rimosso).
+ * Trasformare il fallimento della riga di registro nel fallimento dell'azione
+ * peggiorerebbe le cose — l'atto resterebbe compiuto e il chiamante riceverebbe
+ * un errore falso. Il fallimento va quindi a console, dove il monitoraggio lo
+ * può vedere, e l'azione prosegue.
+ *
+ * Restituisce se la riga è stata scritta: serve solo a chi ha un passo
+ * successivo che dipende dalla traccia (deleteDocuments non rimuove il file se
+ * l'evento col suo path non c'è). Tutti gli altri chiamanti possono ignorarlo.
  */
 export async function logActivityEvent(
   svc: SupabaseClient,
   input: ActivityEventInput
-): Promise<void> {
+): Promise<boolean> {
   const { error } = await svc.from('activity_events').insert({
     residence_id: input.residenceId,
     unit_id: input.unitId ?? null,
@@ -87,5 +91,7 @@ export async function logActivityEvent(
 
   if (error) {
     console.error('[ACTIVITY LOG]', input.eventType, error.message)
+    return false
   }
+  return true
 }
