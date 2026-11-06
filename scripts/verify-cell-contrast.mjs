@@ -15,10 +15,13 @@
 // ============================================================
 import { readFileSync } from 'node:fs'
 
-let css, matrix
+let css, matrix, panel, client, toast
 try {
   css = readFileSync(new URL('../src/app/globals.css', import.meta.url), 'utf8')
   matrix = readFileSync(new URL('../src/app/(dashboard)/admin/residences/[id]/documenti/UnitDocumentMatrix.tsx', import.meta.url), 'utf8')
+  panel = readFileSync(new URL('../src/app/(dashboard)/admin/residences/[id]/documenti/DocumentPanel.tsx', import.meta.url), 'utf8')
+  client = readFileSync(new URL('../src/app/(dashboard)/admin/residences/[id]/documenti/DocumentiClient.tsx', import.meta.url), 'utf8')
+  toast = readFileSync(new URL('../src/components/ui/Toast.tsx', import.meta.url), 'utf8')
 } catch (err) {
   console.error(`✗ File non leggibili: ${err.message}`)
   process.exit(2)
@@ -61,6 +64,19 @@ check('lo stile della cella "Da verificare" usa bordo, sfondo e hover ambra',
   /border-semantic-amber/.test(stile) && /bg-semantic-amber-bg/.test(stile) && /hover:border-semantic-amber/.test(stile), stile)
 check('il quadro non usa i colori di errore', !/status-overdue|semantic-red|text-red|bg-red|border-red/.test(matrix))
 check('icona e testo dello stato usano il testo ambra scuro', /text-semantic-amber/.test(matrix))
+
+// --- lo stesso ambra su badge, banner, filtro e toast (6c-2) ----------------------
+const secondario = token('text-secondary')
+if (secondario && sfondo) {
+  const ratio = contrast(secondario, sfondo)
+  check(`contrasto del testo secondario sul banner ambra >= 4,5 (${ratio.toFixed(2)}:1)`, ratio >= 4.5)
+}
+check('il badge "Da verificare" della lista usa i token ambra',
+  /label: REVIEW_LABEL, className: 'bg-semantic-amber-bg text-semantic-amber'/.test(client))
+check('il filtro "Da verificare" attivo usa i token ambra', /bg-semantic-amber-bg text-semantic-amber border-semantic-amber/.test(client))
+check('il banner del pannello usa i token ambra', /bg-semantic-amber-bg/.test(panel) && /text-semantic-amber">{REVIEW_LABEL}/.test(panel))
+check('il banner del pannello non usa status-inprogress', !/status-inprogress/.test(panel))
+check('icona del toast warning usa il testo ambra', /AlertCircle[^>]*text-semantic-amber/.test(toast))
 
 if (fallimenti > 0) {
   console.error(`\n✗ ${fallimenti} su ${eseguiti} casi divergenti`)

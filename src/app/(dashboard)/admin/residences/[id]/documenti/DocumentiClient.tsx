@@ -877,7 +877,7 @@ export function DocumentiClient({
             aria-pressed={reviewOnly}
             className={`flex-shrink-0 rounded-xl border px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium ${
               reviewOnly
-                ? 'bg-status-inprogress/10 text-status-inprogress border-status-inprogress/30'
+                ? 'bg-semantic-amber-bg text-semantic-amber border-semantic-amber/50'
                 : 'bg-surface text-text-secondary border-border hover:bg-background'
             }`}
           >
@@ -1442,7 +1442,7 @@ function classificationBadgeInfo(
       }
     }
     case 'da_revisionare':
-      return { label: REVIEW_LABEL, className: 'bg-status-inprogress/8 text-status-inprogress' }
+      return { label: REVIEW_LABEL, className: 'bg-semantic-amber-bg text-semantic-amber' }
     case 'fallita':
       // Non più "Errore, riprova": dopo il rollback a 'non_classificato' per
       // gli errori di servizio (route.ts), 'fallita' significa solo che

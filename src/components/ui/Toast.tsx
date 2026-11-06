@@ -94,7 +94,7 @@ export function ToastProvider({ children, placement = 'app' }: { children: React
             {toast.kind === 'success' ? (
               <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-brand-dark" strokeWidth={1.8} />
             ) : toast.kind === 'warning' ? (
-              <AlertCircle className="w-4 h-4 flex-shrink-0 text-status-inprogress" strokeWidth={1.8} />
+              <AlertCircle className="w-4 h-4 flex-shrink-0 text-semantic-amber" strokeWidth={1.8} />
             ) : (
               <XCircle className="w-4 h-4 flex-shrink-0 text-status-overdue" strokeWidth={1.8} />
             )}

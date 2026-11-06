@@ -220,8 +220,8 @@ export function DocumentPanel({
       <DocumentPreview documentId={doc.id} title={humanizeDocumentTitle(doc.title)} className="h-[40vh]" />
 
       {needsConfirmation && (
-        <div className="rounded-lg bg-status-inprogress/8 px-3 py-2 text-xs space-y-0.5" role="note">
-          <p className="font-medium text-status-inprogress">{REVIEW_LABEL}: la classificazione va confermata.</p>
+        <div className="rounded-lg border border-semantic-amber/40 bg-semantic-amber-bg px-3 py-2 text-xs space-y-0.5" role="note">
+          <p className="font-medium text-semantic-amber">{REVIEW_LABEL}: la classificazione va confermata.</p>
           {doc.extracted_metadata?.doc_type ? (
             <p className="text-text-secondary">
               Proposta AI: <span className="text-text-primary font-medium">{DOC_TYPE_LABELS[doc.extracted_metadata.doc_type]}</span>
