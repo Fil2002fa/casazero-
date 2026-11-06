@@ -1,5 +1,6 @@
 import {
   Send, Mail, UserCheck, UserPlus, UserMinus, FileText, FileCheck, Archive, CalendarClock, PencilLine, FileSymlink,
+  FileX2, FileWarning,
   type LucideIcon,
 } from 'lucide-react'
 import type { ActivityEvent, ActivityEventType } from '@/types/database'
@@ -20,7 +21,7 @@ import { pluralize } from '@/lib/pluralize'
  */
 
 /**
- * Tipizzata `Record<ActivityEventType, ...>`: la completezza sui 10 tipi la
+ * Tipizzata `Record<ActivityEventType, ...>`: la completezza sui tipi la
  * impone il compilatore, non la diligenza. Non ha nulla a che vedere con la
  * mappa della pagina demo di portafoglio, che serve i suoi tipi finti — i due
  * insiemi sono disgiunti.
@@ -37,15 +38,16 @@ export const ACTIVITY_EVENT_ICON: Record<ActivityEventType, LucideIcon> = {
   data_consegna_modificata: CalendarClock,
   documento_corretto:     PencilLine,
   documento_unita_cambiata: FileSymlink,
+  documento_eliminato:    FileX2,
+  documento_file_non_rimosso: FileWarning,
 }
 
 /**
  * Etichette neutre, senza interpolazione dal payload.
  *
- * Oggi solo `sollecito_inviato` ha un produttore: nessuna riga degli altri 7
- * tipi può esistere. Scrivere ora una frase ricca per quei tipi significherebbe
- * scrivere testo che nessuno può provare, contro un payload che non è ancora
- * stato deciso. La frase piena arriva col suo produttore.
+ * Un tipo senza produttore non ha righe: scrivere una frase ricca per quel tipo
+ * significherebbe scrivere testo che nessuno può provare, contro un payload
+ * che non è ancora stato deciso. La frase piena arriva col suo produttore.
  */
 const NEUTRAL_LABEL: Record<ActivityEventType, string> = {
   sollecito_inviato:      'Sollecito inviato',
@@ -65,6 +67,8 @@ const NEUTRAL_LABEL: Record<ActivityEventType, string> = {
   // Ripiego della frase piena (documentCorrectionText, document-overrides.ts).
   documento_corretto:     DOCUMENT_CORRECTED_NEUTRAL_LABEL,
   documento_unita_cambiata: 'Unità del documento cambiata',
+  documento_eliminato:    'Documento eliminato',
+  documento_file_non_rimosso: 'File del documento eliminato non rimosso',
 }
 
 // Il payload è JSONB non vincolato dal DB: ogni chiave va letta in modo
