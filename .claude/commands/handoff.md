@@ -1,3 +1,8 @@
+---
+description: Analizza la conversazione corrente e lo stato del repository, poi scrivi un documento di handoff strutturato in docs/handoffs/
+effort: low
+---
+
 Analizza la conversazione corrente e lo stato del repository, poi scrivi un documento di handoff strutturato.
 
 ## Istruzioni
