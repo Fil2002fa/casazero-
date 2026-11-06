@@ -230,6 +230,23 @@ export const SISTEMA_LABELS: Record<Sistema, string> = {
   altro:            'Altro impianto',
 }
 
+// Tipi di documento che riguardano un impianto specifico: solo per questi ha
+// senso chiedere l'"Impianto di riferimento" (lo stesso elenco del prompt di
+// classificazione: DiCo, collaudo, manuale, garanzia, più il libretto
+// d'impianto). Per APE, agibilità, capitolato, planimetria, altro... il sistema
+// è sempre null: un valore lì produrrebbe falsi allarmi di documenti mancanti.
+export const SISTEMA_DOC_TYPES: readonly DocType[] = [
+  'dich_conformita_dm37',
+  'collaudo',
+  'manuale',
+  'garanzia',
+  'libretto_impianto',
+]
+
+export function docTypeHasSistema(docType: DocType | null): boolean {
+  return docType !== null && SISTEMA_DOC_TYPES.includes(docType)
+}
+
 // Regola del sistema (impianto) nel match tra un documento e un'attesa: se uno
 // dei due non è noto, combacia (asimmetria voluta, decisione B4). Fonte unica
 // per la checklist della residenza e per il quadro delle unità.

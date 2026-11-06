@@ -26,7 +26,7 @@ try {
   console.error(`\n✗ Impossibile importare il modulo: ${err.message}`)
   process.exit(2)
 }
-const { panelFields, readInDocumentText, differsFromAi, planFieldChanges, manualFieldKeys, planPanelSave, savePlanIsEmpty } = mod
+const { effectiveSistema, panelFields, readInDocumentText, differsFromAi, planFieldChanges, manualFieldKeys, planPanelSave, savePlanIsEmpty } = mod
 
 let fallimenti = 0
 let eseguiti = 0
@@ -116,6 +116,21 @@ const bozza = (d, over = {}) => ({ docType: d.doc_type, sistema: d.sistema, unit
 {
   const d = doc({ classification_status: 'fallita', doc_type: null, extraction: null })
   check('documento fallito: il Salva conferma il tipo scelto', planPanelSave(d, bozza(d, { docType: 'ape' })).classification, true)
+}
+
+// --- impianto di riferimento: solo per i tipi con un impianto ---------------------
+check('DiCo: impianto scelto vale', effectiveSistema('dich_conformita_dm37', 'elettrico'), 'elettrico')
+check('libretto di impianto: vale', effectiveSistema('libretto_impianto', 'termico'), 'termico')
+check('manuale, garanzia, collaudo: valgono', ['manuale', 'garanzia', 'collaudo'].map(t => effectiveSistema(t, 'vmc')), ['vmc', 'vmc', 'vmc'])
+check('APE: sempre null anche con un impianto rimasto nel select', effectiveSistema('ape', 'termico'), null)
+check('agibilità, planimetria, capitolato, altro: sempre null',
+  ['agibilita', 'planimetria_catastale', 'capitolato', 'altro'].map(t => effectiveSistema(t, 'termico')), [null, null, null, null])
+check('tipo con impianto ma select vuoto: null', effectiveSistema('dich_conformita_dm37', ''), null)
+check('tipo nullo: null', effectiveSistema(null, 'termico'), null)
+{
+  const d = doc({ doc_type: 'dich_conformita_dm37', sistema: 'elettrico', extraction: null })
+  const cambioTipo = planPanelSave(d, { docType: 'ape', sistema: effectiveSistema('ape', 'elettrico'), unitId: null, fields: {} })
+  check('da DiCo elettrica ad APE: la classificazione scrive sistema null', [cambioTipo.classification], [true])
 }
 
 if (fallimenti > 0) {

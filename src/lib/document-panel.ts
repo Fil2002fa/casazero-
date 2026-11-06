@@ -12,6 +12,7 @@
  *
  * Import relativi tra moduli di lib: vedi document-rows.ts.
  */
+import { docTypeHasSistema, type DocType, type Sistema } from './document-classification'
 import type { CorrectionField } from './document-overrides'
 import { canCorrectFields, correctionFields, isReviewClosed, type DocRow } from './document-rows'
 import { proposalSourceText } from './document-unit-proposal'
@@ -74,6 +75,16 @@ export function manualFieldKeys(fields: readonly CorrectionField[]): string[] {
  */
 export function panelNeedsConfirmation(doc: Pick<DocRow, 'classification_status'>): boolean {
   return !isReviewClosed(doc)
+}
+
+/**
+ * Il sistema (impianto) da scrivere per il tipo scelto: quello del select solo
+ * se il tipo riguarda un impianto, altrimenti null. Evita che un impianto
+ * lasciato dal tipo precedente resti attaccato a un APE o a un'agibilità.
+ */
+export function effectiveSistema(docType: DocType | null, sistema: Sistema | '' | null): Sistema | null {
+  if (!docTypeHasSistema(docType) || sistema === '' || sistema === null) return null
+  return sistema
 }
 
 export type PanelDraft = {

@@ -14,6 +14,7 @@ import {
   SISTEMI,
   SISTEMA_LABELS,
   classificationConfidenceBand,
+  docTypeHasSistema,
   type DocType,
   type Sistema,
 } from '@/lib/document-classification'
@@ -27,6 +28,7 @@ import {
 } from '@/lib/document-rows'
 import {
   differsFromAi,
+  effectiveSistema,
   manualFieldKeys,
   panelFields,
   panelNeedsConfirmation,
@@ -99,7 +101,12 @@ export function DocumentPanel({
   const [restoring, setRestoring] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const typeChanged = docType !== doc.doc_type || (sistema === '' ? null : sistema) !== doc.sistema
+  // L'impianto vale solo per i tipi che ne hanno uno (DiCo, collaudo, manuale,
+  // garanzia, libretto): per gli altri è sempre null, anche se il select ne
+  // conserva uno scelto prima di cambiare tipo.
+  const showSistema = docTypeHasSistema(docType)
+  const sistemaToSave = effectiveSistema(docType, sistema)
+  const typeChanged = docType !== doc.doc_type || sistemaToSave !== doc.sistema
   const lostCorrections = correctionsLostOnTypeChange(doc, docType)
   const manualKeys = manualFieldKeys(fields)
 
@@ -119,7 +126,7 @@ export function DocumentPanel({
     setError(null)
     const plan = planPanelSave(doc, {
       docType,
-      sistema: sistema === '' ? null : sistema,
+      sistema: sistemaToSave,
       unitId: unitId === '' ? null : unitId,
       fields: drafts,
     })
@@ -140,7 +147,7 @@ export function DocumentPanel({
       const res = await confirmClassification({
         documentId: doc.id,
         docType,
-        sistema: sistema === '' ? null : sistema,
+        sistema: sistemaToSave,
       })
       if ('error' in res) return fail('Tipo', res.error)
       saved.push('tipo')
@@ -241,18 +248,20 @@ export function DocumentPanel({
           </select>
         </div>
 
-        <div className="space-y-1">
-          <label htmlFor={`panel-sistema-${doc.id}`} className="text-xs font-medium text-text-secondary block">Impianto di riferimento</label>
-          <select
-            id={`panel-sistema-${doc.id}`}
-            value={sistema}
-            onChange={e => { setSistema(e.target.value as Sistema | ''); setError(null) }}
-            className={INPUT_CLASS}
-          >
-            <option value="">Nessun impianto specifico</option>
-            {SISTEMI.map(s => <option key={s} value={s}>{SISTEMA_LABELS[s]}</option>)}
-          </select>
-        </div>
+        {showSistema && (
+          <div className="space-y-1">
+            <label htmlFor={`panel-sistema-${doc.id}`} className="text-xs font-medium text-text-secondary block">Impianto di riferimento</label>
+            <select
+              id={`panel-sistema-${doc.id}`}
+              value={sistema}
+              onChange={e => { setSistema(e.target.value as Sistema | ''); setError(null) }}
+              className={INPUT_CLASS}
+            >
+              <option value="">Nessun impianto specifico</option>
+              {SISTEMI.map(s => <option key={s} value={s}>{SISTEMA_LABELS[s]}</option>)}
+            </select>
+          </div>
+        )}
 
         {lostCorrections > 0 && (
           <p className="text-xs text-semantic-amber">
