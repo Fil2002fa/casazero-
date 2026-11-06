@@ -37,10 +37,10 @@ const STATE_LABELS: Record<UnitDocState, string> = {
   mancante: 'Mancante',
 }
 
-// Famiglia di seconda generazione (status-*/brand/neutral), mai semantic-*.
+// Stato ambra: token ambra (semantic-amber su semantic-amber-bg, contrasto 5,9:1, verify:contrast). Il rosso resta per gli errori veri.
 const CELL_STYLES: Record<UnitDocState, string> = {
   presente: 'border-brand-medium/30 bg-brand-light/50 hover:border-brand-medium',
-  da_verificare: 'border-status-inprogress/40 bg-status-inprogress/8 hover:border-status-inprogress',
+  da_verificare: 'border-semantic-amber/60 bg-semantic-amber-bg hover:border-semantic-amber',
   mancante: 'border-dashed border-border bg-surface text-text-secondary hover:border-solid hover:border-brand-medium',
 }
 
@@ -78,9 +78,9 @@ function GridCell({ unit, cell, selected, onOpenDoc, onUpload }: {
     >
       <span className="flex items-center gap-1.5 text-xs font-medium">
         {cell.state === 'presente' && <Eye className="w-3.5 h-3.5 text-brand-dark" strokeWidth={1.8} aria-hidden="true" />}
-        {cell.state === 'da_verificare' && <AlertCircle className="w-3.5 h-3.5 text-status-inprogress" strokeWidth={1.8} aria-hidden="true" />}
+        {cell.state === 'da_verificare' && <AlertCircle className="w-3.5 h-3.5 text-semantic-amber" strokeWidth={1.8} aria-hidden="true" />}
         {cell.state === 'mancante' && <Upload className="w-3.5 h-3.5" strokeWidth={1.8} aria-hidden="true" />}
-        <span className={cell.state === 'presente' ? 'text-brand-dark' : cell.state === 'da_verificare' ? 'text-status-inprogress' : ''}>
+        <span className={cell.state === 'presente' ? 'text-brand-dark' : cell.state === 'da_verificare' ? 'text-semantic-amber' : ''}>
           {cell.state === 'mancante' ? 'Carica' : STATE_LABELS[cell.state]}
         </span>
       </span>
