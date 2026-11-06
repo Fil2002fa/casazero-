@@ -226,6 +226,7 @@ check('sistemaMatches: sistemi diversi non combaciano', sistemaMatches('elettric
 {
   const rows = await import(new URL('../src/lib/document-rows.ts', import.meta.url).href)
   const stato = s => rows.reviewState({ classification_status: s })
+  check('etichetta unica dello stato ambra', rows.REVIEW_LABEL, 'Da verificare')
   check('reviewState: completata è chiusa', stato('completata'), 'chiusa')
   check('reviewState: da_revisionare è da rivedere', stato('da_revisionare'), 'da_rivedere')
   check('reviewState: gli altri tre stati sono in lavorazione',

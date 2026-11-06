@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react'
 import { AlertCircle, Eye, Upload } from 'lucide-react'
-import type { DocRow, UnitRow } from '@/lib/document-rows'
+import { REVIEW_LABEL, type DocRow, type UnitRow } from '@/lib/document-rows'
 import { pluralize } from '@/lib/pluralize'
 import {
   UNIT_EXPECTATIONS,
@@ -33,7 +33,7 @@ import { compareUnitLabels } from '@/lib/unit-utils'
 
 const STATE_LABELS: Record<UnitDocState, string> = {
   presente: 'Presente',
-  da_verificare: 'Da verificare',
+  da_verificare: REVIEW_LABEL,
   mancante: 'Mancante',
 }
 

@@ -148,18 +148,21 @@ export function correctedFieldLabels(doc: DocRow): string[] {
 }
 
 // --- Stato di revisione: UNICA definizione di "classificazione chiusa" ------
-// Fonte unica per badge della card, contatore e filtro "Da rivedere", celle del
+// Fonte unica per badge della card, contatore e filtro "Da verificare", celle del
 // quadro unità e origine dei dati. Nessuna superficie confronta
 // classification_status con 'completata' o 'da_revisionare' per conto suo.
 //  chiusa          completata: classificazione confermata (dall'AI sopra
 //                  soglia o da una persona).
 //  da_rivedere     da_revisionare: l'AI ha proposto ma sotto soglia, serve una
-//                  persona. È l'unico stato che il badge "Da rivedere" mostra.
+//                  persona. È l'unico stato che il badge "Da verificare" mostra.
 //  in_lavorazione  non_classificato, in_corso, fallita: nessuna proposta
 //                  utilizzabile. Non è "chiusa", quindi conta come da verificare.
 export type ReviewState = 'chiusa' | 'da_rivedere' | 'in_lavorazione'
 
-export const REVIEW_LABEL = 'Da rivedere'
+// Etichetta unica dello stato ambra (classificazione non chiusa) su cella del
+// quadro, badge e pannello. "Da rivedere" è riservato al tab dei documenti senza
+// unità (E1b, commit 8): due concetti, due parole.
+export const REVIEW_LABEL = 'Da verificare'
 
 export function reviewState(doc: Pick<DocRow, 'classification_status'>): ReviewState {
   switch (doc.classification_status) {
