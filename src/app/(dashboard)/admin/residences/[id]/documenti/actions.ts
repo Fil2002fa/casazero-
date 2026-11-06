@@ -38,8 +38,8 @@ import { computeResidenceChecklist } from '@/lib/document-checklist'
 import { PREVIEW_URL_TTL_SECONDS, previewKind, type PreviewKind } from '@/lib/document-preview'
 import { ZIP_MAX_FILES, ZIP_URL_TTL_SECONDS } from '@/lib/document-table'
 import {
-  DELETE_MAX_DOCUMENTS,
   DOCUMENT_SNAPSHOT_COLUMNS,
+  deleteLimitReason,
   documentDeletedPayload,
   documentFileNotRemovedPayload,
   fileRemovalFailures,
@@ -1362,9 +1362,8 @@ async function authorizeDelete(
   if (!Array.isArray(documentIds) || documentIds.length === 0) return { error: 'Parametri non validi' }
   if (documentIds.some(id => typeof id !== 'string' || !UUID_RE.test(id))) return { error: 'Parametri non validi' }
   const ids = [...new Set(documentIds)]
-  if (ids.length > DELETE_MAX_DOCUMENTS) {
-    return { error: `Si possono eliminare al massimo ${DELETE_MAX_DOCUMENTS} documenti alla volta.` }
-  }
+  const tooMany = deleteLimitReason(ids.length)
+  if (tooMany !== null) return { error: tooMany }
 
   const caller = await requireCaller(action, ['admin', 'super_admin'])
   if ('error' in caller) return { error: caller.error }

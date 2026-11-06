@@ -16,6 +16,12 @@ import { pluralize } from './pluralize'
 
 export const DELETE_MAX_DOCUMENTS = 50
 
+/** Una sola frase per il bottone della barra e per il rifiuto dell'action. */
+export function deleteLimitReason(count: number): string | null {
+  if (count <= DELETE_MAX_DOCUMENTS) return null
+  return `Si possono eliminare al massimo ${DELETE_MAX_DOCUMENTS} documenti alla volta: ne hai selezionati ${count}.`
+}
+
 // ------------------------------------------------------------
 // Blocchi
 // ------------------------------------------------------------

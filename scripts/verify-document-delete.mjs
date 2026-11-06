@@ -34,7 +34,7 @@ try {
 }
 
 const {
-  DOCUMENT_SNAPSHOT_COLUMNS,
+  DOCUMENT_SNAPSHOT_COLUMNS, DELETE_MAX_DOCUMENTS, deleteLimitReason,
   findDeleteBlockers, deleteBlockerReason, deleteBlockedMessage,
   documentDeletedPayload, documentFileNotRemovedPayload, documentDeletedText, documentFileNotRemovedText,
   fileRemovalFailures, summarizeDocumentDelete,
@@ -57,6 +57,10 @@ function check(name, actual, expected) {
 const A = { id: 'a', title: 'dico_termico' }
 const B = { id: 'b', title: 'verbale' }
 const C = { id: 'c', title: 'garanzia' }
+
+console.log('\nLimite del multiplo')
+check('al limite: ammesso', deleteLimitReason(DELETE_MAX_DOCUMENTS), null)
+check('oltre il limite: il motivo dice quanti', deleteLimitReason(DELETE_MAX_DOCUMENTS + 1), 'Si possono eliminare al massimo 50 documenti alla volta: ne hai selezionati 51.')
 
 console.log('\nBlocchi')
 check('nessun riferimento: nessun bloccato', findDeleteBlockers([A, B], [], []), [])

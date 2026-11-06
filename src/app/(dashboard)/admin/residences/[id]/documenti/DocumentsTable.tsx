@@ -2,9 +2,17 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronDown, Download } from 'lucide-react'
+import { ChevronDown, Download, Trash2 } from 'lucide-react'
+import { Button } from '@/components/ui/Button'
+import { Modal } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
-import { getDocumentsDownloadUrls, setDocumentUnit } from './actions'
+import { checkDocumentsDeletable, deleteDocuments, getDocumentsDownloadUrls, setDocumentUnit } from './actions'
+import {
+  deleteBlockerReason,
+  deleteLimitReason,
+  summarizeDocumentDelete,
+  type DeleteBlocker,
+} from '@/lib/document-delete'
 import { DOC_TYPE_LABELS, SISTEMA_LABELS, type DocType } from '@/lib/document-classification'
 import { displayDate, reviewState, type DocRow, type ReviewState, type UnitRow } from '@/lib/document-rows'
 import {
@@ -43,9 +51,8 @@ import { pluralize } from '@/lib/pluralize'
 // Tutta la riga apre il pannello laterale. Il click vive sulla <tr>; il
 // bottone col nome serve alla tastiera e agli screen reader (Invio e Spazio
 // generano un click che risale alla riga), quindi nessun elemento interattivo
-// ne contiene un altro. Gli elementi interattivi che arriveranno nella riga
-// (il checkbox oggi, il menu ⋯ in seguito) stanno in una cella che ferma la
-// propagazione.
+// ne contiene un altro. Gli altri elementi interattivi della riga (checkbox e
+// cestino) stanno in celle che fermano la propagazione.
 //
 // Selezione (7a-2): vale solo per le righe visibili, e un filtro che ne nasconde
 // una la toglie dalla selezione (pruneSelection): nessuna azione agisce su
@@ -58,6 +65,19 @@ import { pluralize } from '@/lib/pluralize'
 // browser con poche richieste in parallelo e fflate li comprime. Un file che
 // non si scarica non blocca gli altri: ZIP con quelli riusciti e un toast
 // persistente coi nomi mancanti. Oltre ZIP_MAX_FILES il bottone è disabilitato.
+//
+// "Elimina" (7b): dal cestino della riga o dalla barra, sempre con la finestra di
+// conferma. Il bottone rosso compare solo dopo che checkDocumentsDeletable ha detto
+// che non c'è nessun blocco: mentre controlla, su un errore e su un bloccato non
+// c'è. deleteDocuments ripete comunque il controllo e l'eventuale blocco riporta
+// la finestra sull'elenco dei bloccati. La finestra sta fuori dalla tabella perché
+// i clic risalgono anche dai portal e aprirebbero il pannello della riga.
+
+type DeleteDialogDoc = { id: string; title: string }
+type DeleteDialogState =
+  | { phase: 'checking' | 'ready' | 'deleting'; docs: DeleteDialogDoc[] }
+  | { phase: 'blocked'; docs: DeleteDialogDoc[]; blockers: DeleteBlocker[] }
+  | { phase: 'error'; docs: DeleteDialogDoc[]; message: string }
 
 const NO_UNIT = '__none__'
 const ZIP_PARALLEL_DOWNLOADS = 4
@@ -100,6 +120,73 @@ function FilterSelect({ label, value, active, width, onChange, children }: {
   )
 }
 
+function DeleteDocumentsDialog({ state, onClose, onConfirm, onRetry }: {
+  state: DeleteDialogState
+  onClose: () => void
+  onConfirm: () => void
+  onRetry: () => void
+}) {
+  const count = state.docs.length
+  const title = state.phase === 'blocked'
+    ? (count === 1 ? 'Documento non eliminabile' : 'Eliminazione non possibile')
+    : `Eliminare ${pluralize(count, 'documento', 'documenti')}?`
+  const deleting = state.phase === 'deleting'
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={title}
+      footer={
+        <>
+          <Button variant="secondary" disabled={deleting} onClick={onClose}>
+            {state.phase === 'blocked' ? 'Chiudi' : 'Annulla'}
+          </Button>
+          {state.phase === 'error' && <Button variant="primary" onClick={onRetry}>Riprova</Button>}
+          {(state.phase === 'ready' || deleting) && (
+            <Button variant="destructive" disabled={deleting} onClick={onConfirm}>
+              {deleting ? 'Elimino…' : 'Elimina'}
+            </Button>
+          )}
+        </>
+      }
+    >
+      {state.phase === 'blocked' ? (
+        <div className="space-y-3 text-sm text-text-primary">
+          <p>
+            {count === 1
+              ? 'Questo documento non si può eliminare:'
+              : 'Non viene eliminato nessun documento, perché questi sono bloccati:'}
+          </p>
+          <ul className="max-h-56 overflow-y-auto space-y-1.5">
+            {state.blockers.map(b => (
+              <li key={b.id}>
+                <span className="font-medium">{humanizeDocumentTitle(b.title)}</span> {deleteBlockerReason(b)}.
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <div className="space-y-3 text-sm text-text-primary">
+          <p>
+            {count === 1
+              ? 'Il documento, il suo file, i dati estratti e le correzioni vengono eliminati definitivamente.'
+              : 'I documenti, i loro file, i dati estratti e le correzioni vengono eliminati definitivamente.'}
+            {' '}Non si può annullare.
+          </p>
+          <ul className="max-h-56 overflow-y-auto space-y-1 font-medium">
+            {state.docs.map(d => <li key={d.id} className="break-words">{humanizeDocumentTitle(d.title)}</li>)}
+          </ul>
+          <div aria-live="polite">
+            {state.phase === 'checking' && <p className="text-text-secondary">Controllo i collegamenti…</p>}
+            {state.phase === 'error' && <p role="alert" className="text-status-overdue">{state.message}</p>}
+          </div>
+        </div>
+      )}
+    </Modal>
+  )
+}
+
 export function DocumentsTable({ residenceId, docs, units, selectedId, onOpen }: {
   residenceId: string
   docs: DocRow[]
@@ -126,6 +213,7 @@ export function DocumentsTable({ residenceId, docs, units, selectedId, onOpen }:
   // Un solo lavoro alla volta sulla selezione: assegnare mentre si prepara lo
   // ZIP cambierebbe le unità di documenti già in viaggio.
   const busy = assigning || zipping
+  const [deleteDialog, setDeleteDialog] = useState<DeleteDialogState | null>(null)
 
   // Una selezione non sopravvive alla riga che sparisce (filtro, assegnazione).
   useEffect(() => {
@@ -180,6 +268,62 @@ export function DocumentsTable({ residenceId, docs, units, selectedId, onOpen }:
   }
 
   const zipBlocked = zipBlockReason(selectedDocs.length)
+  const deleteBlocked = deleteLimitReason(selectedDocs.length)
+
+  // Un controllo che risponde a finestra già chiusa non deve riaprirla.
+  const deleteCheckRun = useRef(0)
+
+  async function checkDelete(picked: DeleteDialogDoc[]) {
+    const run = ++deleteCheckRun.current
+    setDeleteDialog({ phase: 'checking', docs: picked })
+    let next: DeleteDialogState
+    try {
+      const res = await checkDocumentsDeletable({ residenceId, documentIds: picked.map(d => d.id) })
+      if ('error' in res) next = { phase: 'error', docs: picked, message: res.error }
+      else if (res.blockers.length > 0) next = { phase: 'blocked', docs: picked, blockers: res.blockers }
+      else next = { phase: 'ready', docs: picked }
+    } catch (err) {
+      console.error('[checkDelete] controllo fallito', err)
+      next = { phase: 'error', docs: picked, message: 'Non sono riuscito a fare il controllo, riprova.' }
+    }
+    if (run === deleteCheckRun.current) setDeleteDialog(next)
+  }
+
+  function closeDeleteDialog() {
+    if (deleteDialog?.phase === 'deleting') return
+    deleteCheckRun.current += 1
+    setDeleteDialog(null)
+  }
+
+  async function confirmDelete() {
+    if (deleteDialog?.phase !== 'ready') return
+    const picked = deleteDialog.docs
+    setDeleteDialog({ phase: 'deleting', docs: picked })
+    let res: Awaited<ReturnType<typeof deleteDocuments>>
+    try {
+      res = await deleteDocuments({ residenceId, documentIds: picked.map(d => d.id) })
+    } catch (err) {
+      // Senza risposta l'esito è ignoto: l'eliminazione può essere avvenuta.
+      console.error('[confirmDelete] nessuna risposta', err)
+      setDeleteDialog(null)
+      showToast('error', 'Non ho ricevuto risposta: controlla l’elenco prima di riprovare.', { persistent: true })
+      router.refresh()
+      return
+    }
+    if ('error' in res) {
+      setDeleteDialog({ phase: 'error', docs: picked, message: res.error })
+      return
+    }
+    if ('blockers' in res) {
+      setDeleteDialog({ phase: 'blocked', docs: picked, blockers: res.blockers })
+      return
+    }
+    setDeleteDialog(null)
+    const summary = summarizeDocumentDelete(res)
+    showToast(summary.kind, summary.message, summary.persistent ? { persistent: true } : undefined)
+    // Le righe sparite escono anche dalla selezione: pruneSelection.
+    router.refresh()
+  }
 
   async function downloadZip() {
     if (busy || selectedDocs.length === 0 || zipBlocked !== null) return
@@ -357,6 +501,19 @@ export function DocumentsTable({ residenceId, docs, units, selectedId, onOpen }:
           )}
           <button
             type="button"
+            onClick={() => checkDelete(selectedDocs.map(d => ({ id: d.id, title: d.title })))}
+            disabled={busy || deleteBlocked !== null}
+            aria-describedby={deleteBlocked !== null ? 'delete-block-reason' : undefined}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-brand-medium bg-surface px-4 py-2 text-sm font-medium text-brand-dark disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium focus-visible:ring-offset-1"
+          >
+            <Trash2 className="w-4 h-4" strokeWidth={1.8} aria-hidden="true" />
+            Elimina
+          </button>
+          {deleteBlocked !== null && (
+            <span id="delete-block-reason" className="text-xs text-semantic-amber">{deleteBlocked}</span>
+          )}
+          <button
+            type="button"
             onClick={() => setSelected(new Set())}
             disabled={busy}
             className="ml-auto text-sm text-text-secondary hover:underline disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium rounded"
@@ -393,6 +550,7 @@ export function DocumentsTable({ residenceId, docs, units, selectedId, onOpen }:
                 <th scope="col" className="px-3 py-2.5">Unità</th>
                 <th scope="col" className="px-3 py-2.5 whitespace-nowrap">Data</th>
                 <th scope="col" className="px-3 py-2.5">Stato</th>
+                <th scope="col" className="w-10 pl-0 pr-3 py-2.5"><span className="sr-only">Azioni</span></th>
               </tr>
             </thead>
             <tbody>
@@ -449,12 +607,34 @@ export function DocumentsTable({ residenceId, docs, units, selectedId, onOpen }:
                         {tableStateLabel(doc)}
                       </span>
                     </td>
+                    <td className="w-10 pl-0 pr-3 py-1.5" onClick={e => e.stopPropagation()}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="table"
+                        disabled={busy}
+                        onClick={() => checkDelete([{ id: doc.id, title: doc.title }])}
+                        aria-label={`Elimina ${humanizeDocumentTitle(doc.title)}`}
+                        className="w-8 !px-0"
+                      >
+                        <Trash2 className="w-4 h-4" strokeWidth={1.8} aria-hidden="true" />
+                      </Button>
+                    </td>
                   </tr>
                 )
               })}
             </tbody>
           </table>
         </div>
+      )}
+
+      {deleteDialog && (
+        <DeleteDocumentsDialog
+          state={deleteDialog}
+          onClose={closeDeleteDialog}
+          onConfirm={confirmDelete}
+          onRetry={() => checkDelete(deleteDialog.docs)}
+        />
       )}
     </section>
   )
