@@ -94,6 +94,59 @@ export const DOC_TYPE_TO_CATEGORY: Record<DocType, DocumentCategory | null> = {
 // AI ha prodotto un doc_type valido (coda di revisione umana, commit 4/5).
 export const CLASSIFICATION_CONFIDENCE_THRESHOLD = 0.8
 
+// --- Tipo atteso al caricamento (E1b, 6b-1) -----------------------------------
+// Quando un documento si carica da una cella vuota del quadro, il tipo atteso
+// ("APE per A1") viaggia come INDIZIO verso classify-document. Non decide il
+// tipo: se la classificazione dà un tipo diverso, il documento resta sull'unità
+// scelta ma NON si chiude da solo, anche con confidenza alta, e una persona lo
+// controlla. Senza tipo atteso il comportamento è quello di sempre.
+
+export type ExpectedDocTypeParse = { ok: true; expected: DocType | null } | { ok: false }
+
+/**
+ * Legge il parametro expected_doc_type del corpo della richiesta. Assente o
+ * null = nessuna attesa. Qualunque altro valore deve essere un doc_type
+ * ammesso: un valore non valido NON si ignora in silenzio (la route risponde
+ * 400), altrimenti un refuso del client sparirebbe senza lasciare traccia.
+ */
+export function parseExpectedDocType(value: unknown): ExpectedDocTypeParse {
+  if (value === undefined || value === null) return { ok: true, expected: null }
+  if (typeof value === 'string' && (DOC_TYPES as readonly string[]).includes(value)) {
+    return { ok: true, expected: value as DocType }
+  }
+  return { ok: false }
+}
+
+export type ClassificationOutcome = {
+  status: 'completata' | 'da_revisionare'
+  /** true quando c'era un tipo atteso e la classificazione ne ha dato un altro. */
+  mismatch: boolean
+}
+
+/** Esito finale della classificazione: soglia di confidenza E coerenza col tipo atteso. */
+export function classificationOutcome(input: {
+  confidence: number
+  docType: DocType
+  expected: DocType | null
+}): ClassificationOutcome {
+  const mismatch = input.expected !== null && input.expected !== input.docType
+  const confident = input.confidence >= CLASSIFICATION_CONFIDENCE_THRESHOLD
+  return { status: confident && !mismatch ? 'completata' : 'da_revisionare', mismatch }
+}
+
+/**
+ * Testo del toast dopo un caricamento da cella i cui tipi non coincidono.
+ * Un solo messaggio per batch: il toast è uno alla volta.
+ */
+export function expectedMismatchMessage(mismatches: ReadonlyArray<{ expected: DocType; actual: DocType }>): string | null {
+  if (mismatches.length === 0) return null
+  if (mismatches.length === 1) {
+    const [m] = mismatches
+    return `Sembra «${DOC_TYPE_LABELS[m.actual]}», non «${DOC_TYPE_LABELS[m.expected]}»: controlla.`
+  }
+  return `${mismatches.length} documenti non corrispondono al tipo atteso: controllali.`
+}
+
 // Fascia di confidenza per chi legge (export Excel): Alta = da 0,8 (la stessa
 // soglia di sopra), Media = da 0,6 a sotto 0,8, Bassa = sotto 0,6. Decisione
 // di Filippo, 5/11. null = confidenza non registrata (es. tipo scelto a mano).

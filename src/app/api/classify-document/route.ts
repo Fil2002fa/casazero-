@@ -5,7 +5,8 @@ import { createServiceClient } from '@/lib/supabase/admin'
 import {
   DOC_TYPES,
   DOC_TYPE_LABELS,
-  CLASSIFICATION_CONFIDENCE_THRESHOLD,
+  classificationOutcome,
+  parseExpectedDocType,
   SISTEMI,
   SISTEMA_LABELS,
   normalizeVatNumber,
@@ -151,6 +152,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Parametro documentId mancante' }, { status: 400 })
   }
 
+  // Tipo atteso (E1b, caricamento da una cella del quadro): facoltativo, ma se c'è
+  // deve essere un doc_type ammesso. Un valore non valido è un 400, mai ignorato.
+  const expectedParse = parseExpectedDocType(body?.expected_doc_type)
+  if (!expectedParse.ok) {
+    return NextResponse.json(
+      { error: 'Parametro expected_doc_type non valido', cause: 'invalid_expected_doc_type' },
+      { status: 400 },
+    )
+  }
+  const expectedDocType = expectedParse.expected
+
   const { data: doc } = await admin
     .from('documents')
     .select('id, title, storage_path, residence_id')
@@ -295,7 +307,13 @@ export async function POST(req: NextRequest) {
       cache_creation_input_tokens: response.usage.cache_creation_input_tokens,
     }))
 
-    const finalStatus = parsed.confidence >= CLASSIFICATION_CONFIDENCE_THRESHOLD ? 'completata' : 'da_revisionare'
+    // Sotto soglia, oppure tipo diverso da quello atteso dal chiamante: il
+    // documento non si chiude da solo e va controllato da una persona.
+    const { status: finalStatus, mismatch } = classificationOutcome({
+      confidence: parsed.confidence,
+      docType: parsed.doc_type,
+      expected: expectedDocType,
+    })
 
     // Impresa installatrice: imposta a null per ogni doc_type diverso da
     // dich_conformita_dm37, indipendentemente da cosa ha risposto il modello.
@@ -334,6 +352,12 @@ export async function POST(req: NextRequest) {
       status: finalStatus,
       doc_type: parsed.doc_type,
       confidence: parsed.confidence,
+      // Solo con un tipo atteso: il client ne ricava il toast "controlla".
+      ...(expectedDocType !== null && {
+        expected_doc_type: expectedDocType,
+        actual_doc_type: parsed.doc_type,
+        mismatch,
+      }),
       usage: response.usage,
     })
   } catch (err) {

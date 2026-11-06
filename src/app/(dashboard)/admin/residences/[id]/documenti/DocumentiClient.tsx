@@ -9,6 +9,7 @@ import { createUploadUrl, confirmDocument, setChecklistException, clearChecklist
 import type { SupplierProposalExpectation } from './actions'
 import { ALLOWED_DOCUMENT_MIME, MAX_DOCUMENT_SIZE } from '@/lib/document-upload'
 import { pluralize } from '@/lib/pluralize'
+import { useToast } from '@/components/ui/Toast'
 import { formatDateIT } from '@/lib/formatDate'
 import { humanizeDocumentTitle } from '@/lib/documentTitle'
 import { DateField } from '@/components/DateField'
@@ -21,6 +22,7 @@ import {
   DOC_TYPE_LABELS,
   SISTEMA_LABELS,
   buildSupplierProposal,
+  expectedMismatchMessage,
   supplierVatNumberToWrite,
   type DocType,
   type ManualInstaller,
@@ -232,6 +234,7 @@ export function DocumentiClient({
   const [submitted, setSubmitted] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const router = useRouter()
+  const { showToast } = useToast()
 
   // --- classificazione AI (batch sequenziale) ---
   const [classifying, setClassifying] = useState(false)
@@ -376,12 +379,15 @@ export function DocumentiClient({
     // per id esatto (mai indovinati da un refresh dei props). Nessun click.
     // Continua in sottofondo anche se la modale viene chiusa — lo stato vive
     // in questo componente, non nella modale.
+    // Caricamento da una cella del quadro: il tipo atteso viaggia come indizio
+    // (classify-document lo confronta col tipo letto, mai lo impone).
+    const expectedDocType = uploadPreset?.expectation.docType ?? null
     const justUploaded = uploadedTasks
       .map((task, i) => ({ file: task.file, result: results[i] }))
       .filter((x): x is { file: File; result: { status: 'fatto'; documentId: string } } =>
         x.result.status === 'fatto' && !!x.result.documentId
       )
-      .map(x => ({ id: x.result.documentId, title: x.file.name }))
+      .map(x => ({ id: x.result.documentId, title: x.file.name, expectedDocType }))
 
     if (justUploaded.length > 0) {
       void classifyDocuments(justUploaded)
@@ -395,7 +401,7 @@ export function DocumentiClient({
   // possono mai correre in parallelo (guardia `classifying` sotto), e il
   // bottone manuale si disabilita/mostra progresso anche quando è
   // l'auto-classificazione a girare.
-  async function classifyDocuments(targets: { id: string; title: string }[]) {
+  async function classifyDocuments(targets: { id: string; title: string; expectedDocType?: DocType | null }[]) {
     if (targets.length === 0 || classifying) return
     setClassifying(true)
     setClassifyProgress({ done: 0, total: targets.length })
@@ -409,15 +415,24 @@ export function DocumentiClient({
     // l'estrazione parte da sola su questi, per id esatto (mai indovinati
     // da un refresh dei props), a batch concluso.
     const toExtract: { id: string; title: string }[] = []
+    // Tipo letto diverso dal tipo atteso della cella: il documento resta sull'unità
+    // ma in revisione, e a fine batch un solo avviso lo dice.
+    const mismatches: { expected: DocType; actual: DocType }[] = []
     for (const [i, doc] of targets.entries()) {
       try {
         const res = await fetch('/api/classify-document', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ documentId: doc.id }),
+          body: JSON.stringify({
+            documentId: doc.id,
+            ...(doc.expectedDocType ? { expected_doc_type: doc.expectedDocType } : {}),
+          }),
         })
         const result = await res.json().catch(() => null)
         if (res.ok) {
+          if (result?.mismatch === true && typeof result.expected_doc_type === 'string' && typeof result.actual_doc_type === 'string') {
+            mismatches.push({ expected: result.expected_doc_type as DocType, actual: result.actual_doc_type as DocType })
+          }
           console.log(`[classifica] ${doc.title}:`, result)
           if (result?.status === 'completata' && isExtractableDocType(typeof result.doc_type === 'string' ? result.doc_type : null)) {
             toExtract.push(doc)
@@ -448,6 +463,9 @@ export function DocumentiClient({
     setClassifyFailures(failures > 0 ? failures : null)
     setClassifyFailureReasons(reasons)
     router.refresh()
+
+    const mismatchMessage = expectedMismatchMessage(mismatches)
+    if (mismatchMessage) showToast('warning', mismatchMessage)
 
     if (toExtract.length > 0) {
       void extractDocuments(toExtract)

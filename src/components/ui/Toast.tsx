@@ -2,10 +2,11 @@
 
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { CheckCircle2, XCircle } from 'lucide-react'
+import { AlertCircle, CheckCircle2, XCircle } from 'lucide-react'
 import { cn } from '@/lib/cn'
 
-type ToastKind = 'success' | 'error'
+// 'warning' = avviso che chiede un controllo senza essere un errore (ambra, non rosso).
+type ToastKind = 'success' | 'error' | 'warning'
 
 interface ToastState {
   id: number
@@ -16,6 +17,7 @@ interface ToastState {
 const DURATIONS: Record<ToastKind, number> = {
   success: 4000,
   error: 8000,
+  warning: 8000,
 }
 
 type ToastPlacement = 'app' | 'dashboard'
@@ -71,6 +73,8 @@ export function ToastProvider({ children, placement = 'app' }: { children: React
           >
             {toast.kind === 'success' ? (
               <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-brand-dark" strokeWidth={1.8} />
+            ) : toast.kind === 'warning' ? (
+              <AlertCircle className="w-4 h-4 flex-shrink-0 text-status-inprogress" strokeWidth={1.8} />
             ) : (
               <XCircle className="w-4 h-4 flex-shrink-0 text-status-overdue" strokeWidth={1.8} />
             )}
