@@ -5,6 +5,7 @@ import { createServiceClient } from '@/lib/supabase/admin'
 import { DOC_TYPE_LABELS, type DocType } from '@/lib/document-classification'
 import { MAX_PDF_BYTES_FOR_API, hasPdfMagicBytes } from '@/lib/document-upload'
 import { authorizeDocumentActor } from '@/lib/document-access'
+import { refreshUnitProposal } from '@/lib/document-unit-proposal.server'
 import {
   AMBITI,
   CLASSI_ENERGETICHE,
@@ -377,6 +378,10 @@ export async function POST(req: NextRequest) {
       valid_until: validUntil,
       fields,
     })
+
+    // Proposta di unità dal testo appena letto (E1b). Mai un'assegnazione, e un
+    // guasto qui non cambia l'esito dell'estrazione già scritta (è già nel log).
+    await refreshUnitProposal(admin, documentId)
 
     return NextResponse.json({
       status: 'completata',

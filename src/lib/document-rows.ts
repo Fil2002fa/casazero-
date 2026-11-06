@@ -94,6 +94,10 @@ export type DocRow = {
   // decide document-overrides.ts. Si leggono SOLO attraverso
   // currentExtraction e documentFacts, mai direttamente.
   overrides: OverrideRow[]
+  // Proposta di unità (052): mai un'assegnazione. Vedi document-unit-proposal.ts.
+  proposed_unit_id: string | null
+  unit_proposal_confidence: 'alta' | 'media' | 'bassa' | null
+  unit_proposal_dismissed_at: string | null
 }
 
 export type UnitRow = {

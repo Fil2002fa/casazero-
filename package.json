@@ -13,6 +13,7 @@
     "verify:match": "node --experimental-strip-types --no-warnings scripts/verify-supplier-match.mjs",
     "verify:extraction": "node --experimental-strip-types --no-warnings scripts/verify-extraction.mjs",
     "verify:export": "node --experimental-strip-types --no-warnings scripts/verify-document-export.mjs",
+    "verify:unitmatch": "node --experimental-strip-types --no-warnings scripts/verify-unit-proposal.mjs",
     "verify:unitdocs": "node --experimental-strip-types --no-warnings scripts/verify-unit-documents.mjs",
     "verify:schede": "node --experimental-strip-types --no-warnings scripts/verify-residence-export.mjs",
     "verify:batch": "node --experimental-strip-types --no-warnings scripts/verify-batch-failures.mjs",

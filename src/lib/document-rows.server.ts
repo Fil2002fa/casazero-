@@ -14,7 +14,7 @@
  * la lista vuota come faceva prima, la route risponde 500).
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { normalizeEmbed } from '@/lib/postgrest-embed'
+import { normalizeEmbed } from './postgrest-embed'
 import type { DocumentExtractionRow } from '@/lib/document-extraction'
 import type { DocRow, UnitRow } from '@/lib/document-rows'
 import type { OverrideRow } from '@/lib/document-overrides'
@@ -25,6 +25,23 @@ export type ResidenceDocumentRows = {
   error: string | null
 }
 
+// Colonne lette per ogni riga documento: una sola stringa per la pagina, l'export
+// e il calcolo delle proposte di unità.
+export const DOCUMENT_ROW_SELECT =
+  'id, title, category, file_name, storage_path, file_date, unit_id, created_at, classification_status, doc_type, sistema, classification_confidence, extracted_metadata, proposed_unit_id, unit_proposal_confidence, unit_proposal_dismissed_at, document_extractions(for_doc_type, status, document_date, ambito, unita_riferimento, valid_until, fields), document_field_overrides(for_doc_type, field_key, value, set_by, set_at)'
+
+// L'embed to-one può tornare oggetto o array di un elemento (bug class
+// registrata, vedi postgrest-embed.ts): normalizzato qui, una volta.
+export function toDocRow(row: Record<string, unknown>): DocRow {
+  const { document_extractions, document_field_overrides, ...rest } = row
+  return {
+    ...(rest as Omit<DocRow, 'extraction' | 'overrides'>),
+    extraction: normalizeEmbed<DocumentExtractionRow>(document_extractions),
+    // Embed to-many (048, PK su più righe per documento): sempre array.
+    overrides: Array.isArray(document_field_overrides) ? (document_field_overrides as OverrideRow[]) : [],
+  }
+}
+
 export async function loadResidenceDocumentRows(
   supabase: SupabaseClient,
   residenceId: string,
@@ -32,7 +49,7 @@ export async function loadResidenceDocumentRows(
   const [{ data: rawDocs, error: docsError }, { data: rawUnits, error: unitsError }] = await Promise.all([
     supabase
       .from('documents')
-      .select('id, title, category, file_name, storage_path, file_date, unit_id, created_at, classification_status, doc_type, sistema, classification_confidence, extracted_metadata, document_extractions(for_doc_type, status, document_date, ambito, unita_riferimento, valid_until, fields), document_field_overrides(for_doc_type, field_key, value, set_by, set_at)')
+      .select(DOCUMENT_ROW_SELECT)
       .eq('residence_id', residenceId)
       .order('created_at', { ascending: false }),
     supabase
@@ -47,17 +64,7 @@ export async function loadResidenceDocumentRows(
     console.error('[document-rows] lettura documenti/unità fallita', { residenceId, error: firstError })
   }
 
-  // L'embed to-one può tornare oggetto o array di un elemento (bug class
-  // registrata, vedi postgrest-embed.ts): normalizzato qui, una volta.
-  const docs: DocRow[] = ((rawDocs ?? []) as Array<Record<string, unknown>>).map(row => {
-    const { document_extractions, document_field_overrides, ...rest } = row
-    return {
-      ...(rest as Omit<DocRow, 'extraction' | 'overrides'>),
-      extraction: normalizeEmbed<DocumentExtractionRow>(document_extractions),
-      // Embed to-many (048, PK su più righe per documento): sempre array.
-      overrides: Array.isArray(document_field_overrides) ? (document_field_overrides as OverrideRow[]) : [],
-    }
-  })
+  const docs: DocRow[] = ((rawDocs ?? []) as Array<Record<string, unknown>>).map(toDocRow)
 
   return {
     docs,

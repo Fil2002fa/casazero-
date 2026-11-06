@@ -12,6 +12,7 @@ import {
   type DocType,
   type Sistema,
 } from '@/lib/document-classification'
+import { refreshUnitProposal } from '@/lib/document-unit-proposal.server'
 
 // Forza runtime Node.js — @anthropic-ai/sdk e il download storage non sono
 // compatibili con Edge. maxDuration alto: una chiamata AI su un PDF di
@@ -324,6 +325,10 @@ export async function POST(req: NextRequest) {
       classification_confidence: parsed.confidence,
       extracted_metadata: extractedMetadata,
     }).eq('id', documentId)
+
+    // Proposta di unità dal testo del verbale (E1b). Mai un'assegnazione, e un
+    // guasto qui non cambia l'esito della classificazione già scritta.
+    await refreshUnitProposal(admin, documentId)
 
     return NextResponse.json({
       status: finalStatus,
