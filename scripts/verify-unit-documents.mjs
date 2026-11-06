@@ -36,7 +36,7 @@ try {
   process.exit(2)
 }
 
-const { UNIT_EXPECTATIONS, unitDocumentRows, documentsMentioningUnitWithoutAssignment, sistemaMatches } = mod
+const { UNIT_EXPECTATIONS, unitDocumentRows, documentsMentioningUnitWithoutAssignment, sistemaMatches, formatCellKeyData } = mod
 
 let fallimenti = 0
 let eseguiti = 0
@@ -207,6 +207,19 @@ check('sistemaMatches: sistemi diversi non combaciano', sistemaMatches('elettric
   })
   check('correzione manuale che toglie ambito e unità: non è più un avviso',
     documentsMentioningUnitWithoutAssignment([corretto]).map(d => d.id), [])
+}
+
+// --- dati chiave in forma breve per la cella ------------------------------------
+{
+  const d = (label, value, kind = 'text') => ({ label, value, kind })
+  check('cella APE: classe e validità', formatCellKeyData('ape', [d('Classe energetica', 'B'), d('Valida fino al', '2034-02-20', 'date')]), 'Classe B · fino al 20 feb 2034')
+  check('cella APE: solo la classe', formatCellKeyData('ape', [d('Classe energetica', 'B')]), 'Classe B')
+  check('cella APE: solo la validità', formatCellKeyData('ape', [d('Valida fino al', '2034-02-20', 'date')]), 'fino al 20 feb 2034')
+  check('cella planimetria: la data', formatCellKeyData('planimetria_catastale', [d('Data documento', '2026-03-12', 'date')]), 'del 12 mar 2026')
+  check('cella DiCo: impresa e data', formatCellKeyData('dico_elettrico', [d('Impresa installatrice', 'Rossi Impianti'), d('Data documento', '2026-03-12', 'date')]), 'Rossi Impianti · 12 mar 2026')
+  check('cella DiCo: senza impresa, solo la data', formatCellKeyData('dico_elettrico', [d('Data documento', '2026-03-12', 'date')]), '12 mar 2026')
+  check('cella: nessun dato = null', [formatCellKeyData('ape', []), formatCellKeyData('planimetria_catastale', []), formatCellKeyData('dico_elettrico', [])], [null, null, null])
+  check('categorie di caricamento delle tre voci', UNIT_EXPECTATIONS.map(e => e.category), ['energetici', 'proprieta', 'conformita'])
 }
 
 // --- reviewState: unica definizione di "classificazione chiusa" -----------------

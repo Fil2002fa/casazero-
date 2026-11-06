@@ -14,6 +14,7 @@ import { humanizeDocumentTitle } from '@/lib/documentTitle'
 import { DateField } from '@/components/DateField'
 import { DocumentPanel } from './DocumentPanel'
 import { UnitDocumentMatrix } from './UnitDocumentMatrix'
+import type { UnitExpectation } from '@/lib/unit-documents'
 import { batchFailureMessage, classifyBatchFailure, type BatchFailureReason } from '@/lib/batch-failures'
 import {
   DOC_TYPES,
@@ -225,6 +226,8 @@ export function DocumentiClient({
   // --- upload modal state ---
   const [showModal, setShowModal] = useState(false)
   const [scope, setScope]         = useState<'residenza' | 'unita'>('residenza')
+  // Caricamento aperto da una cella vuota del quadro: unità e voce già scelte.
+  const [uploadPreset, setUploadPreset] = useState<{ unitId: string; expectation: UnitExpectation } | null>(null)
   const [tasks, setTasks]         = useState<FileTask[]>([])
   const [submitted, setSubmitted] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
@@ -331,6 +334,15 @@ export function DocumentiClient({
     setTasks([])
     setSubmitted(false)
     setScope('residenza')
+    setUploadPreset(null)
+  }
+
+  function openUploadFor(unitId: string, expectation: UnitExpectation) {
+    setTasks([])
+    setSubmitted(false)
+    setUploadPreset({ unitId, expectation })
+    setScope('unita')
+    setShowModal(true)
   }
 
   function updateTask(id: string, patch: Partial<FileTask>) {
@@ -610,6 +622,13 @@ export function DocumentiClient({
             ) : (
             /* ---- Form upload ---- */
               <form onSubmit={handleUpload} className="space-y-4">
+                {uploadPreset && (
+                  <p className="text-xs text-text-secondary bg-background rounded-lg px-3 py-2">
+                    Stai caricando: <span className="font-medium text-text-primary">{uploadPreset.expectation.label}</span>
+                    {' '}per <span className="font-medium text-text-primary">{units.find(u => u.id === uploadPreset.unitId)?.label ?? 'l’unità scelta'}</span>.
+                    Il tipo lo conferma la classificazione dopo il caricamento.
+                  </p>
+                )}
                 {/* Destinazione */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-text-secondary block">Destinazione *</label>
@@ -646,7 +665,7 @@ export function DocumentiClient({
                   <select
                     name="unitId"
                     required
-                    defaultValue=""
+                    defaultValue={uploadPreset?.unitId ?? ''}
                     className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
                   >
                     <option value="" disabled>Seleziona unità…</option>
@@ -662,6 +681,7 @@ export function DocumentiClient({
                   <select
                     name="category"
                     required
+                    defaultValue={uploadPreset?.expectation.category}
                     className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
                   >
                     {CATEGORIES.map(c => (
@@ -793,7 +813,13 @@ export function DocumentiClient({
       )}
 
       {/* -------- Quadro unità × documenti attesi -------- */}
-      <UnitDocumentMatrix docs={docs} units={units} />
+      <UnitDocumentMatrix
+        docs={docs}
+        units={units}
+        selectedDocId={selectedId}
+        onOpenDoc={setSelectedId}
+        onUpload={openUploadFor}
+      />
 
       {/* -------- Da caricare + Escluse dalla consegna -------- */}
       <MissingDocumentsSection

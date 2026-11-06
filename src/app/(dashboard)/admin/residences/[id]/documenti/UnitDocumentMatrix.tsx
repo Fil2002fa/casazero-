@@ -1,23 +1,35 @@
 'use client'
 
 import { useMemo } from 'react'
+import { AlertCircle, Eye, Upload } from 'lucide-react'
 import type { DocRow, UnitRow } from '@/lib/document-rows'
 import { pluralize } from '@/lib/pluralize'
 import {
   UNIT_EXPECTATIONS,
   documentsMentioningUnitWithoutAssignment,
-  formatKeyData,
+  formatCellKeyData,
   unitDocumentRows,
   type UnitDocState,
+  type UnitDocumentCell,
+  type UnitExpectation,
 } from '@/lib/unit-documents'
 import { compareUnitLabels } from '@/lib/unit-utils'
 
-// Quadro unità × documenti attesi (E1a, D1-D2). Un solo componente per admin e
-// super_admin: nessun dato dipende dal ruolo. Il calcolo è in unitDocumentRows,
-// la stessa fonte della scheda "Riepilogo unità" dell'Excel. Considera solo i
-// documenti assegnati a un'unità (documents.unit_id): l'unità citata nel testo
-// del documento non conta, e i documenti che la citano senza essere assegnati
-// si contano a parte.
+// Quadro unità × documenti attesi (E1a D1-D2, E1b). Un solo componente per
+// admin e super_admin: nessun dato dipende dal ruolo. Il calcolo è in
+// unitDocumentRows, la stessa fonte della scheda "Riepilogo unità" dell'Excel.
+// Considera solo i documenti assegnati a un'unità (documents.unit_id): un
+// documento senza unità non compare mai qui, e l'unità citata nel testo non
+// conta (decisione D2).
+//
+// Ogni cella è UN <button> intero (mai elementi interattivi annidati):
+//   presente        verde chiaro, occhio, dati chiave → apre il pannello
+//   mancante        bordo tratteggiato, "Carica" → apre il caricamento con
+//                   unità e voce già scelte
+//   da verificare   ambra, "!" → apre il pannello (che si apre in revisione
+//                   perché la classificazione non è chiusa)
+// Hover: bordo pieno e ombra leggera; il cursore a mano viene dal <button>
+// stesso. Il focus da tastiera è sempre visibile.
 
 const STATE_LABELS: Record<UnitDocState, string> = {
   presente: 'Presente',
@@ -25,15 +37,67 @@ const STATE_LABELS: Record<UnitDocState, string> = {
   mancante: 'Mancante',
 }
 
-// Famiglia di seconda generazione (status-*/brand/neutral), come i badge della
-// pagina: mai semantic-*.
-const STATE_STYLES: Record<UnitDocState, string> = {
-  presente: 'bg-brand-dark/8 text-brand-dark',
-  da_verificare: 'bg-status-inprogress/8 text-status-inprogress',
-  mancante: 'bg-neutral-600/7 text-neutral-600',
+// Famiglia di seconda generazione (status-*/brand/neutral), mai semantic-*.
+const CELL_STYLES: Record<UnitDocState, string> = {
+  presente: 'border-brand-medium/30 bg-brand-light/50 hover:border-brand-medium',
+  da_verificare: 'border-status-inprogress/40 bg-status-inprogress/8 hover:border-status-inprogress',
+  mancante: 'border-dashed border-border bg-surface text-text-secondary hover:border-solid hover:border-brand-medium',
 }
 
-export function UnitDocumentMatrix({ docs, units }: { docs: DocRow[]; units: UnitRow[] }) {
+const FOCUS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium focus-visible:ring-offset-1'
+
+function cellAriaLabel(unit: UnitRow, cell: UnitDocumentCell, facts: string | null): string {
+  const base = `${cell.expectation.label}, ${unit.label}: ${STATE_LABELS[cell.state].toLowerCase()}`
+  if (cell.state === 'mancante') return `${base}. Carica il documento`
+  if (cell.state === 'da_verificare') return `${base}. Apri per rivedere`
+  return `${base}${facts ? `, ${facts}` : ''}. Apri il documento`
+}
+
+function GridCell({ unit, cell, selected, onOpenDoc, onUpload }: {
+  unit: UnitRow
+  cell: UnitDocumentCell
+  selected: boolean
+  onOpenDoc: (docId: string) => void
+  onUpload: (unitId: string, expectation: UnitExpectation) => void
+}) {
+  const facts = formatCellKeyData(cell.expectation.key, cell.keyData)
+  const doc = cell.doc
+
+  function handleClick() {
+    if (cell.state === 'mancante' || !doc) onUpload(unit.id, cell.expectation)
+    else onOpenDoc(doc.id)
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      aria-label={cellAriaLabel(unit, cell, facts)}
+      aria-pressed={cell.state === 'mancante' ? undefined : selected}
+      className={`w-full min-h-[4.25rem] rounded-lg border p-2.5 text-left transition-shadow hover:shadow-sm cursor-pointer ${CELL_STYLES[cell.state]} ${selected ? 'ring-2 ring-brand-medium' : ''} ${FOCUS}`}
+    >
+      <span className="flex items-center gap-1.5 text-xs font-medium">
+        {cell.state === 'presente' && <Eye className="w-3.5 h-3.5 text-brand-dark" strokeWidth={1.8} aria-hidden="true" />}
+        {cell.state === 'da_verificare' && <AlertCircle className="w-3.5 h-3.5 text-status-inprogress" strokeWidth={1.8} aria-hidden="true" />}
+        {cell.state === 'mancante' && <Upload className="w-3.5 h-3.5" strokeWidth={1.8} aria-hidden="true" />}
+        <span className={cell.state === 'presente' ? 'text-brand-dark' : cell.state === 'da_verificare' ? 'text-status-inprogress' : ''}>
+          {cell.state === 'mancante' ? 'Carica' : STATE_LABELS[cell.state]}
+        </span>
+      </span>
+      {cell.state === 'presente' && facts && (
+        <span className="mt-1 block text-xs text-text-secondary break-words">{facts}</span>
+      )}
+    </button>
+  )
+}
+
+export function UnitDocumentMatrix({ docs, units, selectedDocId, onOpenDoc, onUpload }: {
+  docs: DocRow[]
+  units: UnitRow[]
+  selectedDocId: string | null
+  onOpenDoc: (docId: string) => void
+  onUpload: (unitId: string, expectation: UnitExpectation) => void
+}) {
   const rows = useMemo(
     () => unitDocumentRows(docs, [...units].sort((a, b) => compareUnitLabels(a.label, b.label))),
     [docs, units],
@@ -54,13 +118,13 @@ export function UnitDocumentMatrix({ docs, units }: { docs: DocRow[]; units: Uni
         </p>
       </div>
 
-      <div className="overflow-x-auto max-h-96 overflow-y-auto">
-        <table className="w-full text-left">
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-separate border-spacing-y-2">
           <thead>
-            <tr className="border-b border-border">
-              <th scope="col" className="py-2 pr-3 text-xs font-medium text-text-secondary whitespace-nowrap">Unità</th>
+            <tr>
+              <th scope="col" className="pr-3 text-xs font-medium text-text-secondary whitespace-nowrap">Unità</th>
               {UNIT_EXPECTATIONS.map(exp => (
-                <th key={exp.key} scope="col" className="py-2 pr-3 text-xs font-medium text-text-secondary min-w-40">
+                <th key={exp.key} scope="col" className="pr-2 text-xs font-medium text-text-secondary min-w-44">
                   {exp.label}
                 </th>
               ))}
@@ -68,21 +132,21 @@ export function UnitDocumentMatrix({ docs, units }: { docs: DocRow[]; units: Uni
           </thead>
           <tbody>
             {rows.map(row => (
-              <tr key={row.unit.id} className="border-b border-border last:border-b-0 align-top">
-                <th scope="row" className="py-2.5 pr-3 text-sm font-medium text-text-primary whitespace-nowrap">
+              <tr key={row.unit.id} className="align-top">
+                <th scope="row" className="pr-3 pt-2.5 text-sm font-medium text-text-primary whitespace-nowrap">
                   {row.unit.label}
                 </th>
-                {row.cells.map(cell => {
-                  const facts = formatKeyData(cell.keyData)
-                  return (
-                    <td key={cell.expectation.key} className="py-2.5 pr-3 space-y-1">
-                      <span className={`inline-flex items-center rounded-full h-[22px] px-2.5 text-xs font-medium ${STATE_STYLES[cell.state]}`}>
-                        {STATE_LABELS[cell.state]}
-                      </span>
-                      {facts && <p className="text-xs text-text-secondary break-words">{facts}</p>}
-                    </td>
-                  )
-                })}
+                {row.cells.map(cell => (
+                  <td key={cell.expectation.key} className="pr-2">
+                    <GridCell
+                      unit={row.unit}
+                      cell={cell}
+                      selected={cell.doc !== null && cell.doc.id === selectedDocId}
+                      onOpenDoc={onOpenDoc}
+                      onUpload={onUpload}
+                    />
+                  </td>
+                ))}
               </tr>
             ))}
           </tbody>

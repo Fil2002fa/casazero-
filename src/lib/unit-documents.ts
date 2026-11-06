@@ -25,6 +25,7 @@ import {
   type DocType,
   type Sistema,
 } from './document-classification'
+import type { DocumentCategory } from '@/types/database'
 import { formatDateIT } from './formatDate'
 import {
   currentExtraction,
@@ -43,16 +44,19 @@ export type UnitExpectation = {
   docType: DocType
   sistema: Sistema | null
   label: string
+  /** Categoria preselezionata quando si carica questo documento dal quadro. */
+  category: DocumentCategory
 }
 
 export const UNIT_EXPECTATIONS: readonly UnitExpectation[] = [
-  { key: 'ape', docType: 'ape', sistema: null, label: DOC_TYPE_LABELS.ape },
-  { key: 'planimetria_catastale', docType: 'planimetria_catastale', sistema: null, label: DOC_TYPE_LABELS.planimetria_catastale },
+  { key: 'ape', docType: 'ape', sistema: null, label: DOC_TYPE_LABELS.ape, category: 'energetici' },
+  { key: 'planimetria_catastale', docType: 'planimetria_catastale', sistema: null, label: DOC_TYPE_LABELS.planimetria_catastale, category: 'proprieta' },
   {
     key: 'dico_elettrico',
     docType: 'dich_conformita_dm37',
     sistema: 'elettrico',
     label: `${DOC_TYPE_LABELS.dich_conformita_dm37} · ${SISTEMA_LABELS.elettrico}`,
+    category: 'conformita',
   },
 ]
 
@@ -134,6 +138,36 @@ export function formatKeyData(keyData: KeyDatum[]): string | null {
   return keyData
     .map(k => `${k.label}: ${k.kind === 'date' ? formatDateIT(k.value) : k.value}`)
     .join(' · ')
+}
+
+/**
+ * Dati chiave in forma breve per la cella del quadro, sotto l'icona:
+ *   APE            "Classe B · fino al 20 feb 2034"
+ *   Planimetria    "del 12 mar 2026"
+ *   DiCo elettrica "Rossi Impianti · 12 mar 2026"
+ * null se non c'è nessun dato. Stessi valori di unitKeyData (e quindi
+ * dell'Excel), solo senza le etichette lunghe: la cella è stretta.
+ */
+export function formatCellKeyData(key: UnitExpectationKey, keyData: KeyDatum[]): string | null {
+  const find = (label: string) => keyData.find(k => k.label === label)
+  const show = (k: KeyDatum | undefined) => (k ? (k.kind === 'date' ? formatDateIT(k.value) : k.value) : null)
+  const join = (parts: Array<string | null>) => {
+    const out = parts.filter((p): p is string => p !== null)
+    return out.length > 0 ? out.join(' · ') : null
+  }
+  switch (key) {
+    case 'ape': {
+      const classe = show(find('Classe energetica'))
+      const fino = show(find('Valida fino al'))
+      return join([classe ? `Classe ${classe}` : null, fino ? `fino al ${fino}` : null])
+    }
+    case 'planimetria_catastale': {
+      const data = show(find('Data documento'))
+      return data ? `del ${data}` : null
+    }
+    case 'dico_elettrico':
+      return join([show(find('Impresa installatrice')), show(find('Data documento'))])
+  }
 }
 
 function buildCell(unitDocs: DocRow[], exp: UnitExpectation): UnitDocumentCell {
