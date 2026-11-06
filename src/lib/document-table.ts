@@ -11,6 +11,7 @@
  */
 import { DOC_TYPES, DOC_TYPE_LABELS, type DocType } from './document-classification'
 import { humanizeDocumentTitle } from './documentTitle'
+import { pluralize } from './pluralize'
 import { compareUnitLabels } from './unit-utils'
 import {
   CLASSIFICATION_STATUS_LABELS,
@@ -112,4 +113,105 @@ export function sortTableDocs(docs: readonly DocRow[]): DocRow[] {
     if (byTitle !== 0) return byTitle
     return a.id.localeCompare(b.id)
   })
+}
+
+// ---------------------------------------------------------------------------
+// Selezione e assegnazione multipla (E1b, 7a-2)
+// ---------------------------------------------------------------------------
+
+// Dei documenti selezionati restano solo quelli ancora in tabella: cambiare un
+// filtro o assegnare un documento fuori dal filtro non lascia selezioni
+// invisibili su cui un'azione potrebbe agire. Restituisce lo stesso Set se non
+// c'è niente da togliere, così un effetto che lo usa non rigenera lo stato a vuoto.
+export function pruneSelection(selected: ReadonlySet<string>, visible: readonly Pick<DocRow, 'id'>[]): ReadonlySet<string> {
+  const ids = new Set(visible.map(d => d.id))
+  let toRemove = false
+  for (const id of selected) if (!ids.has(id)) { toRemove = true; break }
+  if (!toRemove) return selected
+  return new Set([...selected].filter(id => ids.has(id)))
+}
+
+export type SelectAllState = 'none' | 'some' | 'all'
+
+export function selectAllState(selected: ReadonlySet<string>, visible: readonly Pick<DocRow, 'id'>[]): SelectAllState {
+  if (visible.length === 0) return 'none'
+  const n = visible.filter(d => selected.has(d.id)).length
+  return n === 0 ? 'none' : n === visible.length ? 'all' : 'some'
+}
+
+// Il checkbox di intestazione agisce sulle righe VISIBILI: se sono tutte
+// selezionate le deseleziona, altrimenti le seleziona tutte.
+export function toggleSelectAll(selected: ReadonlySet<string>, visible: readonly Pick<DocRow, 'id'>[]): Set<string> {
+  const next = new Set(selected)
+  if (selectAllState(selected, visible) === 'all') for (const d of visible) next.delete(d.id)
+  else for (const d of visible) next.add(d.id)
+  return next
+}
+
+// I documenti già nell'unità di destinazione non si riscrivono: niente chiamata,
+// niente evento nel registro, e il messaggio finale li dice a parte.
+export function splitBulkAssign<T extends Pick<DocRow, 'unit_id'>>(
+  selected: readonly T[],
+  targetUnitId: string | null,
+): { toApply: T[]; alreadyThere: T[] } {
+  return {
+    toApply: selected.filter(d => d.unit_id !== targetUnitId),
+    alreadyThere: selected.filter(d => d.unit_id === targetUnitId),
+  }
+}
+
+export type BulkFailure = { name: string; error: string }
+export type BulkAssignSummary = { kind: 'success' | 'warning' | 'error'; message: string; persistent: boolean }
+
+const MAX_NAMES_IN_MESSAGE = 3
+
+function endSentence(text: string): string {
+  return text.endsWith('.') ? text : text + '.'
+}
+
+function namesList(names: readonly string[]): string {
+  const shown = names.slice(0, MAX_NAMES_IN_MESSAGE).join(', ')
+  const rest = names.length - MAX_NAMES_IN_MESSAGE
+  return rest > 0 ? `${shown} e altri ${rest}` : shown
+}
+
+// Un solo messaggio per tutto il ciclo ("N assegnati, M falliti: nomi"). Con
+// dei fallimenti il toast è persistente, perché i nomi vanno letti e il
+// motivo (uno solo, se è lo stesso per tutti) è l'unico indizio su cosa
+// ritentare.
+export function summarizeBulkAssign(input: {
+  assigned: number
+  alreadyThere: number
+  failures: readonly BulkFailure[]
+  // null = documenti riportati alla residenza (nessuna unità)
+  targetLabel: string | null
+}): BulkAssignSummary {
+  const { assigned, alreadyThere, failures, targetLabel } = input
+  const where = targetLabel === null ? 'senza unità' : `in ${targetLabel}`
+  const already = alreadyThere > 0
+    ? ` (${pluralize(alreadyThere, 'era già', 'erano già')} ${where})`
+    : ''
+
+  if (failures.length === 0) {
+    if (assigned === 0) {
+      return { kind: 'success', message: `Niente da fare: ${alreadyThere === 1 ? 'il documento è già' : 'i documenti sono già'} ${where}.`, persistent: false }
+    }
+    const done = targetLabel === null
+      ? `${pluralize(assigned, 'documento riportato', 'documenti riportati')} alla residenza`
+      : `${pluralize(assigned, 'documento assegnato', 'documenti assegnati')} a ${targetLabel}`
+    return { kind: 'success', message: `${done}${already}.`, persistent: false }
+  }
+
+  const reasons = new Set(failures.map(f => f.error))
+  const reason = reasons.size === 1 ? ` Motivo: ${[...reasons][0]}` : ''
+  const names = namesList(failures.map(f => f.name))
+  const failed = pluralize(failures.length, 'fallito', 'falliti')
+  if (assigned === 0) {
+    return { kind: 'error', message: endSentence(`Nessun documento assegnato, ${failed}: ${names}.${reason}`), persistent: true }
+  }
+  return {
+    kind: 'warning',
+    message: endSentence(`${pluralize(assigned, 'assegnato', 'assegnati')}, ${failed}: ${names}.${reason}${already}`),
+    persistent: true,
+  }
 }

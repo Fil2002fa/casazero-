@@ -1108,8 +1108,13 @@ export type SetDocumentUnitResult = { success: true } | { error: string }
 export async function setDocumentUnit(input: {
   documentId: string
   unitId: string | null
+  // false = non rigenerare la pagina a fine chiamata: l'assegnazione multipla
+  // (tabella, E1b 7a) fa un ciclo di chiamate e ricarica una volta sola alla
+  // fine. Default true: ogni altro chiamante resta com'era.
+  revalidate?: boolean
 }): Promise<SetDocumentUnitResult> {
   const { documentId, unitId } = input ?? {}
+  const revalidate = input?.revalidate !== false
   if (typeof documentId !== 'string' || documentId === '') return { error: 'Parametri non validi' }
   if (unitId !== null && (typeof unitId !== 'string' || unitId === '')) return { error: 'Parametri non validi' }
 
@@ -1171,7 +1176,7 @@ export async function setDocumentUnit(input: {
     }),
   })
 
-  revalidatePath(`/admin/residences/${doc.residence_id}/documenti`)
+  if (revalidate) revalidatePath(`/admin/residences/${doc.residence_id}/documenti`)
   return { success: true }
 }
 

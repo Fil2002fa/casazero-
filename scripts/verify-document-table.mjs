@@ -27,6 +27,7 @@ const {
   EMPTY_TABLE_FILTERS, STATE_FILTER_OPTIONS, UNIT_FILTER_NONE,
   documentNameText, filterTableDocs, isTableFiltered, presentDocTypes,
   sortTableDocs, sortedUnits, tableStateLabel,
+  pruneSelection, selectAllState, toggleSelectAll, splitBulkAssign, summarizeBulkAssign,
 } = T
 
 let fallimenti = 0
@@ -143,6 +144,48 @@ check('unita: l\'elenco di ingresso non cambia', (() => { const u = [{ id: 'x', 
 
 // --- la mappa degli stati e' una sola, usata anche dall'Excel -----------------------------
 check('la mappa degli stati e\' esportata da document-rows', typeof R.CLASSIFICATION_STATUS_LABELS, 'object')
+
+// --- selezione (7a-2) ---------------------------------------------------------------
+const vis = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]
+check('prune: toglie le righe che non si vedono piu', [...pruneSelection(new Set(['a', 'x']), vis)], ['a'])
+check('prune: stesso Set se non c è niente da togliere', (() => { const s0 = new Set(['a', 'b']); return pruneSelection(s0, vis) === s0 })(), true)
+check('prune: tabella vuota svuota la selezione', [...pruneSelection(new Set(['a']), [])], [])
+check('selectAllState: nessuno', selectAllState(new Set(), vis), 'none')
+check('selectAllState: alcuni', selectAllState(new Set(['a']), vis), 'some')
+check('selectAllState: tutti', selectAllState(new Set(['a', 'b', 'c']), vis), 'all')
+check('selectAllState: ignora i selezionati non visibili', selectAllState(new Set(['x']), vis), 'none')
+check('selectAllState: tabella vuota non conta come tutti', selectAllState(new Set(), []), 'none')
+check('toggleSelectAll: da nessuno seleziona le visibili', [...toggleSelectAll(new Set(), vis)].sort(), ['a', 'b', 'c'])
+check('toggleSelectAll: da alcuni seleziona tutte', [...toggleSelectAll(new Set(['a']), vis)].sort(), ['a', 'b', 'c'])
+check('toggleSelectAll: da tutti deseleziona', [...toggleSelectAll(new Set(['a', 'b', 'c']), vis)], [])
+check('toggleSelectAll: non tocca i selezionati fuori vista', [...toggleSelectAll(new Set(['a', 'b', 'c', 'x']), vis)], ['x'])
+check('toggleSelectAll: non muta input', (() => { const s0 = new Set(['a']); toggleSelectAll(s0, vis); return [...s0] })(), ['a'])
+
+// --- assegnazione multipla ---------------------------------------------------------------
+const sel = [{ id: '1', unit_id: null }, { id: '2', unit_id: 'u1' }, { id: '3', unit_id: 'u2' }]
+check('split: verso u1 salta chi è già lì', (() => { const r = splitBulkAssign(sel, 'u1'); return [r.toApply.map(d => d.id), r.alreadyThere.map(d => d.id)] })(), [['1', '3'], ['2']])
+check('split: verso nessuna unita salta chi non ha unita', (() => { const r = splitBulkAssign(sel, null); return [r.toApply.map(d => d.id), r.alreadyThere.map(d => d.id)] })(), [['2', '3'], ['1']])
+const ok = (over) => summarizeBulkAssign({ assigned: 0, alreadyThere: 0, failures: [], targetLabel: 'Unità 2', ...over })
+check('riepilogo: un documento assegnato', ok({ assigned: 1 }), { kind: 'success', message: '1 documento assegnato a Unità 2.', persistent: false })
+check('riepilogo: piu documenti assegnati', ok({ assigned: 3 }).message, '3 documenti assegnati a Unità 2.')
+check('riepilogo: verso nessuna unita', ok({ assigned: 2, targetLabel: null }).message, '2 documenti riportati alla residenza.')
+check('riepilogo: un solo riportato', ok({ assigned: 1, targetLabel: null }).message, '1 documento riportato alla residenza.')
+check('riepilogo: con uno già lì', ok({ assigned: 2, alreadyThere: 1 }).message, '2 documenti assegnati a Unità 2 (1 era già in Unità 2).')
+check('riepilogo: con piu già lì', ok({ assigned: 1, alreadyThere: 2 }).message, '1 documento assegnato a Unità 2 (2 erano già in Unità 2).')
+check('riepilogo: tutti già lì, uno', ok({ alreadyThere: 1 }).message, 'Niente da fare: il documento è già in Unità 2.')
+check('riepilogo: tutti già lì, piu', ok({ alreadyThere: 3 }).message, 'Niente da fare: i documenti sono già in Unità 2.')
+check('riepilogo: tutti già senza unita', ok({ alreadyThere: 2, targetLabel: null }).message, 'Niente da fare: i documenti sono già senza unità.')
+const f1 = { name: 'A', error: 'Errore tecnico, riprova.' }
+const f2 = { name: 'B', error: 'Errore tecnico, riprova.' }
+const f3 = { name: 'C', error: 'Documento non trovato o non accessibile' }
+check('riepilogo: parziale, stesso motivo, persistente e ambra', ok({ assigned: 2, failures: [f1, f2] }),
+  { kind: 'warning', message: '2 assegnati, 2 falliti: A, B. Motivo: Errore tecnico, riprova.', persistent: true })
+check('riepilogo: un fallito si dice al singolare', ok({ assigned: 1, failures: [f1] }).message, '1 assegnato, 1 fallito: A. Motivo: Errore tecnico, riprova.')
+check('riepilogo: motivi diversi non ne mostra nessuno', ok({ assigned: 1, failures: [f1, f3] }).message, '1 assegnato, 2 falliti: A, C.')
+check('riepilogo: tutti falliti è un errore persistente', ok({ failures: [f1, f2] }),
+  { kind: 'error', message: 'Nessun documento assegnato, 2 falliti: A, B. Motivo: Errore tecnico, riprova.', persistent: true })
+check('riepilogo: oltre 3 nomi, "e altri N"', ok({ assigned: 1, failures: ['A', 'B', 'C', 'D', 'E'].map(name => ({ name, error: 'x' })) }).message, '1 assegnato, 5 falliti: A, B, C e altri 2. Motivo: x.')
+check('riepilogo: parziale con già lì', ok({ assigned: 1, alreadyThere: 1, failures: [f3] }).message, '1 assegnato, 1 fallito: C. Motivo: Documento non trovato o non accessibile (1 era già in Unità 2).')
 
 if (fallimenti > 0) {
   console.error(`\n✗ ${fallimenti} su ${eseguiti} casi divergenti`)
