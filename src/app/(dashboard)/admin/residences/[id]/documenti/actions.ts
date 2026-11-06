@@ -35,6 +35,7 @@ import {
 } from '@/lib/document-classification'
 import { friendlySupplierError, isVatUniqueViolation } from '@/lib/supplier-errors'
 import { computeResidenceChecklist } from '@/lib/document-checklist'
+import { PREVIEW_URL_TTL_SECONDS, previewKind, type PreviewKind } from '@/lib/document-preview'
 
 type AuthorizedUser = { user: { id: string } }
 type AuthError = { error: string }
@@ -1172,4 +1173,51 @@ export async function setDocumentUnit(input: {
 
   revalidatePath(`/admin/residences/${doc.residence_id}/documenti`)
   return { success: true }
+}
+
+// ============================================================
+// Anteprima del documento (E1b). Una signed URL NUOVA a ogni chiamata, a
+// scadenza breve (PREVIEW_URL_TTL_SECONDS), senza download forzato: il PDF si
+// apre nel viewer nativo del browser, l'immagine in un <img>. "Apri a schermo
+// intero" richiama questa action al clic, perché l'URL dell'iframe scade.
+//
+// Doppio controllo: authorizeDocumentActor (super_admin del builder
+// proprietario, admin assegnato alla residenza; chi non rientra riceve
+// "Documento non trovato") e poi la firma con il client di SESSIONE, così la
+// policy di lettura del bucket documents resta la seconda barriera. Non passa
+// da /api/download, che accetta un path qualunque e forza il download.
+// ============================================================
+
+export type DocumentPreviewResult =
+  | { url: string; kind: PreviewKind; expiresInSeconds: number }
+  | { error: string }
+
+export async function getDocumentPreviewUrl(input: { documentId: string }): Promise<DocumentPreviewResult> {
+  const { documentId } = input ?? {}
+  if (typeof documentId !== 'string' || documentId === '') return { error: 'Parametri non validi' }
+
+  const caller = await requireCaller('getDocumentPreviewUrl', ['admin', 'super_admin'])
+  if ('error' in caller) return { error: caller.error }
+
+  const svc = createServiceClient()
+  const actor = await authorizeDocumentActor(svc, caller.userId, documentId, '[getDocumentPreviewUrl]')
+  if (!actor.ok) return { error: actor.error }
+  const { doc } = actor
+
+  const kind = previewKind(doc.storage_path)
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.storage
+    .from('documents')
+    .createSignedUrl(doc.storage_path, PREVIEW_URL_TTL_SECONDS)
+  if (error || !data?.signedUrl) {
+    // Il file non c'è nello storage (esito di dominio) oppure il guasto è
+    // tecnico (rete, permessi, configurazione): messaggi diversi.
+    const status = (error as { statusCode?: string | number } | null)?.statusCode
+    const notFound = String(status) === '404' || /not found/i.test(error?.message ?? '')
+    console.error('[getDocumentPreviewUrl] firma fallita', { documentId, status, message: error?.message })
+    return { error: notFound ? 'Il file di questo documento non è nello storage.' : 'Anteprima non disponibile per un problema tecnico, riprova.' }
+  }
+
+  return { url: data.signedUrl, kind, expiresInSeconds: PREVIEW_URL_TTL_SECONDS }
 }
