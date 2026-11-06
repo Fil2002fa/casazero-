@@ -200,7 +200,7 @@ export function DocumentPanel({
   return (
     <aside
       aria-label={`Dettaglio: ${humanizeDocumentTitle(doc.title)}`}
-      className="bg-surface rounded-xl border border-border p-4 space-y-4 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto"
+      className="bg-surface p-4 space-y-4 xl:rounded-xl xl:border xl:border-border xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto"
     >
       <div className="flex items-start gap-2">
         <div className="flex-1 min-w-0">

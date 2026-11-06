@@ -26,7 +26,7 @@ try {
   console.error(`\n✗ Impossibile importare il modulo: ${err.message}`)
   process.exit(2)
 }
-const { effectiveSistema, panelFields, readInDocumentText, differsFromAi, planFieldChanges, manualFieldKeys, planPanelSave, savePlanIsEmpty } = mod
+const { PANEL_DRAWER_BREAKPOINT_PX, effectiveSistema, panelFields, readInDocumentText, differsFromAi, planFieldChanges, manualFieldKeys, planPanelSave, savePlanIsEmpty } = mod
 
 let fallimenti = 0
 let eseguiti = 0
@@ -116,6 +116,18 @@ const bozza = (d, over = {}) => ({ docType: d.doc_type, sistema: d.sistema, unit
 {
   const d = doc({ classification_status: 'fallita', doc_type: null, extraction: null })
   check('documento fallito: il Salva conferma il tipo scelto', planPanelSave(d, bozza(d, { docType: 'ape' })).classification, true)
+}
+
+// --- cassetto sotto 1280px ------------------------------------------------------
+check('la soglia del cassetto è il breakpoint xl di Tailwind (80rem)', PANEL_DRAWER_BREAKPOINT_PX, 80 * 16)
+{
+  const { readFileSync } = await import('node:fs')
+  const base = new URL('../src/app/(dashboard)/admin/residences/[id]/documenti/', import.meta.url)
+  const client = readFileSync(new URL('DocumentiClient.tsx', base), 'utf8')
+  const pannello = readFileSync(new URL('DocumentPanel.tsx', base), 'utf8')
+  check("il layout affiancato parte da xl, non da lg", client.includes("xl:grid xl:grid-cols-[") && !client.includes("lg:grid-cols-[minmax"), true)
+  check('il pannello è sticky solo da xl', /xl:sticky/.test(pannello) && !/ lg:sticky/.test(pannello), true)
+  check('il pannello è avvolto dal cassetto', /<PanelShell/.test(client), true)
 }
 
 // --- impianto di riferimento: solo per i tipi con un impianto ---------------------

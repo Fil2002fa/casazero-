@@ -14,6 +14,7 @@ import { formatDateIT } from '@/lib/formatDate'
 import { humanizeDocumentTitle } from '@/lib/documentTitle'
 import { DateField } from '@/components/DateField'
 import { DocumentPanel } from './DocumentPanel'
+import { PanelShell } from './PanelShell'
 import { UnitDocumentMatrix } from './UnitDocumentMatrix'
 import { otherVersions, type UnitExpectation } from '@/lib/unit-documents'
 import { batchFailureMessage, classifyBatchFailure, type BatchFailureReason } from '@/lib/batch-failures'
@@ -558,7 +559,7 @@ export function DocumentiClient({
   const selectedDoc = selectedId === null ? null : docs.find(d => d.id === selectedId) ?? null
 
   return (
-    <div className={selectedDoc ? 'lg:grid lg:grid-cols-[minmax(0,1fr)_clamp(480px,40%,640px)] lg:gap-6 lg:items-start' : ''}>
+    <div className={selectedDoc ? 'xl:grid xl:grid-cols-[minmax(0,1fr)_clamp(480px,40%,640px)] xl:gap-6 xl:items-start' : ''}>
     <div className="space-y-6 min-w-0">
 
       {/* -------- Banner servizio classificazione -------- */}
@@ -1012,6 +1013,7 @@ export function DocumentiClient({
     </div>
 
     {selectedDoc && (
+      <PanelShell label={`Dettaglio: ${humanizeDocumentTitle(selectedDoc.title)}`} onClose={() => setSelectedId(null)}>
       <DocumentPanel
         // Si rimonta quando cambia il documento o le sue correzioni: le bozze
         // ripartono dai dati appena salvati.
@@ -1025,6 +1027,7 @@ export function DocumentiClient({
         onOpenVersion={setSelectedId}
         onConfirmed={docType => handleClassificationConfirmed({ id: selectedDoc.id, title: selectedDoc.title }, docType)}
       />
+      </PanelShell>
     )}
     </div>
   )

@@ -17,6 +17,13 @@ import type { CorrectionField } from './document-overrides'
 import { canCorrectFields, correctionFields, isReviewClosed, type DocRow } from './document-rows'
 import { proposalSourceText } from './document-unit-proposal'
 
+/**
+ * Sotto questa larghezza di viewport il pannello è un cassetto sopra il
+ * contenuto; da qui in su è affiancato. Deve coincidere con il breakpoint `xl`
+ * di Tailwind usato nelle classi del layout (80rem = 1280px).
+ */
+export const PANEL_DRAWER_BREAKPOINT_PX = 1280
+
 export const HIDDEN_PANEL_FIELD_KEYS: readonly string[] = ['ambito', 'unita_riferimento']
 
 /**
