@@ -7,7 +7,7 @@ import {
   emailPromemoriaDue,
   maintenanceItemUrl,
 } from '@/lib/notifications'
-import { getRolesForProfiles } from '@/lib/notification-recipients'
+import { getItemLinkRoles, linkRoleFor } from '@/lib/notification-recipients'
 import { nextDueFrom } from '@/lib/maintenance-due'
 import { todayISO } from '@/lib/maintenance-status'
 import type { CompletionMode } from '@/types/database'
@@ -104,7 +104,7 @@ export async function GET(req: NextRequest) {
 
           const shouldNotify = await checkDedup(supabase, item.id, 0, 'n1_due')
           if (shouldNotify && item.unit_id) {
-            await notifyUnitMembers(supabase, item.unit_id, item.id, 'n1_due', tpl.title, dueDate, actionUrl => ({
+            await notifyUnitMembers(supabase, item.unit_id, item.residence_id, item.id, 'n1_due', tpl.title, dueDate, actionUrl => ({
               subject: `Manutenzione consigliata: "${tpl.title}"`,
               html: emailPromemoriaDue(tpl.title, effectiveFreq, actionUrl),
             }))
@@ -123,7 +123,7 @@ export async function GET(req: NextRequest) {
 
         // Notifica iniziale
         if (mode === 'residente' && item.unit_id) {
-          await notifyUnitMembers(supabase, item.unit_id, item.id, 'n2_due', tpl.title, dueDate, actionUrl => ({
+          await notifyUnitMembers(supabase, item.unit_id, item.residence_id, item.id, 'n2_due', tpl.title, dueDate, actionUrl => ({
             subject: `Manutenzione in scadenza: "${tpl.title}"`,
             html: emailMaintenanceDue(tpl.title, 'residente', dueDate, actionUrl),
           }))
@@ -145,7 +145,7 @@ export async function GET(req: NextRequest) {
         if (!shouldRemind) continue
 
         if (mode === 'residente' && item.unit_id) {
-          await notifyUnitMembers(supabase, item.unit_id, item.id, 'n2_reminder', tpl.title, dueDate, actionUrl => ({
+          await notifyUnitMembers(supabase, item.unit_id, item.residence_id, item.id, 'n2_reminder', tpl.title, dueDate, actionUrl => ({
             subject: `Promemoria: "${tpl.title}" non ancora eseguita`,
             html: emailMaintenanceReminder(tpl.title, dueDate, actionUrl),
           }))
@@ -200,6 +200,7 @@ async function notifyUnitMembers(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
   unitId: string,
+  residenceId: string,
   itemId: string,
   type: string,
   title: string,
@@ -213,9 +214,10 @@ async function notifyUnitMembers(
     .is('ended_at', null)
 
   // Ruolo di ripiego 'client': un membro di unità è un residente. Vale solo se
-  // la lettura dei ruoli fallisce (già loggata); altrimenti conta il ruolo vero,
-  // che per gli account di test può essere admin.
-  const roles = await getRolesForProfiles(supabase, (members ?? []).map((m: { profile_id: string }) => m.profile_id))
+  // la lettura dei ruoli fallisce (già loggata); altrimenti conta l'accesso
+  // reale alla voce: un membro con ruolo admin (account di test) ha il link
+  // diretto solo se è assegnato alla residenza, altrimenti va all'elenco.
+  const roles = await getItemLinkRoles(supabase, (members ?? []).map((m: { profile_id: string }) => m.profile_id), residenceId)
 
   for (const m of members ?? []) {
     await supabase.from('notifications').insert({
@@ -227,7 +229,7 @@ async function notifyUnitMembers(
     })
     const email = await getEmailForProfile(supabase, m.profile_id)
     if (email) {
-      const actionUrl = maintenanceItemUrl(APP_URL, roles.get(m.profile_id) ?? 'client', itemId)
+      const actionUrl = maintenanceItemUrl(APP_URL, linkRoleFor(roles, m.profile_id, 'client'), itemId)
       await sendEmail({ to: email, ...buildContent(actionUrl) })
     }
   }
@@ -249,7 +251,7 @@ async function notifyResidenceAdmins(
     .eq('residence_id', residenceId)
 
   // Ruolo di ripiego 'admin': chi è in admin_assignments è un admin.
-  const roles = await getRolesForProfiles(supabase, (assignments ?? []).map((a: { profile_id: string }) => a.profile_id))
+  const roles = await getItemLinkRoles(supabase, (assignments ?? []).map((a: { profile_id: string }) => a.profile_id), residenceId)
 
   for (const a of assignments ?? []) {
     await supabase.from('notifications').insert({
@@ -261,7 +263,7 @@ async function notifyResidenceAdmins(
     })
     const email = await getEmailForProfile(supabase, a.profile_id)
     if (email) {
-      const actionUrl = maintenanceItemUrl(APP_URL, roles.get(a.profile_id) ?? 'admin', itemId)
+      const actionUrl = maintenanceItemUrl(APP_URL, linkRoleFor(roles, a.profile_id, 'admin'), itemId)
       await sendEmail({ to: email, ...buildContent(actionUrl) })
     }
   }

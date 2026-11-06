@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/admin'
-import { resolveRecipientsForMode, getRolesForProfiles } from '@/lib/notification-recipients'
+import { resolveRecipientsForMode, getItemLinkRoles, linkRoleFor } from '@/lib/notification-recipients'
 import { sendEmail, emailSollecito, maintenanceItemUrl } from '@/lib/notifications'
 import { logActivityEvent } from '@/lib/activity-log'
 import { OBLIGATION_LABELS } from '@/components/MaintenanceBadge'
@@ -155,7 +155,7 @@ export async function sollecitaItem(itemId: string): Promise<SollecitoResult> {
     actionUrl,
   })
   const fallbackRole = mode === 'residente' ? 'client' : 'admin'
-  const recipientRoles = await getRolesForProfiles(svc, lookup.recipients.map(r => r.profileId))
+  const recipientRoles = await getItemLinkRoles(svc, lookup.recipients.map(r => r.profileId), item.residence_id)
   const subject = `Sollecito: "${title}" non ancora eseguita`
 
   const cutoff = new Date(Date.now() - DEDUP_WINDOW_HOURS * 3600_000).toISOString()
@@ -185,7 +185,7 @@ export async function sollecitaItem(itemId: string): Promise<SollecitoResult> {
       delivery = 'no_email'
       outcome.withoutEmail++
     } else {
-      const actionUrl = maintenanceItemUrl(APP_URL, recipientRoles.get(recipient.profileId) ?? fallbackRole, itemId)
+      const actionUrl = maintenanceItemUrl(APP_URL, linkRoleFor(recipientRoles, recipient.profileId, fallbackRole), itemId)
       const res = await sendEmail({ to: recipient.email, subject, html: buildHtml(actionUrl) })
       delivery = res.status === 'sent' ? 'sent' : res.status === 'simulated' ? 'simulated' : 'failed'
       if (res.status === 'sent') {

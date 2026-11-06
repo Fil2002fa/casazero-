@@ -11,6 +11,12 @@
 //   admin, super_admin   → /admin/manutenzioni/<id>  (dashboard)
 //   ruolo mancante       → /manutenzioni             (elenco, il link di prima)
 //
+// E che il ruolo del link segua l'ACCESSO alla voce (linkRoleForAccess), non il
+// solo profiles.role: admin non assegnato e super_admin di un altro builder
+// vanno all'elenco, perché la RLS nasconde la voce e il dettaglio darebbe 404.
+// La lettura di assegnazioni e builder (getItemLinkRoles) è DB e non si prova
+// qui: questo script copre la regola pura.
+//
 // PERCHE' ESISTE: il layout della PWA ((app)/layout.tsx:12) rimanda ogni ruolo
 // diverso da client a /admin perdendo il percorso. Un link per ruolo sbagliato
 // non da errore: porta in silenzio sulla home della dashboard.
@@ -37,7 +43,7 @@ try {
 }
 
 const {
-  maintenanceItemUrl, emailMaintenanceDue, emailPromemoriaDue, emailMaintenanceReminder,
+  maintenanceItemUrl, linkRoleForAccess, emailMaintenanceDue, emailPromemoriaDue, emailMaintenanceReminder,
 } = n
 
 let fallimenti = 0
@@ -68,6 +74,28 @@ check('ruolo null → elenco', maintenanceItemUrl(APP, null, ID), `${APP}/manute
 check('ruolo undefined → elenco', maintenanceItemUrl(APP, undefined, ID), `${APP}/manutenzioni`)
 check('ruolo sconosciuto → elenco', maintenanceItemUrl(APP, 'boh', ID), `${APP}/manutenzioni`)
 check('ruolo stringa vuota → elenco', maintenanceItemUrl(APP, '', ID), `${APP}/manutenzioni`)
+
+// --- ruolo per ACCESSO alla voce: mai un link che la RLS trasforma in 404 --------
+// Specchio della RLS di maintenance_items. Il caso B39v: filippoloro02 (admin)
+// membro di un'unità di Cavaccio senza esservi assegnato → elenco, non dettaglio.
+const urlPer = (ruolo, access) => maintenanceItemUrl(APP, linkRoleForAccess(ruolo, access), ID)
+const elenco = `${APP}/manutenzioni`
+const dettaglioAdmin = `${APP}/admin/manutenzioni/${ID}`
+
+check('admin assegnato alla residenza → dettaglio admin',
+  urlPer('admin', { assignedToResidence: true, sameBuilderAsResidence: false }), dettaglioAdmin)
+check('admin NON assegnato (anche se dello stesso builder) → elenco',
+  urlPer('admin', { assignedToResidence: false, sameBuilderAsResidence: true }), elenco)
+check('super_admin dello stesso builder della residenza → dettaglio admin',
+  urlPer('super_admin', { assignedToResidence: false, sameBuilderAsResidence: true }), dettaglioAdmin)
+check('super_admin di un altro builder → elenco',
+  urlPer('super_admin', { assignedToResidence: false, sameBuilderAsResidence: false }), elenco)
+check('client → PWA residente, a prescindere dall\'accesso admin',
+  urlPer('client', { assignedToResidence: false, sameBuilderAsResidence: false }), `${APP}/manutenzioni/${ID}`)
+check('ruolo sconosciuto → elenco',
+  urlPer('boh', { assignedToResidence: true, sameBuilderAsResidence: true }), elenco)
+check('admin assegnato: l\'assegnazione conta, non il builder',
+  urlPer('admin', { assignedToResidence: true, sameBuilderAsResidence: false }), dettaglioAdmin)
 
 // --- l'id non può rompere il percorso ------------------------------------------
 check('id con caratteri riservati viene codificato',

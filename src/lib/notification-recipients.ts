@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { CompletionMode, UserRole } from '@/types/database'
+import { linkRoleForAccess } from '@/lib/notifications'
 
 // Risoluzione dei destinatari di una notifica a partire dalla modalità di
 // completamento di un item. Fonte di verità unica: oggi la stessa query è
@@ -53,36 +54,99 @@ export async function getEmailForProfile(
 }
 
 /**
- * Ruolo di ciascun profilo, per scegliere il link giusto nelle email
+ * Ruolo con cui costruire il link alla voce per ciascun destinatario
  * (maintenanceItemUrl in notifications.ts). Unico punto di lettura, condiviso
  * dal cron e dal sollecito manuale.
+ *
+ * Non è il solo profiles.role: tiene conto dell'accesso reale alla residenza
+ * della voce (linkRoleForAccess), perché un admin non assegnato o un
+ * super_admin di un altro builder non vedono la voce (RLS) e il link diretto
+ * porterebbe a un 404. Per loro il valore è null e il link va all'elenco.
+ * Un profilo assente dalla mappa significa "non letto": vedi linkRoleFor.
  *
  * Un errore tecnico NON diventa "nessun ruolo" in silenzio: si logga lato
  * server e si restituisce una mappa vuota, così il chiamante ricade sul ruolo
  * che la fonte dei destinatari già implica (membro di unità = client, admin
  * assegnato = admin) invece di non mandare l'email.
  */
-export async function getRolesForProfiles(
+export async function getItemLinkRoles(
   svc: SupabaseClient,
-  profileIds: string[]
-): Promise<Map<string, UserRole>> {
-  const roles = new Map<string, UserRole>()
+  profileIds: string[],
+  residenceId: string
+): Promise<Map<string, UserRole | null>> {
+  const roles = new Map<string, UserRole | null>()
   if (profileIds.length === 0) return roles
 
-  const { data, error } = await svc
+  const { data: profiles, error: profilesError } = await svc
     .from('profiles')
-    .select('id, role')
+    .select('id, role, builder_id')
     .in('id', profileIds)
-
-  if (error) {
+  if (profilesError) {
     console.error('[notification-recipients] lettura ruoli fallita, link alla voce con ruolo di ripiego', {
-      code: error.code,
-      message: error.message,
+      code: profilesError.code,
+      message: profilesError.message,
     })
     return roles
   }
-  for (const p of data ?? []) roles.set(p.id as string, p.role as UserRole)
+
+  const adminIds = (profiles ?? []).filter(p => p.role === 'admin').map(p => p.id as string)
+  const needsBuilder = (profiles ?? []).some(p => p.role === 'super_admin')
+
+  const assigned = new Set<string>()
+  if (adminIds.length > 0) {
+    const { data: assignments, error: assignmentsError } = await svc
+      .from('admin_assignments')
+      .select('profile_id')
+      .eq('residence_id', residenceId)
+      .in('profile_id', adminIds)
+    if (assignmentsError) {
+      console.error('[notification-recipients] lettura assegnazioni fallita, link alla voce con ruolo di ripiego', {
+        code: assignmentsError.code,
+        message: assignmentsError.message,
+      })
+      return roles
+    }
+    for (const a of assignments ?? []) assigned.add(a.profile_id as string)
+  }
+
+  let residenceBuilderId: string | null = null
+  if (needsBuilder) {
+    const { data: residence, error: residenceError } = await svc
+      .from('residences')
+      .select('builder_id')
+      .eq('id', residenceId)
+      .maybeSingle()
+    if (residenceError) {
+      console.error('[notification-recipients] lettura builder della residenza fallita, link alla voce con ruolo di ripiego', {
+        code: residenceError.code,
+        message: residenceError.message,
+      })
+      return roles
+    }
+    residenceBuilderId = (residence?.builder_id as string | undefined) ?? null
+  }
+
+  for (const p of profiles ?? []) {
+    roles.set(p.id as string, linkRoleForAccess(p.role as UserRole, {
+      assignedToResidence: assigned.has(p.id as string),
+      sameBuilderAsResidence:
+        residenceBuilderId !== null && p.builder_id === residenceBuilderId,
+    }))
+  }
   return roles
+}
+
+/**
+ * Ruolo del link per un destinatario. Profilo presente nella mappa → il suo
+ * valore (anche null = elenco). Profilo assente (lettura fallita, già loggata)
+ * → il ruolo di ripiego che la fonte dei destinatari implica.
+ */
+export function linkRoleFor(
+  roles: Map<string, UserRole | null>,
+  profileId: string,
+  fallback: UserRole
+): UserRole | null {
+  return roles.has(profileId) ? (roles.get(profileId) ?? null) : fallback
 }
 
 async function toRecipients(

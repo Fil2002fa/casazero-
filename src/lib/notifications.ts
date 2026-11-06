@@ -72,8 +72,11 @@ export async function sendEmail(payload: EmailPayload): Promise<EmailResult> {
  *   ruolo mancante       → /manutenzioni             (elenco: il link di prima,
  *                          che ogni shell sa già rimandare al posto giusto)
  *
- * Fonte unica: cron e sollecito manuale. Un admin non assegnato alla residenza
- * non vede la voce (RLS) e atterra su "non trovato": è voluto.
+ * Fonte unica: cron e sollecito manuale. Il ruolo da passare è quello
+ * dell'ACCESSO alla voce (linkRoleForAccess), non il solo profiles.role: un
+ * admin non assegnato alla residenza, o un super_admin di un altro builder,
+ * non vede la voce (RLS) e il link diretto finirebbe su un 404. Per loro il
+ * ruolo è null e il link porta all'elenco.
  */
 export function maintenanceItemUrl(
   appUrl: string,
@@ -84,6 +87,26 @@ export function maintenanceItemUrl(
   if (role === 'client') return `${appUrl}/manutenzioni/${id}`
   if (role === 'admin' || role === 'super_admin') return `${appUrl}/admin/manutenzioni/${id}`
   return `${appUrl}/manutenzioni`
+}
+
+/**
+ * Ruolo con cui scegliere il link alla voce, dato l'accesso reale del
+ * destinatario alla residenza della voce. Specchio della RLS di
+ * maintenance_items (czero_can_access_residence / czero_can_access_unit):
+ *
+ *   client       → client (arriva da unit_members, la PWA gli mostra la voce)
+ *   admin        → admin solo se assegnato alla residenza (admin_assignments)
+ *   super_admin  → super_admin solo se il builder è quello della residenza
+ *   altrimenti   → null (maintenanceItemUrl porta all'elenco, mai a un 404)
+ */
+export function linkRoleForAccess(
+  role: UserRole,
+  access: { assignedToResidence: boolean; sameBuilderAsResidence: boolean },
+): UserRole | null {
+  if (role === 'client') return 'client'
+  if (role === 'admin') return access.assignedToResidence ? 'admin' : null
+  if (role === 'super_admin') return access.sameBuilderAsResidence ? 'super_admin' : null
+  return null
 }
 
 // ── Template email ────────────────────────────────────────────
