@@ -15,7 +15,7 @@ import { humanizeDocumentTitle } from '@/lib/documentTitle'
 import { DateField } from '@/components/DateField'
 import { DocumentPanel } from './DocumentPanel'
 import { UnitDocumentMatrix } from './UnitDocumentMatrix'
-import type { UnitExpectation } from '@/lib/unit-documents'
+import { otherVersions, type UnitExpectation } from '@/lib/unit-documents'
 import { batchFailureMessage, classifyBatchFailure, type BatchFailureReason } from '@/lib/batch-failures'
 import {
   DOC_TYPES,
@@ -1010,9 +1010,11 @@ export function DocumentiClient({
         key={selectedDoc.id + ':' + selectedDoc.overrides.map(o => o.field_key + o.set_at).join('|')}
         doc={selectedDoc}
         units={units}
+        versions={otherVersions(selectedDoc, docs)}
         correctedByNames={correctedByNames}
         supplierSlot={supplierContext ? <SupplierProposalSection doc={selectedDoc} context={supplierContext} /> : null}
         onClose={() => setSelectedId(null)}
+        onOpenVersion={setSelectedId}
         onConfirmed={docType => handleClassificationConfirmed({ id: selectedDoc.id, title: selectedDoc.title }, docType)}
       />
     )}

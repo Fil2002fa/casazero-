@@ -47,7 +47,8 @@ const CELL_STYLES: Record<UnitDocState, string> = {
 const FOCUS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium focus-visible:ring-offset-1'
 
 function cellAriaLabel(unit: UnitRow, cell: UnitDocumentCell, facts: string | null): string {
-  const base = `${cell.expectation.label}, ${unit.label}: ${STATE_LABELS[cell.state].toLowerCase()}`
+  const extra = cell.versions.length > 0 ? `, ${pluralize(cell.versions.length, 'altra versione', 'altre versioni')}` : ''
+  const base = `${cell.expectation.label}, ${unit.label}: ${STATE_LABELS[cell.state].toLowerCase()}${extra}`
   if (cell.state === 'mancante') return `${base}. Carica il documento`
   if (cell.state === 'da_verificare') return `${base}. Apri per rivedere`
   return `${base}${facts ? `, ${facts}` : ''}. Apri il documento`
@@ -86,6 +87,13 @@ function GridCell({ unit, cell, selected, onOpenDoc, onUpload }: {
       </span>
       {cell.state === 'presente' && facts && (
         <span className="mt-1 block text-xs text-text-secondary break-words">{facts}</span>
+      )}
+      {/* Più documenti sullo stesso slot: la cella mostra il più recente, le altre
+          versioni si aprono dal pannello. Nessuna sostituzione automatica. */}
+      {cell.versions.length > 0 && (
+        <span className="mt-1 block text-xs font-medium text-text-secondary">
+          +{pluralize(cell.versions.length, 'versione', 'versioni')}
+        </span>
       )}
     </button>
   )

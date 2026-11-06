@@ -68,10 +68,17 @@ export type KeyDatum = { label: string; value: string; kind: 'text' | 'date' }
 export type UnitDocumentCell = {
   expectation: UnitExpectation
   state: UnitDocState
-  /** Il documento che decide lo stato: il primo che combacia nell'ordine ricevuto (created_at decrescente). */
+  /** Il documento che decide lo stato: il confermato più recente, altrimenti la proposta più recente (created_at). */
   doc: DocRow | null
   /** Solo per 'presente'; vuoto altrimenti. */
   keyData: KeyDatum[]
+  /**
+   * Gli ALTRI documenti sullo stesso slot (stessa unità, stesso tipo atteso),
+   * dal più recente: versioni precedenti o successive di quello che decide lo
+   * stato. Mai cancellati né sostituiti da soli; vuoto se lo slot ha un solo
+   * documento.
+   */
+  versions: DocRow[]
 }
 
 export type UnitDocumentRow = {
@@ -170,14 +177,48 @@ export function formatCellKeyData(key: UnitExpectationKey, keyData: KeyDatum[]):
   }
 }
 
+// I documenti di uno slot (unità + tipo atteso): quelli confermati e quelli
+// che propongono proprio questo tipo, dal più recente (created_at decrescente,
+// a parità l'ordine ricevuto). Un solo ordinamento, qui: "il più recente" è una
+// garanzia, non una convenzione di chi chiama.
+function slotDocs(unitDocs: readonly DocRow[], exp: UnitExpectation): DocRow[] {
+  return unitDocs
+    .filter(d => isConfirmedMatch(d, exp) || isUnconfirmedProposal(d, exp))
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+}
+
 function buildCell(unitDocs: DocRow[], exp: UnitExpectation): UnitDocumentCell {
-  const confirmed = unitDocs.find(d => isConfirmedMatch(d, exp))
+  const slot = slotDocs(unitDocs, exp)
+  // Lo stato lo decide il documento confermato più recente; se non ce n'è, la
+  // proposta più recente. Gli altri sono le versioni.
+  const confirmed = slot.find(d => isConfirmedMatch(d, exp))
   if (confirmed) {
-    return { expectation: exp, state: 'presente', doc: confirmed, keyData: unitKeyData(exp.key, confirmed) }
+    return {
+      expectation: exp, state: 'presente', doc: confirmed, keyData: unitKeyData(exp.key, confirmed),
+      versions: slot.filter(d => d.id !== confirmed.id),
+    }
   }
-  const proposed = unitDocs.find(d => isUnconfirmedProposal(d, exp))
-  if (proposed) return { expectation: exp, state: 'da_verificare', doc: proposed, keyData: [] }
-  return { expectation: exp, state: 'mancante', doc: null, keyData: [] }
+  const proposed = slot[0]
+  if (proposed) {
+    return { expectation: exp, state: 'da_verificare', doc: proposed, keyData: [], versions: slot.slice(1) }
+  }
+  return { expectation: exp, state: 'mancante', doc: null, keyData: [], versions: [] }
+}
+
+/**
+ * Gli altri documenti sullo stesso slot di `doc` (stessa unità, stesso tipo
+ * atteso), dal più recente. Per la sezione "Altre versioni" del pannello.
+ * Vuoto se il documento non è di un'unità o non è di un tipo atteso.
+ */
+export function otherVersions(doc: DocRow, docs: readonly DocRow[]): DocRow[] {
+  if (doc.unit_id === null) return []
+  const unitDocs = docs.filter(d => d.unit_id === doc.unit_id)
+  for (const exp of UNIT_EXPECTATIONS) {
+    if (isConfirmedMatch(doc, exp) || isUnconfirmedProposal(doc, exp)) {
+      return slotDocs(unitDocs, exp).filter(d => d.id !== doc.id)
+    }
+  }
+  return []
 }
 
 /** Una riga per unità, nell'ordine di `units`. O(documenti + unità). */

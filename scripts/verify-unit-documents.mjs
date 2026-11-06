@@ -36,7 +36,7 @@ try {
   process.exit(2)
 }
 
-const { UNIT_EXPECTATIONS, unitDocumentRows, documentsMentioningUnitWithoutAssignment, sistemaMatches, formatCellKeyData } = mod
+const { UNIT_EXPECTATIONS, unitDocumentRows, documentsMentioningUnitWithoutAssignment, sistemaMatches, formatCellKeyData, otherVersions } = mod
 
 let fallimenti = 0
 let eseguiti = 0
@@ -220,6 +220,39 @@ check('sistemaMatches: sistemi diversi non combaciano', sistemaMatches('elettric
   check('cella DiCo: senza impresa, solo la data', formatCellKeyData('dico_elettrico', [d('Data documento', '2026-03-12', 'date')]), '12 mar 2026')
   check('cella: nessun dato = null', [formatCellKeyData('ape', []), formatCellKeyData('planimetria_catastale', []), formatCellKeyData('dico_elettrico', [])], [null, null, null])
   check('categorie di caricamento delle tre voci', UNIT_EXPECTATIONS.map(e => e.category), ['energetici', 'proprieta', 'conformita'])
+}
+
+// --- più documenti sullo stesso slot: il più recente decide, gli altri sono versioni
+{
+  const ape = (id, creato, over = {}) => doc({ id, unit_id: 'u1', doc_type: 'ape', created_at: creato, ...over })
+  const vecchio = ape('vecchio', '2026-01-10T10:00:00+00:00')
+  const nuovo = ape('nuovo', '2026-05-10T10:00:00+00:00')
+  const medio = ape('medio', '2026-03-10T10:00:00+00:00')
+  // ordine ricevuto volutamente SBAGLIATO: il più recente è una garanzia della funzione
+  const [r] = unitDocumentRows([vecchio, nuovo, medio], [U('u1')])
+  check('slot con tre APE: la cella mostra il più recente', r.cells[0].doc.id, 'nuovo')
+  check('slot con tre APE: le versioni sono le altre due, dal più recente', r.cells[0].versions.map(d => d.id), ['medio', 'vecchio'])
+  check('slot con tre APE: nessuna cancellazione, i tre restano documenti della stessa unità', r.documentCount, 3)
+  check('slot con un solo APE: nessuna versione', unitDocumentRows([nuovo], [U('u1')])[0].cells[0].versions, [])
+  check('slot vuoto: nessuna versione', unitDocumentRows([], [U('u1')])[0].cells.map(c => c.versions.length), [0, 0, 0])
+  check('le altre voci della stessa unità non hanno versioni', r.cells.slice(1).map(c => c.versions.length), [0, 0])
+
+  const confermatoVecchio = ape('conf', '2026-01-10T10:00:00+00:00')
+  const proposta = ape('prop', '2026-06-10T10:00:00+00:00', { classification_status: 'da_revisionare' })
+  const [m] = unitDocumentRows([proposta, confermatoVecchio], [U('u1')])
+  check('confermato vecchio + proposta nuova: lo stato lo decide il confermato', [m.cells[0].state, m.cells[0].doc.id], ['presente', 'conf'])
+  check('confermato vecchio + proposta nuova: la proposta è una versione', m.cells[0].versions.map(d => d.id), ['prop'])
+
+  const altraUnita = doc({ id: 'altra', unit_id: 'u2', doc_type: 'ape', created_at: '2026-07-01T10:00:00+00:00' })
+  const tutti = [vecchio, nuovo, medio, altraUnita]
+  check('otherVersions dal documento più recente', otherVersions(nuovo, tutti).map(d => d.id), ['medio', 'vecchio'])
+  check('otherVersions da una versione vecchia include il più recente', otherVersions(vecchio, tutti).map(d => d.id), ['nuovo', 'medio'])
+  check('otherVersions non include mai documenti di un’altra unità', otherVersions(nuovo, tutti).includes(altraUnita), false)
+  check('otherVersions di un documento senza unità: vuoto', otherVersions(doc({ id: 'libero', unit_id: null, doc_type: 'ape' }), tutti), [])
+  check('otherVersions di un tipo non atteso: vuoto', otherVersions(doc({ id: 'g', unit_id: 'u1', doc_type: 'garanzia' }), [...tutti]), [])
+  const dicoTermica = doc({ id: 'dt', unit_id: 'u1', doc_type: 'dich_conformita_dm37', sistema: 'termico' })
+  const dicoElettrica = doc({ id: 'de', unit_id: 'u1', doc_type: 'dich_conformita_dm37', sistema: 'elettrico' })
+  check('DiCo di un altro impianto non è una versione della voce elettrica', otherVersions(dicoElettrica, [dicoTermica, dicoElettrica]), [])
 }
 
 // --- reviewState: unica definizione di "classificazione chiusa" -----------------

@@ -23,6 +23,7 @@ import { MAX_TEXT_LENGTH, type CorrectionField } from '@/lib/document-overrides'
 import {
   REVIEW_LABEL,
   correctionsLostOnTypeChange,
+  reviewState,
   type DocRow,
   type UnitRow,
 } from '@/lib/document-rows'
@@ -67,16 +68,20 @@ function aiLabel(field: CorrectionField): string {
 }
 
 export function DocumentPanel({
-  doc, units, correctedByNames, supplierSlot, onClose, onConfirmed,
+  doc, units, versions, correctedByNames, supplierSlot, onClose, onOpenVersion, onConfirmed,
 }: {
   doc: DocRow
   units: UnitRow[]
+  // Gli altri documenti sullo stesso slot (stessa unità, stesso tipo atteso), dal
+  // più recente: mai cancellati né sostituiti da soli. Vuoto se non ce ne sono.
+  versions: DocRow[]
   // id profilo → full_name di chi ha corretto a mano (048).
   correctedByNames: Record<string, string | null>
   // Proposta del fornitore dalle DiCo: la costruisce DocumentiClient (che ne
   // possiede il contesto, solo super_admin) e arriva qui già pronta o null.
   supplierSlot: ReactNode
   onClose: () => void
+  onOpenVersion: (documentId: string) => void
   // Chiamata SOLO a salvataggio riuscito che ha confermato la classificazione,
   // col tipo confermato: chi la riceve decide se far partire l'estrazione.
   onConfirmed: (docType: DocType) => void
@@ -373,6 +378,33 @@ export function DocumentPanel({
           </button>
         )}
       </div>
+
+      {versions.length > 0 && (
+        <section className="space-y-1.5" aria-label={`Altre versioni (${versions.length})`}>
+          <h3 className="text-xs font-medium text-text-secondary">Altre versioni ({versions.length})</h3>
+          <p className="text-xs text-text-secondary">
+            Stessa unità e stesso tipo. Nessuna è stata sostituita o cancellata: apri quella che ti serve.
+          </p>
+          <ul className="divide-y divide-border rounded-lg border border-border">
+            {versions.map(v => (
+              <li key={v.id}>
+                <button
+                  type="button"
+                  onClick={() => onOpenVersion(v.id)}
+                  disabled={busy}
+                  className="w-full text-left px-3 py-2 hover:bg-background disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-medium"
+                >
+                  <span className="block text-xs font-medium text-text-primary break-words">{humanizeDocumentTitle(v.title)}</span>
+                  <span className="block text-xs text-text-secondary break-words">
+                    {v.file_name} · {formatDateIT(v.created_at)}
+                    {reviewState(v) !== 'chiusa' && ` · ${REVIEW_LABEL}`}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {error && <p role="alert" className="text-xs text-semantic-red">{error}</p>}
 
