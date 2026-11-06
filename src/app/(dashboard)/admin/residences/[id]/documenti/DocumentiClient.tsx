@@ -550,7 +550,7 @@ export function DocumentiClient({
   const selectedDoc = selectedId === null ? null : docs.find(d => d.id === selectedId) ?? null
 
   return (
-    <div className={selectedDoc ? 'lg:grid lg:grid-cols-[minmax(0,1fr)_30rem] lg:gap-6 lg:items-start' : ''}>
+    <div className={selectedDoc ? 'lg:grid lg:grid-cols-[minmax(0,1fr)_clamp(480px,40%,640px)] lg:gap-6 lg:items-start' : ''}>
     <div className="space-y-6 min-w-0">
 
       {/* -------- Banner servizio classificazione -------- */}
