@@ -52,11 +52,11 @@ export const DOCUMENT_EXPORT_HEADERS = [
 ] as const
 
 // Stato di classificazione: stessa parola della card dove esiste ("Da
-// rivedere"); 'non_classificato' non ha badge a schermo ma nel foglio una
+// verificare"); 'non_classificato' non ha badge a schermo ma nel foglio una
 // cella vuota sarebbe ambigua.
 const CLASSIFICATION_STATUS_LABELS: Record<ClassificationStatus, string> = {
   completata: 'Classificato',
-  da_revisionare: 'Da rivedere',
+  da_revisionare: 'Da verificare',
   fallita: 'Non classificabile',
   in_corso: 'In classificazione',
   non_classificato: 'Non classificato',

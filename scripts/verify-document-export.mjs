@@ -242,7 +242,7 @@ check('colonne nuove: AI', documentExportRow(garanziaAi, null).slice(12),
 check('colonne nuove: corretto a mano con i campi', documentExportRow(garanziaCorretta, null).slice(12),
   [T('garanzia_corretta.pdf'), T('Classificato'), T('Alta'), T('Corretto a mano'), T('Durata (anni), Oggetto')])
 check('colonne nuove: da rivedere', documentExportRow(daRivedere, null).slice(12),
-  [T('x.pdf'), T('Da rivedere'), T('Media'), T('Da verificare'), _])
+  [T('x.pdf'), T('Da verificare'), T('Media'), T('Da verificare'), _])
 check('colonne nuove: non classificato', documentExportRow(nonClass, null).slice(12),
   [T('y.pdf'), T('Non classificato'), _, T('Da verificare'), _])
 check('colonne nuove: non classificabile', documentExportRow(fallita, null).slice(12),
