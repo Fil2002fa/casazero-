@@ -23,7 +23,7 @@ try {
   console.error(`\n✗ Impossibile importare il modulo: ${err.message}`)
   process.exit(2)
 }
-const { previewKind, PREVIEW_URL_TTL_SECONDS } = mod
+const { previewKind, pdfPreviewSrc, PREVIEW_URL_TTL_SECONDS } = mod
 
 let fallimenti = 0
 let eseguiti = 0
@@ -50,6 +50,13 @@ check('punto in una cartella ma non nel file', previewKind(`${R}/v1.2/capitolato
 check('pdf dopo punti nel nome', previewKind(`${R}/altro/1_a.b.c.pdf`), 'pdf')
 check('percorso vuoto', previewKind(''), 'unsupported')
 check('la signed URL dura al massimo 5 minuti', PREVIEW_URL_TTL_SECONDS > 0 && PREVIEW_URL_TTL_SECONDS <= 300, true)
+
+// --- indirizzo del PDF nell'anteprima --------------------------------------------
+check('PDF: prima pagina, larghezza, senza barre',
+  pdfPreviewSrc('https://x.supabase.co/storage/v1/object/sign/documents/a.pdf?token=abc'),
+  'https://x.supabase.co/storage/v1/object/sign/documents/a.pdf?token=abc#page=1&view=FitH&toolbar=0&navpanes=0&scrollbar=0')
+check('PDF: il token della firma resta intatto', pdfPreviewSrc('https://h/p.pdf?token=a.b-c_d').includes('?token=a.b-c_d#'), true)
+check('PDF: un frammento già presente non si somma', pdfPreviewSrc('https://h/p.pdf?token=a#zoom=200').split('#').length, 2)
 
 if (fallimenti > 0) {
   console.error(`\n✗ ${fallimenti} su ${eseguiti} casi divergenti`)

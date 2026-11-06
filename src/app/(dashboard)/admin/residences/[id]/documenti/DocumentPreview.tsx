@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { ExternalLink, FileText, Loader2 } from 'lucide-react'
-import type { PreviewKind } from '@/lib/document-preview'
+import { pdfPreviewSrc, type PreviewKind } from '@/lib/document-preview'
 import { getDocumentPreviewUrl } from './actions'
 
 // Anteprima REALE del documento (E1b): PDF nel viewer nativo del browser,
@@ -92,36 +92,51 @@ export function DocumentPreview({ documentId, title, className = 'h-[60vh]' }: {
             </button>
           </div>
         )}
+        {/* L'anteprima è solo da guardare: l'iframe non riceve né mouse né focus
+            (nessuno scroll dentro), e l'intera area è coperta dal bottone qui
+            sotto. Il bottone è un FRATELLO dell'iframe, mai suo genitore: un
+            elemento interattivo dentro un button non è HTML valido. */}
         {state.status === 'ready' && state.kind === 'pdf' && (
-          <iframe src={state.url} title={`Anteprima: ${title}`} className="w-full h-full" />
+          <iframe
+            src={pdfPreviewSrc(state.url)}
+            title={`Anteprima: ${title}`}
+            tabIndex={-1}
+            scrolling="no"
+            aria-hidden="true"
+            className="w-full h-full pointer-events-none"
+          />
         )}
         {state.status === 'ready' && state.kind === 'image' && (
           // Signed URL a scadenza breve: next/image non serve e non va ottimizzata.
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={state.url} alt={`Anteprima: ${title}`} className="w-full h-full object-contain" />
+          <img src={state.url} alt="" aria-hidden="true" className="w-full h-full object-contain pointer-events-none" />
         )}
         {state.status === 'ready' && state.kind === 'unsupported' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 text-center">
             <FileText className="w-6 h-6 text-text-secondary" strokeWidth={1.6} aria-hidden="true" />
             <p className="text-sm text-text-secondary">
-              Anteprima non disponibile per questo formato. Puoi aprire o scaricare il file.
+              Anteprima non disponibile per questo formato. Clicca per aprire il file.
             </p>
           </div>
         )}
+
+        {canOpen && (
+          <button
+            type="button"
+            onClick={openFullScreen}
+            disabled={opening}
+            aria-label={`Apri a schermo intero: ${title}`}
+            className="group absolute inset-0 w-full h-full cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-medium disabled:cursor-wait"
+          >
+            <span className="absolute inset-0 flex items-center justify-center gap-1.5 bg-black/45 text-sm font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+              <ExternalLink className="w-4 h-4" strokeWidth={1.8} aria-hidden="true" />
+              {opening ? 'Apertura…' : 'Apri a schermo intero'}
+            </span>
+          </button>
+        )}
       </div>
 
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={openFullScreen}
-          disabled={!canOpen || opening}
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-medium hover:underline disabled:opacity-50 disabled:no-underline"
-        >
-          <ExternalLink className="w-3.5 h-3.5" strokeWidth={1.8} aria-hidden="true" />
-          {opening ? 'Apertura…' : 'Apri a schermo intero'}
-        </button>
-        {openError && <p role="alert" className="text-xs text-semantic-red">{openError}</p>}
-      </div>
+      {openError && <p role="alert" className="text-xs text-semantic-red">{openError}</p>}
     </div>
   )
 }
