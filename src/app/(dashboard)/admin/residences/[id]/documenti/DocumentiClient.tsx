@@ -5,21 +5,19 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { FileText, Download, Upload, X, Loader2, CheckCircle2, AlertCircle, Clock, Sparkles, ChevronDown, FileSearch } from 'lucide-react'
 import type { DocumentCategory } from '@/types/database'
-import { createUploadUrl, confirmDocument, confirmClassification, setChecklistException, clearChecklistException, confirmSupplierProposal } from './actions'
+import { createUploadUrl, confirmDocument, setChecklistException, clearChecklistException, confirmSupplierProposal } from './actions'
 import type { SupplierProposalExpectation } from './actions'
 import { ALLOWED_DOCUMENT_MIME, MAX_DOCUMENT_SIZE } from '@/lib/document-upload'
 import { pluralize } from '@/lib/pluralize'
 import { formatDateIT } from '@/lib/formatDate'
 import { humanizeDocumentTitle } from '@/lib/documentTitle'
 import { DateField } from '@/components/DateField'
-import { CorrectDataPanel } from './CorrectDataPanel'
-import { AssignUnitPanel } from './AssignUnitPanel'
+import { DocumentPanel } from './DocumentPanel'
 import { UnitDocumentMatrix } from './UnitDocumentMatrix'
 import { batchFailureMessage, classifyBatchFailure, type BatchFailureReason } from '@/lib/batch-failures'
 import {
   DOC_TYPES,
   DOC_TYPE_LABELS,
-  SISTEMI,
   SISTEMA_LABELS,
   buildSupplierProposal,
   supplierVatNumberToWrite,
@@ -44,9 +42,7 @@ import {
   displayDate,
   hasValidity,
   extractionFacts,
-  canCorrectFields,
   hasCorrections,
-  correctionsLostOnTypeChange,
   installerMismatchText,
   installerSupplierMismatches,
   reviewState,
@@ -255,6 +251,8 @@ export function DocumentiClient({
   const [extractFailureReasons, setExtractFailureReasons] = useState<BatchFailureReason[]>([])
   const [extractServiceUnavailable, setExtractServiceUnavailable] = useState(false)
   const [reviewOnly, setReviewOnly] = useState(false)
+  // Documento aperto nel pannello laterale (E1b): un solo pannello per pagina.
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const [docTypeFilter, setDocTypeFilter] = useState<DocType | 'all'>('all')
   // Filtri sui dati estratti (estrazione corrente soltanto): ambito e
   // "con scadenza" (data calcolata o formula dichiarata).
@@ -519,8 +517,11 @@ export function DocumentiClient({
     if (isExtractableDocType(docType)) void extractDocuments([doc])
   }
 
+  const selectedDoc = selectedId === null ? null : docs.find(d => d.id === selectedId) ?? null
+
   return (
-    <div className="space-y-6">
+    <div className={selectedDoc ? 'lg:grid lg:grid-cols-[minmax(0,1fr)_30rem] lg:gap-6 lg:items-start' : ''}>
+    <div className="space-y-6 min-w-0">
 
       {/* -------- Banner servizio classificazione -------- */}
       {/* Pagina intera, non per-documento: quando la causa è il servizio
@@ -936,7 +937,7 @@ export function DocumentiClient({
                 Nessun documento di residenza{isFiltered ? ' per questo filtro' : ''}.
               </p>
             ) : (
-              residenceDocs.map(doc => <DocCard key={doc.id} doc={doc} units={units} supplierContext={supplierContext} correctedByNames={correctedByNames} onClassificationConfirmed={handleClassificationConfirmed} />)
+              residenceDocs.map(doc => <DocCard key={doc.id} doc={doc} supplierContext={supplierContext} selected={doc.id === selectedId} onOpen={setSelectedId} />)
             )}
           </section>
 
@@ -949,13 +950,28 @@ export function DocumentiClient({
                   <h3 className="text-sm font-medium text-text-primary">
                     {unitMap.get(unitId)?.label ?? 'Unità'}
                   </h3>
-                  {unitDocs.map(doc => <DocCard key={doc.id} doc={doc} units={units} supplierContext={supplierContext} correctedByNames={correctedByNames} onClassificationConfirmed={handleClassificationConfirmed} />)}
+                  {unitDocs.map(doc => <DocCard key={doc.id} doc={doc} supplierContext={supplierContext} selected={doc.id === selectedId} onOpen={setSelectedId} />)}
                 </div>
               ))}
             </section>
           )}
         </div>
       )}
+    </div>
+
+    {selectedDoc && (
+      <DocumentPanel
+        // Si rimonta quando cambia il documento o le sue correzioni: le bozze
+        // ripartono dai dati appena salvati.
+        key={selectedDoc.id + ':' + selectedDoc.overrides.map(o => o.field_key + o.set_at).join('|')}
+        doc={selectedDoc}
+        units={units}
+        correctedByNames={correctedByNames}
+        supplierSlot={supplierContext ? <SupplierProposalSection doc={selectedDoc} context={supplierContext} /> : null}
+        onClose={() => setSelectedId(null)}
+        onConfirmed={docType => handleClassificationConfirmed({ id: selectedDoc.id, title: selectedDoc.title }, docType)}
+      />
+    )}
     </div>
   )
 }
@@ -1397,7 +1413,6 @@ function ClassificationBadge({ doc }: { doc: DocRow }) {
   )
 }
 
-type ClassificationConfirmedHandler = (doc: { id: string; title: string }, docType: DocType) => void
 
 // Testo di ricerca: titolo (grezzo e leggibile, così "garanzia caldaia"
 // trova "certificato_garanzia_caldaia"), nome file e i fatti estratti, in
@@ -1406,20 +1421,12 @@ function searchText(doc: DocRow): string {
   return [doc.title, humanizeDocumentTitle(doc.title), doc.file_name, ...extractionFacts(doc)].join(' ').toLowerCase()
 }
 
-function DocCard({ doc, units, supplierContext, correctedByNames, onClassificationConfirmed }: {
+function DocCard({ doc, supplierContext, selected, onOpen }: {
   doc: DocRow
-  units: UnitRow[]
   supplierContext: SupplierContext | null
-  correctedByNames: Record<string, string | null>
-  onClassificationConfirmed: ClassificationConfirmedHandler
+  selected: boolean
+  onOpen: (id: string) => void
 }) {
-  // Un solo pannello aperto per volta: revisione della classificazione,
-  // correzione dei dati estratti oppure assegnazione dell'unità.
-  const [openPanel, setOpenPanel] = useState<'review' | 'correct' | 'unit' | null>(null)
-  const reviewOpen = openPanel === 'review'
-  const correctOpen = openPanel === 'correct'
-  const unitOpen = openPanel === 'unit'
-  const canCorrect = canCorrectFields(doc)
   const formattedDate = formatDateIT(displayDate(doc))
   const facts = extractionFacts(doc)
   // Impresa del documento diversa dal fornitore che quel documento ha collegato
@@ -1427,24 +1434,23 @@ function DocCard({ doc, units, supplierContext, correctedByNames, onClassificati
   const supplierMismatches = supplierContext
     ? installerSupplierMismatches(doc, supplierContext.installations, supplierContext.suppliers)
     : []
-  // 'fallita' è un errore di merito dell'AI sul documento, non un errore di
-  // servizio (quello rientra in 'non_classificato', vedi route.ts): l'unica
-  // via d'uscita automatica sarebbe ritentare la stessa chiamata, che per
-  // definizione ha già fallito. Stesso ragionamento per 'non_classificato'
-  // quando manca un verbale utilizzabile. La revisione umana è quindi
-  // l'unica uscita reale per questi due stati, non una scorciatoia.
-  const canReview = doc.classification_status === 'da_revisionare'
-    || doc.classification_status === 'completata'
-    || doc.classification_status === 'fallita'
-    || doc.classification_status === 'non_classificato'
   return (
-    <div className="bg-surface rounded-xl border border-border">
+    <div className={`bg-surface rounded-xl border ${selected ? 'border-brand-medium' : 'border-border'}`}>
       <div className="p-4 flex items-center gap-3">
         <div className="w-10 h-10 bg-background rounded-lg flex items-center justify-center flex-shrink-0">
           <FileText className="w-5 h-5 text-text-secondary" strokeWidth={1.6} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-text-primary break-words lg:truncate">{humanizeDocumentTitle(doc.title)}</p>
+          {/* Il nome apre il pannello laterale: tipo, unità, dati letti e
+              revisione stanno tutti lì, non più in pannelli sotto la card. */}
+          <button
+            type="button"
+            onClick={() => onOpen(doc.id)}
+            aria-pressed={selected}
+            className="block max-w-full text-left text-sm font-medium text-text-primary break-words lg:truncate hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium rounded"
+          >
+            {humanizeDocumentTitle(doc.title)}
+          </button>
           {/* La data non si taglia mai: solo il nome file cede spazio */}
           <p className="flex gap-1 text-xs text-text-secondary mt-0.5">
             <span className="truncate">{doc.file_name}</span>
@@ -1486,183 +1492,6 @@ function DocCard({ doc, units, supplierContext, correctedByNames, onClassificati
           <Download className="w-5 h-5" strokeWidth={1.6} />
         </a>
       </div>
-
-      {(canReview || canCorrect || units.length > 0) && (
-        <div className="border-t border-border px-4 py-2">
-          <div className="flex flex-wrap gap-2">
-            {canReview && (
-              <button
-                onClick={() => setOpenPanel(p => (p === 'review' ? null : 'review'))}
-                className="inline-flex items-center gap-1.5 h-9 max-lg:h-11 px-3 rounded-lg border border-border text-xs font-medium text-brand-medium hover:bg-background transition-colors"
-              >
-                <ChevronDown
-                  className={`w-3.5 h-3.5 transition-transform ${reviewOpen ? 'rotate-180' : ''}`}
-                  strokeWidth={1.8}
-                />
-                {reviewOpen ? 'Chiudi revisione' : 'Rivedi classificazione'}
-              </button>
-            )}
-            {canCorrect && (
-              <button
-                onClick={() => setOpenPanel(p => (p === 'correct' ? null : 'correct'))}
-                className="inline-flex items-center gap-1.5 h-9 max-lg:h-11 px-3 rounded-lg border border-border text-xs font-medium text-brand-medium hover:bg-background transition-colors"
-              >
-                <ChevronDown
-                  className={`w-3.5 h-3.5 transition-transform ${correctOpen ? 'rotate-180' : ''}`}
-                  strokeWidth={1.8}
-                />
-                {correctOpen ? 'Chiudi correzione' : 'Correggi dati'}
-              </button>
-            )}
-            {units.length > 0 && (
-              <button
-                onClick={() => setOpenPanel(p => (p === 'unit' ? null : 'unit'))}
-                className="inline-flex items-center gap-1.5 h-9 max-lg:h-11 px-3 rounded-lg border border-border text-xs font-medium text-brand-medium hover:bg-background transition-colors"
-              >
-                <ChevronDown
-                  className={`w-3.5 h-3.5 transition-transform ${unitOpen ? 'rotate-180' : ''}`}
-                  strokeWidth={1.8}
-                />
-                {unitOpen ? 'Chiudi unità' : doc.unit_id ? 'Cambia unità' : 'Assegna unità'}
-              </button>
-            )}
-          </div>
-          {reviewOpen && (
-            <ReviewPanel
-              doc={doc}
-              supplierContext={supplierContext}
-              onDone={() => setOpenPanel(null)}
-              onConfirmed={docType => onClassificationConfirmed({ id: doc.id, title: doc.title }, docType)}
-            />
-          )}
-          {correctOpen && <CorrectDataPanel doc={doc} correctedByNames={correctedByNames} />}
-          {unitOpen && <AssignUnitPanel doc={doc} units={units} onDone={() => setOpenPanel(null)} />}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function ReviewPanel({ doc, supplierContext, onDone, onConfirmed }: {
-  doc: DocRow
-  supplierContext: SupplierContext | null
-  onDone: () => void
-  // Chiamata SOLO a conferma riuscita, col tipo confermato: chi la riceve
-  // decide se far partire l'estrazione (DocumentiClient, unico proprietario
-  // dello stato di batch).
-  onConfirmed: (docType: DocType) => void
-}) {
-  const router = useRouter()
-  // REGOLA (non riaprire): il blocco "Proposta AI" legge SEMPRE E SOLO
-  // extracted_metadata (il verbale di cosa ha detto la macchina, mai la
-  // colonna). I select di MODIFICA fanno l'opposto: verità confermata dalla
-  // colonna (documents.doc_type / documents.sistema) prima, verbale come
-  // fallback solo quando la colonna è null. Precompilare i select dal verbale
-  // sovrascriverebbe una correzione umana con la proposta AI al submit (B4 C2).
-  const [selected, setSelected] = useState<DocType>(doc.doc_type ?? doc.extracted_metadata?.doc_type ?? 'altro')
-  const [sistema, setSistema]   = useState<Sistema | ''>(doc.sistema ?? doc.extracted_metadata?.sistema ?? '')
-  const [saving, setSaving]     = useState(false)
-  const [error, setError]       = useState<string | null>(null)
-
-  // Correzioni manuali che smetterebbero di valere con il tipo scelto (D6);
-  // 0 se il tipo non cambia (un cambio del solo impianto non avvisa).
-  const lostCorrections = correctionsLostOnTypeChange(doc, selected)
-
-  // Confidenza del VERBALE (extracted_metadata), non della colonna: il blocco
-  // "Proposta AI" deve restare fedele a cosa ha detto la macchina.
-  const verbaleConfidence = doc.extracted_metadata?.confidence
-  const confidencePct = verbaleConfidence != null
-    ? Math.round(verbaleConfidence * 100)
-    : null
-
-  async function handleConfirm() {
-    setSaving(true)
-    setError(null)
-    const res = await confirmClassification({
-      documentId: doc.id,
-      docType: selected,
-      sistema: sistema === '' ? null : sistema,
-    })
-    setSaving(false)
-    if ('error' in res) {
-      setError(res.error)
-    } else {
-      onDone()
-      router.refresh()
-      onConfirmed(selected)
-    }
-  }
-
-  return (
-    <div className="mt-2 space-y-2">
-      {/* Proposta AI (sola lettura): SEMPRE E SOLO extracted_metadata, mai la colonna */}
-      <div className="text-xs text-text-secondary space-y-0.5">
-        {doc.extracted_metadata?.doc_type ? (
-          <p>
-            Proposta AI: <span className="text-text-primary font-medium">{DOC_TYPE_LABELS[doc.extracted_metadata.doc_type]}</span>
-            {doc.extracted_metadata?.sistema && ` · ${SISTEMA_LABELS[doc.extracted_metadata.sistema]}`}
-            {confidencePct != null && ` · ${confidencePct}% di confidenza`}
-          </p>
-        ) : (
-          <p>
-            Nessuna proposta automatica
-            {doc.extracted_metadata?.skipped_reason ? ` (${doc.extracted_metadata.skipped_reason})` : ''}.
-          </p>
-        )}
-        {doc.extracted_metadata?.motivazione && (
-          <p className="italic">{doc.extracted_metadata.motivazione}</p>
-        )}
-      </div>
-
-      {/* Conferma o correzione: tipo documento */}
-      <div className="space-y-1.5">
-        <label htmlFor={`doctype-${doc.id}`} className="text-xs font-medium text-text-secondary block">Tipo documento</label>
-        <select
-          id={`doctype-${doc.id}`}
-          value={selected}
-          onChange={e => setSelected(e.target.value as DocType)}
-          className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
-        >
-          {DOC_TYPES.map(t => (
-            <option key={t} value={t}>{DOC_TYPE_LABELS[t]}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* Impianto di riferimento (verità confermata → documents.sistema) */}
-      <div className="space-y-1.5">
-        <label htmlFor={`sistema-${doc.id}`} className="text-xs font-medium text-text-secondary block">Impianto di riferimento</label>
-        <select
-          id={`sistema-${doc.id}`}
-          value={sistema}
-          onChange={e => setSistema(e.target.value as Sistema | '')}
-          className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
-        >
-          <option value="">Nessun impianto specifico</option>
-          {SISTEMI.map(s => (
-            <option key={s} value={s}>{SISTEMA_LABELS[s]}</option>
-          ))}
-        </select>
-      </div>
-
-      {lostCorrections > 0 && (
-        <p className="text-xs text-semantic-amber">
-          {pluralize(lostCorrections, 'correzione manuale non si applicherà più', 'correzioni manuali non si applicheranno più')} con
-          questo tipo. Restano salvate e tornano attive se rimetti il tipo attuale.
-        </p>
-      )}
-
-      {error && <p className="text-xs text-semantic-red">{error}</p>}
-
-      <button
-        onClick={handleConfirm}
-        disabled={saving}
-        className="w-full bg-brand-dark text-white rounded-xl py-2.5 text-sm font-medium shadow-sm active:scale-[0.98] transition-transform disabled:opacity-50"
-      >
-        {saving ? 'Salvataggio…' : 'Conferma classificazione'}
-      </button>
-
-      {supplierContext && <SupplierProposalSection doc={doc} context={supplierContext} />}
     </div>
   )
 }
