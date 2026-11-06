@@ -43,24 +43,22 @@ Dati e DB: migrazione 052 applicata e registrata in `docs/migrations.log`; scrip
 ## Cosa è stato provato a mano e cosa no
 **Provato da Filippo (esito ok):** passi 1-3 dei commit 1-6 (quadro su Prova, pannello/anteprima, modifica/salvataggio), passo 7 (`filippoloro02` su Residenza Prova → 404), conteggio "Da assegnare a un'unità: 2 documenti" coerente (DiCo senza unità + libretto d'impianto con ambito `unita`). La riga APE di A1 (`09e204d6-…`) è stata confermata dal pannello (`reviewed_by`/`reviewed_at` valorizzati, **lasciati**: è una conferma vera).
 
+**Provato da Filippo dopo i 6b/6c (esito ok), passi A-C:** A) ambra uguale ovunque (cella, badge, filtro, banner) e nessun "Da rivedere" fuori posto; B) anteprima cliccabile in ogni punto (overlay "Apri a schermo intero"); C) pannello largo (circa 40%) e, sotto 1280px, cassetto con chiusura da X, da clic sullo sfondo e da Esc.
+
 **Non provato a mano:**
-- I passi **A-D dei 6b/6c**: ambra ovunque, anteprima cliccabile con overlay, pannello al 40% e cassetto sotto 1280px, versioni (+1 versione con la DiCo di B2). Preparati ma senza il "prova finita".
+- Passo **D dei 6b/6c (versioni)**: "+N versioni" nella cella e "Altre versioni (N)" nel pannello. **Rimandato alla prova completa pre-demo** (per farlo: assegnare `DiCo_elettrica_senza_unita.pdf` a B2 in Residenza Prova e poi riportarla a "Nessuna unità"; la regola "decide il più recente" è coperta da `verify:unitdocs`).
 - 6b-1: nessuna prova manuale (crediti AI), solo `verify:expected` (22 casi sulla regola pura). Il 400 della route e il toast persistente "Apri" non sono mai stati eseguiti.
-- Anteprima su Firefox; signed URL contro lo storage reale oltre ai passi 1-3.
+- Anteprima su Firefox; signed URL contro lo storage reale oltre ai passi già provati.
 - `npm run build`: mai lanciata su questi commit.
 - L'Excel dopo il cambio etichetta (solo `verify:export`, 61 casi).
 
-**⚠ STATO DB DI PROVA DA RIPRISTINARE.** La riga APE/A1 di Residenza Prova è lasciata a `da_revisionare` per la prova ambra. Prima di altro, se la prova è finita o rimandata:
-```sql
-update documents set classification_status = 'completata' where id = '09e204d6-e1b1-4c47-9b92-1e88dd549d3b' and classification_status = 'da_revisionare' returning id, classification_status;
-```
-(`reviewed_by`/`reviewed_at` non si toccano.) Se in prova DiCo_elettrica_senza_unita.pdf è stata assegnata a B2, riportarla a "Nessuna unità".
+**Stato DB di prova (ripristinato il 06/11).** La riga APE/A1 di Residenza Prova (`09e204d6-…`) è `completata`: durante la prova era stata riconfermata dal pannello (`reviewed_at` 06/11 11:43:56 UTC), quindi l'UPDATE di ripristino non ha trovato righe da toccare. In Residenza Prova restano senza unità solo `771-esempio-stampa.pdf`, `DiCo_elettrica_senza_unita.pdf` e l'agibilità, tutti `completata`: nessun residuo di prova.
 
 ## Verifiche automatiche (ultima esecuzione, tutte verdi)
 `npm run verify` (tsc + lint); `verify:unitdocs` 57; `unitmatch` 41; `preview` 16; `panel` 41; `expected` 22; `contrast` 11; `export` 61; `schede` 60.
 
 ## Prossimi commit, in ordine
-1. **7a** — tab "Tutti i documenti": tabella con checkbox (Nome, Tipo, Unità, Data, Stato), filtri Unità/Tipo/Stato + ricerca nome; barra azioni con selezione: Assegna unità ▾ e Scarica. **Tutta la riga apre il pannello** (esclusi checkbox e menu ⋯); finché esiste la lista a card, anche la card intera è cliccabile. Menu ⋯: Apri, Scarica (Elimina arriva in 7b). Filtro Stato = dove vive il filtro dei "da verificare" per ora.
+1. **7a** — tab "Tutti i documenti": tabella con checkbox (Nome, Tipo, Unità, Data, Stato), filtri Unità/Tipo/Stato + ricerca nome; barra azioni con selezione: Assegna unità ▾ e Scarica. **Tutta la riga apre il pannello** (esclusi checkbox e menu ⋯); finché esiste la lista a card, anche la card intera è cliccabile — **in particolare le 3 card della sezione "Residenza" (documenti senza unità) devono essere cliccabili per intero: oggi si apre il pannello solo dal nome**. Il download e i link interni alla card restano elementi separati (niente elementi interattivi annidati). Menu ⋯: Apri, Scarica (Elimina arriva in 7b). Filtro Stato = dove vive il filtro dei "da verificare" per ora.
 2. **STOP** — riportare l'esito della verifica FK verso `documents` (vedi condizioni sopra) e aspettare l'ok.
 3. **7b** — Elimina singolo e multiplo + migrazione 053 (`documento_eliminato`). Un concern, commit separato.
 4. **8** — tab "Da rivedere" (regole sopra). Qui sparisce la riga "Da assegnare a un'unità" del quadro.
