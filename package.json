@@ -17,6 +17,7 @@
     "verify:preview": "node --experimental-strip-types --no-warnings scripts/verify-document-preview.mjs",
     "verify:panel": "node --experimental-strip-types --no-warnings scripts/verify-document-panel.mjs",
     "verify:expected": "node --experimental-strip-types --no-warnings scripts/verify-expected-doc-type.mjs",
+    "verify:doctable": "node --experimental-strip-types --no-warnings scripts/verify-document-table.mjs",
     "verify:contrast": "node scripts/verify-cell-contrast.mjs",
     "verify:unitdocs": "node --experimental-strip-types --no-warnings scripts/verify-unit-documents.mjs",
     "verify:schede": "node --experimental-strip-types --no-warnings scripts/verify-residence-export.mjs",

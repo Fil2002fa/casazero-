@@ -16,10 +16,13 @@ import { DateField } from '@/components/DateField'
 import { DocumentPanel } from './DocumentPanel'
 import { PanelShell } from './PanelShell'
 import { UnitDocumentMatrix } from './UnitDocumentMatrix'
+import { ClassificationBadge } from './ClassificationBadge'
+import { DocumentTabs, tabId, tabPanelId, type DocumentTabId } from './DocumentTabs'
+import { DocumentsTable } from './DocumentsTable'
+import { documentNameText, presentDocTypes } from '@/lib/document-table'
 import { otherVersions, type UnitExpectation } from '@/lib/unit-documents'
 import { batchFailureMessage, classifyBatchFailure, type BatchFailureReason } from '@/lib/batch-failures'
 import {
-  DOC_TYPES,
   DOC_TYPE_LABELS,
   SISTEMA_LABELS,
   buildSupplierProposal,
@@ -260,6 +263,8 @@ export function DocumentiClient({
   const [reviewOnly, setReviewOnly] = useState(false)
   // Documento aperto nel pannello laterale (E1b): un solo pannello per pagina.
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // Tab della pagina: i commit 8 e 9 ne aggiungono altri (Da rivedere, Parti comuni).
+  const [tab, setTab] = useState<DocumentTabId>('panoramica')
   const [docTypeFilter, setDocTypeFilter] = useState<DocType | 'all'>('all')
   // Filtri sui dati estratti (estrazione corrente soltanto): ambito e
   // "con scadenza" (data calcolata o formula dichiarata).
@@ -284,9 +289,7 @@ export function DocumentiClient({
   // dalle sue option). Il link "Vedi documenti di questo tipo" dalla
   // checklist, che era il caso d'uso originario, è stato rimosso col blocco
   // Da caricare (18/09); la garanzia resta perché costa niente.
-  const presentDocTypes = DOC_TYPES
-    .filter(t => t === docTypeFilter || docs.some(d => d.doc_type === t))
-    .sort((a, b) => DOC_TYPE_LABELS[a].localeCompare(DOC_TYPE_LABELS[b], 'it'))
+  const presentTypes = presentDocTypes(docs, docTypeFilter)
 
   // Ambiti davvero presenti tra le estrazioni correnti (stessa logica della
   // tendina dei tipi: si filtra su ciò che c'è) e conteggio dei documenti
@@ -839,6 +842,10 @@ export function DocumentiClient({
         </p>
       )}
 
+      <DocumentTabs value={tab} onChange={setTab} />
+
+      {tab === 'panoramica' && (
+      <div id={tabPanelId('panoramica')} role="tabpanel" aria-labelledby={tabId('panoramica')} className="space-y-6">
       {/* -------- Quadro unità × documenti attesi -------- */}
       <UnitDocumentMatrix
         docs={docs}
@@ -889,7 +896,7 @@ export function DocumentiClient({
         {/* Filtro tipo documento: tendina nativa (coerente coi select del modale).
             Il bottone si autodescrive con la selezione corrente; stato attivo
             evidenziato quando la lista è filtrata. */}
-        {presentDocTypes.length > 0 && (
+        {presentTypes.length > 0 && (
           <div className="relative flex-shrink-0">
             <select
               value={docTypeFilter}
@@ -902,7 +909,7 @@ export function DocumentiClient({
               }`}
             >
               <option value="all">Tutti i tipi</option>
-              {presentDocTypes.map(t => (
+              {presentTypes.map(t => (
                 <option key={t} value={t}>{DOC_TYPE_LABELS[t]}</option>
               ))}
             </select>
@@ -1010,6 +1017,13 @@ export function DocumentiClient({
           )}
         </div>
       )}
+      </div>
+      )}
+
+      {/* Sempre montata e nascosta quando non attiva: i filtri non si perdono cambiando tab. */}
+      <div id={tabPanelId('tutti')} role="tabpanel" aria-labelledby={tabId('tutti')} hidden={tab !== 'tutti'}>
+        <DocumentsTable docs={docs} units={units} selectedId={selectedId} onOpen={setSelectedId} />
+      </div>
     </div>
 
     {selectedDoc && (
@@ -1412,70 +1426,10 @@ function TaskRow({ task }: { task: FileTask }) {
   )
 }
 
-// Fonte unica per label + colore del badge di stato classificazione, riusata
-// da ogni card. 'da_revisionare'/'fallita' non usano mai la parola "fallita"
-// né linguaggio di scadenza (stessa filosofia dell'invariante promemoria).
-// Colori dalla famiglia di 2ª generazione ammessa ai componenti nuovi
-// (status-*/brand/neutral): mai semantic-* (Regola delle Due Generazioni,
-// DESIGN.md). 'non_classificato' → nessun badge.
-function classificationBadgeInfo(
-  doc: DocRow
-): { label: string; className: string; spinner?: boolean } | null {
-  switch (doc.classification_status) {
-    case 'completata': {
-      // sistema (impianto) accanto al doc_type quando presente — assi distinti,
-      // il sistema qualifica il tipo, non lo sostituisce. Legge SOLO la colonna
-      // confermata documents.sistema (regola B4: il display legge le colonne,
-      // mai il verbale). Nessun fallback a extracted_metadata: la route la scrive
-      // già in auto-conferma, e un fallback farebbe riapparire sulla card una
-      // proposta AI che l'umano ha rifiutato scegliendo "Nessun impianto".
-      const sistema = doc.sistema
-      const base = doc.doc_type ? DOC_TYPE_LABELS[doc.doc_type] : 'Classificato'
-      // 'altro' non soddisfa mai una voce di checklist (match per uguaglianza
-      // in document-checklist.ts): 'completata' qui significa solo che la
-      // revisione è chiusa, non che il documento conta per la consegna.
-      // Stesso trattamento neutro di 'Non applicabile' (riga 871), mai il
-      // colore di successo.
-      if (doc.doc_type === 'altro') {
-        return { label: 'Nessuna categoria', className: 'bg-neutral-600/7 text-neutral-600' }
-      }
-      return {
-        label: sistema ? `${base} · ${SISTEMA_LABELS[sistema]}` : base,
-        className: 'bg-brand-dark/8 text-brand-dark',
-      }
-    }
-    case 'da_revisionare':
-      return { label: REVIEW_LABEL, className: 'bg-semantic-amber-bg text-semantic-amber' }
-    case 'fallita':
-      // Non più "Errore, riprova": dopo il rollback a 'non_classificato' per
-      // gli errori di servizio (route.ts), 'fallita' significa solo che
-      // QUESTO documento non è classificabile nel merito — è già incluso in
-      // pendingClassification, quindi "riprova" resta corretto.
-      return { label: 'Non classificabile, riprova', className: 'bg-neutral-600/7 text-neutral-600' }
-    case 'in_corso':
-      return { label: 'Classificazione…', className: 'bg-neutral-600/7 text-neutral-600', spinner: true }
-    case 'non_classificato':
-      return null
-  }
-}
-
-function ClassificationBadge({ doc }: { doc: DocRow }) {
-  const info = classificationBadgeInfo(doc)
-  if (!info) return null
-  return (
-    <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${info.className}`}>
-      {info.spinner && <Loader2 className="w-3 h-3 animate-spin" strokeWidth={2} />}
-      {info.label}
-    </span>
-  )
-}
-
-
-// Testo di ricerca: titolo (grezzo e leggibile, così "garanzia caldaia"
-// trova "certificato_garanzia_caldaia"), nome file e i fatti estratti, in
-// minuscolo. Un solo posto che decide cosa è cercabile.
+// Testo di ricerca della lista a card: il nome (document-table.ts) più i fatti
+// estratti, in minuscolo. Il nome lo decide un solo posto, come per la tabella.
 function searchText(doc: DocRow): string {
-  return [doc.title, humanizeDocumentTitle(doc.title), doc.file_name, ...extractionFacts(doc)].join(' ').toLowerCase()
+  return [documentNameText(doc), ...extractionFacts(doc)].join(' ').toLowerCase()
 }
 
 function DocCard({ doc, supplierContext, selected, onOpen }: {

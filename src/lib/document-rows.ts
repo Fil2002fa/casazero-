@@ -164,6 +164,18 @@ export type ReviewState = 'chiusa' | 'da_rivedere' | 'in_lavorazione'
 // unità (E1b, commit 8): due concetti, due parole.
 export const REVIEW_LABEL = 'Da verificare'
 
+// Stato di classificazione in parole, uno per valore del DB. Fonte unica per la
+// colonna Stato della tabella e per il foglio Excel: 'non_classificato' non ha
+// badge sulla card ma in una tabella o in un foglio una cella vuota sarebbe
+// ambigua.
+export const CLASSIFICATION_STATUS_LABELS: Record<ClassificationStatus, string> = {
+  completata: 'Classificato',
+  da_revisionare: REVIEW_LABEL,
+  fallita: 'Non classificabile',
+  in_corso: 'In classificazione',
+  non_classificato: 'Non classificato',
+}
+
 export function reviewState(doc: Pick<DocRow, 'classification_status'>): ReviewState {
   switch (doc.classification_status) {
     case 'completata': return 'chiusa'

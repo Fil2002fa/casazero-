@@ -16,12 +16,12 @@ import { formatUnitLabel } from './formatUnitLabel'
 import {
   DOC_TYPE_LABELS,
   classificationConfidenceBand,
-  type ClassificationStatus,
   type ConfidenceBand,
 } from './document-classification'
 import { textCell, dateCell, type ExportCell } from './xlsx-helpers'
 import { compareUnitLabels } from './unit-utils'
 import {
+  CLASSIFICATION_STATUS_LABELS,
   correctedFieldLabels,
   dataOrigin,
   displayDate,
@@ -50,17 +50,6 @@ export const DOCUMENT_EXPORT_HEADERS = [
   'Origine del dato',
   'Campi corretti a mano',
 ] as const
-
-// Stato di classificazione: stessa parola della card dove esiste ("Da
-// verificare"); 'non_classificato' non ha badge a schermo ma nel foglio una
-// cella vuota sarebbe ambigua.
-const CLASSIFICATION_STATUS_LABELS: Record<ClassificationStatus, string> = {
-  completata: 'Classificato',
-  da_revisionare: 'Da verificare',
-  fallita: 'Non classificabile',
-  in_corso: 'In classificazione',
-  non_classificato: 'Non classificato',
-}
 
 const CONFIDENCE_BAND_LABELS: Record<ConfidenceBand, string> = {
   alta: 'Alta',

@@ -15,12 +15,14 @@
 // ============================================================
 import { readFileSync } from 'node:fs'
 
-let css, matrix, panel, client, toast
+let css, matrix, panel, client, badge, table, toast
 try {
   css = readFileSync(new URL('../src/app/globals.css', import.meta.url), 'utf8')
   matrix = readFileSync(new URL('../src/app/(dashboard)/admin/residences/[id]/documenti/UnitDocumentMatrix.tsx', import.meta.url), 'utf8')
   panel = readFileSync(new URL('../src/app/(dashboard)/admin/residences/[id]/documenti/DocumentPanel.tsx', import.meta.url), 'utf8')
   client = readFileSync(new URL('../src/app/(dashboard)/admin/residences/[id]/documenti/DocumentiClient.tsx', import.meta.url), 'utf8')
+  badge = readFileSync(new URL('../src/app/(dashboard)/admin/residences/[id]/documenti/ClassificationBadge.tsx', import.meta.url), 'utf8')
+  table = readFileSync(new URL('../src/app/(dashboard)/admin/residences/[id]/documenti/DocumentsTable.tsx', import.meta.url), 'utf8')
   toast = readFileSync(new URL('../src/components/ui/Toast.tsx', import.meta.url), 'utf8')
 } catch (err) {
   console.error(`✗ File non leggibili: ${err.message}`)
@@ -72,7 +74,8 @@ if (secondario && sfondo) {
   check(`contrasto del testo secondario sul banner ambra >= 4,5 (${ratio.toFixed(2)}:1)`, ratio >= 4.5)
 }
 check('il badge "Da verificare" della lista usa i token ambra',
-  /label: REVIEW_LABEL, className: 'bg-semantic-amber-bg text-semantic-amber'/.test(client))
+  /label: REVIEW_LABEL, className: 'bg-semantic-amber-bg text-semantic-amber'/.test(badge))
+check('lo stato "Da verificare" della tabella usa i token ambra', /da_rivedere: 'bg-semantic-amber-bg text-semantic-amber'/.test(table))
 check('il filtro "Da verificare" attivo usa i token ambra', /bg-semantic-amber-bg text-semantic-amber border-semantic-amber/.test(client))
 check('il banner del pannello usa i token ambra', /bg-semantic-amber-bg/.test(panel) && /text-semantic-amber">{REVIEW_LABEL}/.test(panel))
 check('il banner del pannello non usa status-inprogress', !/status-inprogress/.test(panel))
