@@ -68,7 +68,7 @@ export type KeyDatum = { label: string; value: string; kind: 'text' | 'date' }
 export type UnitDocumentCell = {
   expectation: UnitExpectation
   state: UnitDocState
-  /** Il documento che decide lo stato: il confermato più recente, altrimenti la proposta più recente (created_at). */
+  /** Il documento che decide lo stato: il più recente dello slot (created_at), confermato o no. */
   doc: DocRow | null
   /** Solo per 'presente'; vuoto altrimenti. */
   keyData: KeyDatum[]
@@ -178,31 +178,31 @@ export function formatCellKeyData(key: UnitExpectationKey, keyData: KeyDatum[]):
 }
 
 // I documenti di uno slot (unità + tipo atteso): quelli confermati e quelli
-// che propongono proprio questo tipo, dal più recente (created_at decrescente,
-// a parità l'ordine ricevuto). Un solo ordinamento, qui: "il più recente" è una
-// garanzia, non una convenzione di chi chiama.
+// che propongono proprio questo tipo, dal più recente (created_at decrescente).
+// A parità di istante prima il confermato, poi l'ordine ricevuto. Un solo
+// ordinamento, qui: "il più recente" è una garanzia, non una convenzione di chi
+// chiama.
 function slotDocs(unitDocs: readonly DocRow[], exp: UnitExpectation): DocRow[] {
   return unitDocs
     .filter(d => isConfirmedMatch(d, exp) || isUnconfirmedProposal(d, exp))
-    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+    .sort((a, b) => {
+      const byDate = Date.parse(b.created_at) - Date.parse(a.created_at)
+      if (byDate !== 0) return byDate
+      return Number(isConfirmedMatch(b, exp)) - Number(isConfirmedMatch(a, exp))
+    })
 }
 
 function buildCell(unitDocs: DocRow[], exp: UnitExpectation): UnitDocumentCell {
   const slot = slotDocs(unitDocs, exp)
-  // Lo stato lo decide il documento confermato più recente; se non ce n'è, la
-  // proposta più recente. Gli altri sono le versioni.
-  const confirmed = slot.find(d => isConfirmedMatch(d, exp))
-  if (confirmed) {
-    return {
-      expectation: exp, state: 'presente', doc: confirmed, keyData: unitKeyData(exp.key, confirmed),
-      versions: slot.filter(d => d.id !== confirmed.id),
-    }
+  // Decide SEMPRE il documento più recente dello slot, anche se è ancora da
+  // verificare: un APE nuovo non confermato non si nasconde dietro uno vecchio
+  // confermato. Gli altri sono le versioni (mai cancellate né sostituite).
+  const latest = slot[0]
+  if (!latest) return { expectation: exp, state: 'mancante', doc: null, keyData: [], versions: [] }
+  if (isConfirmedMatch(latest, exp)) {
+    return { expectation: exp, state: 'presente', doc: latest, keyData: unitKeyData(exp.key, latest), versions: slot.slice(1) }
   }
-  const proposed = slot[0]
-  if (proposed) {
-    return { expectation: exp, state: 'da_verificare', doc: proposed, keyData: [], versions: slot.slice(1) }
-  }
-  return { expectation: exp, state: 'mancante', doc: null, keyData: [], versions: [] }
+  return { expectation: exp, state: 'da_verificare', doc: latest, keyData: [], versions: slot.slice(1) }
 }
 
 /**

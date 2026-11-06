@@ -166,7 +166,7 @@ check('sistemaMatches: sistemi diversi non combaciano', sistemaMatches('elettric
   const confermato = apeDoc('ok', 'u1')
   const inRevisione = doc({ id: 'r3', unit_id: 'u1', classification_status: 'da_revisionare', extracted_metadata: { doc_type: 'ape' } })
   const [r] = unitDocumentRows([inRevisione, confermato], [U('u1')])
-  check('un documento confermato batte uno in revisione dello stesso tipo', [r.cells[0].state, r.cells[0].doc.id], ['presente', 'ok'])
+  check('a parità di data un documento confermato precede uno in revisione dello stesso tipo', [r.cells[0].state, r.cells[0].doc.id], ['presente', 'ok'])
 }
 {
   // Il verbale AI da solo non rende "presente": serve la colonna confermata.
@@ -240,8 +240,15 @@ check('sistemaMatches: sistemi diversi non combaciano', sistemaMatches('elettric
   const confermatoVecchio = ape('conf', '2026-01-10T10:00:00+00:00')
   const proposta = ape('prop', '2026-06-10T10:00:00+00:00', { classification_status: 'da_revisionare' })
   const [m] = unitDocumentRows([proposta, confermatoVecchio], [U('u1')])
-  check('confermato vecchio + proposta nuova: lo stato lo decide il confermato', [m.cells[0].state, m.cells[0].doc.id], ['presente', 'conf'])
-  check('confermato vecchio + proposta nuova: la proposta è una versione', m.cells[0].versions.map(d => d.id), ['prop'])
+  check('confermato vecchio + proposta nuova: decide il più recente, quindi da verificare', [m.cells[0].state, m.cells[0].doc.id], ['da_verificare', 'prop'])
+  check('confermato vecchio + proposta nuova: il confermato è una versione', m.cells[0].versions.map(d => d.id), ['conf'])
+  check('confermato vecchio + proposta nuova: nessun dato chiave finché non si conferma', m.cells[0].keyData, [])
+  const confermatoNuovo = ape('conf2', '2026-07-10T10:00:00+00:00')
+  const [n] = unitDocumentRows([proposta, confermatoVecchio, confermatoNuovo], [U('u1')])
+  check('confermato più recente della proposta: presente, e la proposta è una versione',
+    [n.cells[0].state, n.cells[0].doc.id, n.cells[0].versions.map(d => d.id)], ['presente', 'conf2', ['prop', 'conf']])
+  const unaSola = ape('sola', '2026-01-10T10:00:00+00:00', { classification_status: 'da_revisionare' })
+  check('una sola proposta: da verificare senza versioni', [unitDocumentRows([unaSola], [U('u1')])[0].cells[0].state, unitDocumentRows([unaSola], [U('u1')])[0].cells[0].versions.length], ['da_verificare', 0])
 
   const altraUnita = doc({ id: 'altra', unit_id: 'u2', doc_type: 'ape', created_at: '2026-07-01T10:00:00+00:00' })
   const tutti = [vecchio, nuovo, medio, altraUnita]
