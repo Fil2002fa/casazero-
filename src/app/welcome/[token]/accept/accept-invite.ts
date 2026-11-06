@@ -1,9 +1,11 @@
 import { createServiceClient } from '@/lib/supabase/admin'
 import { logActivityEvent } from '@/lib/activity-log'
+import { classifyAssignmentWrite, UNIQUE_VIOLATION } from '@/lib/admin-assignment-outcome'
 import type { UserRole } from '@/types/database'
 
 export const TEMPORARY_ERROR = 'Errore temporaneo, riprova tra poco.'
 export const ACTIVATION_ERROR = 'Errore temporaneo durante l\'attivazione, riprova tra poco.'
+export const RESIDENCE_HAS_ADMIN = 'Questa residenza ha già un altro amministratore assegnato, quindi l\'invito non può essere completato. Contatta chi te l\'ha inviato.'
 export const INVALID_INVITE = 'Questo invito non è più valido: potrebbe essere già stato usato o essere scaduto.'
 export const FORBIDDEN_ROLE = 'Questo account ha già un ruolo di gestione su CasaZero e l\'invito non può cambiarlo. Accedi con un altro indirizzo email.'
 
@@ -135,15 +137,48 @@ export async function activateInvite(context: AcceptContext, userId: string): Pr
   }
 
   if ((context.role === 'admin' || context.role === 'super_admin') && context.residenceId) {
-    const { error: assignmentError } = await admin.from('admin_assignments').upsert({
+    // Sul DB admin_assignments ha UNIQUE(residence_id): una residenza, un solo
+    // admin. Si scrive con un INSERT e si guarda il codice dell'errore: un
+    // upsert con onConflict su (profile_id, residence_id) non ha un vincolo
+    // corrispondente e fallisce sempre con 42P10. Un invito non sostituisce mai
+    // l'admin di una residenza (cambio admin = atto del super_admin).
+    const { error: assignmentError } = await admin.from('admin_assignments').insert({
       profile_id: userId,
       residence_id: context.residenceId,
-    }, { onConflict: 'profile_id,residence_id', ignoreDuplicates: true })
+    })
 
-    if (assignmentError) {
+    let existingProfileId: string | null = null
+    if (assignmentError?.code === UNIQUE_VIOLATION) {
+      const { data: holder, error: holderError } = await admin
+        .from('admin_assignments')
+        .select('profile_id')
+        .eq('residence_id', context.residenceId)
+        .maybeSingle()
+      if (holderError) {
+        console.error('accept: errore lettura assegnazione esistente', holderError)
+        return { error: ACTIVATION_ERROR }
+      }
+      existingProfileId = (holder?.profile_id as string | undefined) ?? null
+    }
+
+    const outcome = classifyAssignmentWrite({
+      errorCode: assignmentError ? (assignmentError.code ?? '') : null,
+      existingProfileId,
+      userId,
+    })
+
+    if (outcome === 'altro_admin') {
+      console.warn('accept: residenza già assegnata a un altro admin, invito non completato', {
+        inviteId: context.inviteId,
+        residenceId: context.residenceId,
+      })
+      return { error: RESIDENCE_HAS_ADMIN }
+    }
+    if (outcome === 'tecnico') {
       console.error('accept: errore assegnazione residenza', assignmentError)
       return { error: ACTIVATION_ERROR }
     }
+    // 'assegnata' e 'gia_assegnata' (stesso profilo: successo ripetibile) proseguono.
   }
 
   const { error: usedError } = await admin
