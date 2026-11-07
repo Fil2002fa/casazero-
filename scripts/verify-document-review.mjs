@@ -179,6 +179,23 @@ check('action: non tocca completions', body.includes('.from(\'completions\')'), 
 check('action: non scrive unit_id né la proposta',
   /\.update\(\{[^}]*(unit_id|proposed_unit_id|unit_proposal_confidence)/.test(body), false)
 
+// --- Lista Da rivedere: "Accetta tutte" riusa il ciclo condiviso, senza conferma ---
+const listSrc = readFileSync(
+  new URL('../src/app/(dashboard)/admin/residences/[id]/documenti/ReviewList.tsx', import.meta.url), 'utf8',
+)
+const accStart = listSrc.indexOf('async function acceptAll()')
+const accEnd = listSrc.indexOf('\n  }\n', accStart)
+const acc = accStart === -1 ? '' : listSrc.slice(accStart, accEnd)
+check('lista: acceptAll esiste', accStart !== -1, true)
+check('lista: acceptAll usa runUnitAssignments', acc.includes('runUnitAssignments('), true)
+check('lista: acceptAll non rigenera a ogni passo (revalidate: false)', acc.includes('revalidate: false'), true)
+check('lista: acceptAll un solo router.refresh', acc.split('router.refresh()').length - 1, 1)
+check('lista: acceptAll un solo toast, persistente se falliti',
+  acc.split('showToast(').length - 1 === 1 && acc.includes('summary.persistent ? { persistent: true } : undefined'), true)
+check('lista: acceptAll parte solo da acceptAllCandidates', acc.includes('candidates.map('), true)
+check('lista: nessuna finestra di conferma (niente Modal)', /\bModal\b/.test(listSrc), false)
+check('lista: nessun client Supabase né completions', /supabase|completions/.test(listSrc), false)
+
 if (fallimenti > 0) {
   console.error(`\n✗ ${fallimenti} casi divergenti su ${eseguiti}`)
   process.exit(1)
