@@ -2,15 +2,17 @@
 
 import type { KeyboardEvent } from 'react'
 
-// Tab della pagina Documenti. Il commit 9 (Parti comuni) aggiunge una voce a
-// TABS e il pannello corrispondente.
+// Tab della pagina Documenti.
 // Tastiera come da pattern WAI-ARIA: frecce e Home/End spostano la selezione,
 // e solo il tab attivo è raggiungibile con Tab.
 // "Da rivedere" (E1b-8) mostra il numero di documenti da rivedere, se ce ne sono:
 // non confonderlo con "Da verificare" (classificazione aperta).
+// "Parti comuni" mostra caricati/totale come testo (es. "2/16"), anche a zero: non è
+// un avviso, quindi nessun colore d'allerta.
 const TABS = [
   { id: 'panoramica', label: 'Panoramica' },
   { id: 'tutti', label: 'Tutti i documenti' },
+  { id: 'parti-comuni', label: 'Parti comuni' },
   { id: 'da-rivedere', label: 'Da rivedere' },
 ] as const
 
@@ -19,10 +21,15 @@ export type DocumentTabId = (typeof TABS)[number]['id']
 export const tabId = (id: DocumentTabId) => `documenti-tab-${id}`
 export const tabPanelId = (id: DocumentTabId) => `documenti-tabpanel-${id}`
 
+function badgeVisible(count: number | string | undefined): boolean {
+  return typeof count === 'string' ? count !== '' : (count ?? 0) > 0
+}
+
 export function DocumentTabs({ value, onChange, counts }: {
   value: DocumentTabId
   onChange: (id: DocumentTabId) => void
-  counts?: Partial<Record<DocumentTabId, number>>
+  // numero: mostrato se maggiore di zero; testo: mostrato se non vuoto (es. "2/16").
+  counts?: Partial<Record<DocumentTabId, number | string>>
 }) {
   function onKeyDown(e: KeyboardEvent<HTMLButtonElement>, index: number) {
     let next = index
@@ -58,7 +65,7 @@ export function DocumentTabs({ value, onChange, counts }: {
             }`}
           >
             {t.label}
-            {(counts?.[t.id] ?? 0) > 0 && (
+            {badgeVisible(counts?.[t.id]) && (
               <span className="ml-2 inline-flex min-w-5 justify-center rounded-full bg-brand-light px-1.5 text-xs font-medium text-brand-dark">
                 {counts?.[t.id]}
               </span>
