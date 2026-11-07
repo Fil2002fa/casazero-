@@ -27,7 +27,7 @@ const {
   EMPTY_TABLE_FILTERS, STATE_FILTER_OPTIONS, UNIT_FILTER_NONE,
   documentNameText, filterTableDocs, isTableFiltered, presentDocTypes,
   sortTableDocs, sortedUnits, tableStateLabel,
-  pruneSelection, selectAllState, toggleSelectAll, splitBulkAssign, summarizeBulkAssign,
+  pruneSelection, selectAllState, toggleSelectAll, splitBulkAssign, summarizeBulkAssign, runUnitAssignments,
   ZIP_MAX_FILES, zipBlockReason, zipFileName, zipEntryNames, summarizeZip,
 } = T
 
@@ -215,6 +215,43 @@ check('zip riepilogo: motivi diversi non ne mostra nessuno', summarizeZip({ adde
 check('zip riepilogo: oltre 3 nomi, "e altri N"', summarizeZip({ added: 1, failures: ['A', 'B', 'C', 'D', 'E'].map(zf) }).message, 'ZIP creato con 1 file, 5 file non scaricati: A, B, C e altri 2. Motivo: File non trovato nello storage.')
 check('zip riepilogo: nessun file è errore e niente ZIP', summarizeZip({ added: 0, failures: [zf('A'), zf('B')] }),
   { kind: 'error', message: 'Nessun file scaricato, ZIP non creato: A, B. Motivo: File non trovato nello storage.', persistent: true })
+
+// --- runUnitAssignments (ciclo condiviso da Assegna e, in 8d, da Accetta tutte) ---
+{
+  const calls = []
+  let inFlight = 0
+  let maxInFlight = 0
+  const assign = failOn => async input => {
+    calls.push(input)
+    inFlight++
+    maxInFlight = Math.max(maxInFlight, inFlight)
+    await new Promise(r => setTimeout(r, 1))
+    inFlight--
+    return failOn.has(input.documentId) ? { error: 'Errore tecnico, riprova.' } : { success: true }
+  }
+  const items = [
+    { doc: { id: 'a', title: 'DiCo_a' }, unitId: 'u1' },
+    { doc: { id: 'b', title: 'DiCo_b' }, unitId: 'u2' },
+    { doc: { id: 'c', title: 'DiCo_c' }, unitId: null },
+  ]
+  const progress = []
+  const ok = await runUnitAssignments(items, assign(new Set()), (d, t) => progress.push([d, t]))
+  check('ciclo: nessun fallimento', [ok.failures, [...ok.failedIds]], [[], []])
+  check('ciclo: una chiamata per documento, nell’ordine, con la propria unità', calls,
+    [{ documentId: 'a', unitId: 'u1' }, { documentId: 'b', unitId: 'u2' }, { documentId: 'c', unitId: null }])
+  check('ciclo: mai in parallelo', maxInFlight, 1)
+  check('ciclo: progresso 0/3 prima, poi dopo ogni documento', progress, [[0, 3], [1, 3], [2, 3], [3, 3]])
+
+  calls.length = 0
+  const bad = await runUnitAssignments(items, assign(new Set(['b'])))
+  check('ciclo: un fallimento non ferma gli altri', calls.map(c => c.documentId), ['a', 'b', 'c'])
+  check('ciclo: fallimento col nome leggibile e il motivo', bad.failures, [{ name: 'DiCo b', error: 'Errore tecnico, riprova.' }])
+  check('ciclo: ids dei falliti', [...bad.failedIds], ['b'])
+
+  calls.length = 0
+  const none = await runUnitAssignments([], assign(new Set()), (d, t) => progress.push([d, t]))
+  check('ciclo: elenco vuoto, nessuna chiamata né fallimenti', [calls.length, none.failures.length], [0, 0])
+}
 
 if (fallimenti > 0) {
   console.error(`\n✗ ${fallimenti} su ${eseguiti} casi divergenti`)

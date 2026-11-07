@@ -19,7 +19,9 @@ import { UnitDocumentMatrix } from './UnitDocumentMatrix'
 import { ClassificationBadge } from './ClassificationBadge'
 import { DocumentTabs, tabId, tabPanelId, type DocumentTabId } from './DocumentTabs'
 import { DocumentsTable } from './DocumentsTable'
+import { ReviewList } from './ReviewList'
 import { documentNameText, presentDocTypes } from '@/lib/document-table'
+import { reviewDocs } from '@/lib/document-review'
 import { otherVersions, type UnitExpectation } from '@/lib/unit-documents'
 import { batchFailureMessage, classifyBatchFailure, type BatchFailureReason } from '@/lib/batch-failures'
 import {
@@ -263,8 +265,10 @@ export function DocumentiClient({
   const [reviewOnly, setReviewOnly] = useState(false)
   // Documento aperto nel pannello laterale (E1b): un solo pannello per pagina.
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  // Tab della pagina: i commit 8 e 9 ne aggiungono altri (Da rivedere, Parti comuni).
+  // Tab della pagina: il commit 9 aggiunge Parti comuni.
   const [tab, setTab] = useState<DocumentTabId>('panoramica')
+  // Tab "Da rivedere" (E1b-8): senza unità e non ignorati, regole in document-review.ts.
+  const toReview = useMemo(() => reviewDocs(docs, units), [docs, units])
   const [docTypeFilter, setDocTypeFilter] = useState<DocType | 'all'>('all')
   // Filtri sui dati estratti (estrazione corrente soltanto): ambito e
   // "con scadenza" (data calcolata o formula dichiarata).
@@ -842,7 +846,7 @@ export function DocumentiClient({
         </p>
       )}
 
-      <DocumentTabs value={tab} onChange={setTab} />
+      <DocumentTabs value={tab} onChange={setTab} counts={{ 'da-rivedere': toReview.length }} />
 
       {tab === 'panoramica' && (
       <div id={tabPanelId('panoramica')} role="tabpanel" aria-labelledby={tabId('panoramica')} className="space-y-6">
@@ -1023,6 +1027,10 @@ export function DocumentiClient({
       {/* Sempre montata e nascosta quando non attiva: i filtri non si perdono cambiando tab. */}
       <div id={tabPanelId('tutti')} role="tabpanel" aria-labelledby={tabId('tutti')} hidden={tab !== 'tutti'}>
         <DocumentsTable residenceId={residenceId} docs={docs} units={units} selectedId={selectedId} onOpen={setSelectedId} />
+      </div>
+
+      <div id={tabPanelId('da-rivedere')} role="tabpanel" aria-labelledby={tabId('da-rivedere')} hidden={tab !== 'da-rivedere'}>
+        <ReviewList docs={toReview} units={units} selectedId={selectedId} onOpen={setSelectedId} />
       </div>
     </div>
 

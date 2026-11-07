@@ -216,6 +216,37 @@ export function summarizeBulkAssign(input: {
   }
 }
 
+/**
+ * Il ciclo di assegnazione delle unità, uno per volta e nell'ordine ricevuto
+ * (mai in parallelo: ogni chiamata scrive un evento nel registro). Lo usano
+ * "Assegna" della tabella (7a-2) e "Accetta tutte" di Da rivedere (8d). Non
+ * rigenera la pagina e non mostra niente: chi lo chiama fa un solo refresh e un
+ * solo toast alla fine. `assign` è la server action, passata da fuori perché
+ * questo modulo resta puro (verify:doctable lo prova con una finta).
+ * onProgress(0, totale) parte prima del primo documento, poi dopo ognuno.
+ */
+export type UnitAssignment = { doc: Pick<DocRow, 'id' | 'title'>; unitId: string | null }
+export type AssignUnit = (input: { documentId: string; unitId: string | null }) => Promise<{ success: true } | { error: string }>
+
+export async function runUnitAssignments(
+  items: readonly UnitAssignment[],
+  assign: AssignUnit,
+  onProgress?: (done: number, total: number) => void,
+): Promise<{ failures: BulkFailure[]; failedIds: Set<string> }> {
+  const failures: BulkFailure[] = []
+  const failedIds = new Set<string>()
+  onProgress?.(0, items.length)
+  for (const [i, { doc, unitId }] of items.entries()) {
+    const res = await assign({ documentId: doc.id, unitId })
+    if ('error' in res) {
+      failures.push({ name: humanizeDocumentTitle(doc.title), error: res.error })
+      failedIds.add(doc.id)
+    }
+    onProgress?.(i + 1, items.length)
+  }
+  return { failures, failedIds }
+}
+
 // ============================================================
 // Scarica in ZIP (E1b, 7a-4). Lo ZIP si compone nel browser (fflate): una server
 // action con gate di ruolo restituisce solo signed URL brevi, i byte non

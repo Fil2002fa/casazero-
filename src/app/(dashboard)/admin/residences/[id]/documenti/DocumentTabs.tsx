@@ -2,13 +2,16 @@
 
 import type { KeyboardEvent } from 'react'
 
-// Tab della pagina Documenti. Oggi due; i commit 8 (Da rivedere) e 9 (Parti
-// comuni) aggiungono una voce a TABS e il pannello corrispondente.
+// Tab della pagina Documenti. Il commit 9 (Parti comuni) aggiunge una voce a
+// TABS e il pannello corrispondente.
 // Tastiera come da pattern WAI-ARIA: frecce e Home/End spostano la selezione,
 // e solo il tab attivo è raggiungibile con Tab.
+// "Da rivedere" (E1b-8) mostra il numero di documenti da rivedere, se ce ne sono:
+// non confonderlo con "Da verificare" (classificazione aperta).
 const TABS = [
   { id: 'panoramica', label: 'Panoramica' },
   { id: 'tutti', label: 'Tutti i documenti' },
+  { id: 'da-rivedere', label: 'Da rivedere' },
 ] as const
 
 export type DocumentTabId = (typeof TABS)[number]['id']
@@ -16,9 +19,10 @@ export type DocumentTabId = (typeof TABS)[number]['id']
 export const tabId = (id: DocumentTabId) => `documenti-tab-${id}`
 export const tabPanelId = (id: DocumentTabId) => `documenti-tabpanel-${id}`
 
-export function DocumentTabs({ value, onChange }: {
+export function DocumentTabs({ value, onChange, counts }: {
   value: DocumentTabId
   onChange: (id: DocumentTabId) => void
+  counts?: Partial<Record<DocumentTabId, number>>
 }) {
   function onKeyDown(e: KeyboardEvent<HTMLButtonElement>, index: number) {
     let next = index
@@ -54,6 +58,11 @@ export function DocumentTabs({ value, onChange }: {
             }`}
           >
             {t.label}
+            {(counts?.[t.id] ?? 0) > 0 && (
+              <span className="ml-2 inline-flex min-w-5 justify-center rounded-full bg-brand-light px-1.5 text-xs font-medium text-brand-dark">
+                {counts?.[t.id]}
+              </span>
+            )}
           </button>
         )
       })}

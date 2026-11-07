@@ -24,6 +24,7 @@ import {
   isTableFiltered,
   presentDocTypes,
   pruneSelection,
+  runUnitAssignments,
   selectAllState,
   sortTableDocs,
   sortedUnits,
@@ -242,17 +243,11 @@ export function DocumentsTable({ residenceId, docs, units, selectedId, onOpen }:
     const targetLabel = unitId === null ? null : formatUnitLabel(unitLabels.get(unitId) ?? 'Unità')
     const { toApply, alreadyThere } = splitBulkAssign(selectedDocs, unitId)
 
-    const failures: BulkFailure[] = []
-    const failedIds = new Set<string>()
-    setProgress({ done: 0, total: toApply.length })
-    for (const [i, doc] of toApply.entries()) {
-      const res = await setDocumentUnit({ documentId: doc.id, unitId, revalidate: false })
-      if ('error' in res) {
-        failures.push({ name: humanizeDocumentTitle(doc.title), error: res.error })
-        failedIds.add(doc.id)
-      }
-      setProgress({ done: i + 1, total: toApply.length })
-    }
+    const { failures, failedIds } = await runUnitAssignments(
+      toApply.map(doc => ({ doc, unitId })),
+      input => setDocumentUnit({ ...input, revalidate: false }),
+      (done, total) => setProgress({ done, total }),
+    )
     setProgress(null)
 
     const summary = summarizeBulkAssign({
