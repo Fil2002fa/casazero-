@@ -19,7 +19,7 @@ import { humanizeDocumentTitle } from './documentTitle'
 import { pluralize } from './pluralize'
 import { displayDate, type DocRow, type UnitRow } from './document-rows'
 import { hasPendingUnitProposal, type ProposalConfidence } from './document-unit-proposal'
-import { namesList, type BulkAssignSummary, type BulkFailure } from './document-table'
+import { namesList, type BulkAssignSummary, type BulkFailure, type UnitAssignment } from './document-table'
 
 /** Fascia della proposta di unità, come la leggono la riga e il pannello. */
 export const BAND_LABELS: Record<ProposalConfidence, string> = { alta: 'Alta', media: 'Media', bassa: 'Bassa' }
@@ -37,22 +37,77 @@ export function isInReview(doc: Pick<DocRow, 'unit_id' | 'unit_proposal_dismisse
  * cambia da un render all'altro. Non muta l'input.
  */
 export function reviewDocs(docs: readonly DocRow[], units: readonly UnitRow[]): DocRow[] {
+  return docs.filter(isInReview).sort(reviewComparator(units))
+}
+
+/** Ordine del tab: fascia della proposta, poi i più recenti, poi titolo e id. */
+function reviewComparator(units: readonly UnitRow[]): (a: DocRow, b: DocRow) => number {
   const known = new Set(units.map(u => u.id))
   const rank = (d: DocRow) => {
     const p = proposalOf(d, known)
     return p === null ? 3 : BAND_ORDER[p.confidence]
   }
-  return docs
-    .filter(isInReview)
-    .sort((a, b) => {
-      const byBand = rank(a) - rank(b)
-      if (byBand !== 0) return byBand
-      const byDate = displayDate(b).localeCompare(displayDate(a))
-      if (byDate !== 0) return byDate
-      const byTitle = humanizeDocumentTitle(a.title).localeCompare(humanizeDocumentTitle(b.title), 'it', { sensitivity: 'base' })
-      if (byTitle !== 0) return byTitle
-      return a.id.localeCompare(b.id)
-    })
+  return (a, b) => {
+    const byBand = rank(a) - rank(b)
+    if (byBand !== 0) return byBand
+    const byDate = displayDate(b).localeCompare(displayDate(a))
+    if (byDate !== 0) return byDate
+    const byTitle = humanizeDocumentTitle(a.title).localeCompare(humanizeDocumentTitle(b.title), 'it', { sensitivity: 'base' })
+    if (byTitle !== 0) return byTitle
+    return a.id.localeCompare(b.id)
+  }
+}
+
+/**
+ * Lo stesso file caricato più volte (E1b-8e): una riga sola nel tab. Un gruppo è
+ * l'insieme dei documenti del tab con lo stesso nome file E lo stesso tipo: il
+ * solo tipo non basta (due DiCo di unità diverse non sono versioni), il solo
+ * nome nemmeno (lo stesso file può essere letto come due tipi). Senza tipo si
+ * raggruppa solo con altri senza tipo.
+ * `latest` è il più recente per created_at (come slotDocs in unit-documents.ts,
+ * spareggio sull'id): la riga mostra lui e la proposta del gruppo è la sua.
+ * `docs` ha tutti i documenti, `latest` per primo; `extra` è il numero delle
+ * versioni oltre al più recente ("+N versioni").
+ */
+export type ReviewGroup = { key: string; latest: DocRow; docs: DocRow[]; extra: number }
+
+export function reviewGroupKey(doc: Pick<DocRow, 'file_name' | 'doc_type'>): string {
+  return `${doc.file_name}\u0000${doc.doc_type ?? ''}`
+}
+
+function newestFirst(a: DocRow, b: DocRow): number {
+  const byDate = Date.parse(b.created_at) - Date.parse(a.created_at)
+  if (byDate !== 0) return byDate
+  return a.id.localeCompare(b.id)
+}
+
+/**
+ * Le righe del tab: l'ordine di reviewDocs applicato al documento più recente
+ * di ogni gruppo. Non muta l'input.
+ */
+export function reviewGroups(docs: readonly DocRow[], units: readonly UnitRow[]): ReviewGroup[] {
+  const byKey = new Map<string, DocRow[]>()
+  for (const doc of docs) {
+    if (!isInReview(doc)) continue
+    const key = reviewGroupKey(doc)
+    const list = byKey.get(key)
+    if (list) list.push(doc)
+    else byKey.set(key, [doc])
+  }
+  const groups: ReviewGroup[] = [...byKey].map(([key, list]) => {
+    const sorted = [...list].sort(newestFirst)
+    return { key, latest: sorted[0], docs: sorted, extra: sorted.length - 1 }
+  })
+  const compare = reviewComparator(units)
+  return groups.sort((a, b) => compare(a.latest, b.latest))
+}
+
+/**
+ * Un'assegnazione per documento del gruppo, tutte verso la stessa unità
+ * (null = nessuna: serve a Ignora, che passa per lo stesso ciclo).
+ */
+export function groupAssignments(group: ReviewGroup, unitId: string | null): UnitAssignment[] {
+  return group.docs.map(doc => ({ doc, unitId }))
 }
 
 function proposalOf(doc: DocRow, knownUnitIds: ReadonlySet<string>): { unitId: string; confidence: ProposalConfidence } | null {
@@ -76,9 +131,25 @@ export function reviewProposal(doc: DocRow, units: readonly UnitRow[]): ReviewPr
 }
 
 /**
- * Che cosa assegna "Accetta tutte ad alta confidenza": solo i documenti del
- * tab con proposta pendente in fascia Alta. Il match è già univoco alla
- * scrittura (proposeUnit non propone se ambiguo); qui si esclude il resto.
+ * Che cosa assegna "Accetta tutte ad alta confidenza": solo i gruppi del tab con
+ * proposta pendente in fascia Alta (la proposta del gruppo è quella del
+ * documento più recente). Il match è già univoco alla scrittura (proposeUnit
+ * non propone se ambiguo); qui si esclude il resto. Ogni gruppo assegna tutte
+ * le sue versioni.
+ */
+export function acceptAllGroupCandidates(docs: readonly DocRow[], units: readonly UnitRow[]): { group: ReviewGroup; unitId: string }[] {
+  const out: { group: ReviewGroup; unitId: string }[] = []
+  for (const group of reviewGroups(docs, units)) {
+    const p = reviewProposal(group.latest, units)
+    if (p !== null && p.confidence === 'alta') out.push({ group, unitId: p.unitId })
+  }
+  return out
+}
+
+/**
+ * Per documento, non per gruppo: la lista (ReviewList) lo usa ancora finché il
+ * commit 8e-2 non passa ai gruppi; con quel commit si toglie, insieme a
+ * summarizeAcceptAll.
  */
 export function acceptAllCandidates(docs: readonly DocRow[], units: readonly UnitRow[]): { doc: DocRow; unitId: string }[] {
   const out: { doc: DocRow; unitId: string }[] = []
@@ -109,12 +180,17 @@ export function checkDismissProposal(
   return { ok: true, change: 'ignorata' }
 }
 
-/**
- * Un solo messaggio per tutto il ciclo di "Accetta tutte": "N assegnati, M
- * falliti: nomi". Con dei fallimenti il toast è persistente (i nomi vanno
- * letti); senza, passa da solo. Lo stesso formato di summarizeBulkAssign, che
- * qui non basta: le destinazioni sono unità diverse, non una sola.
- */
+const endSentence = (t: string) => (t.endsWith('.') ? t : t + '.')
+// I nomi si dicono una volta sola: due versioni dello stesso file che falliscono
+// sono un nome e due file non riusciti (la conta sta a parte).
+const uniqueNames = (failures: readonly BulkFailure[]) => namesList([...new Set(failures.map(f => f.name))])
+const reasonOf = (failures: readonly BulkFailure[]) => {
+  const reasons = new Set(failures.map(f => f.error))
+  return reasons.size === 1 ? ` Motivo: ${[...reasons][0]}` : ''
+}
+const versionsSuffix = (total: number) => (total > 1 ? ` (${pluralize(total, 'versione', 'versioni')})` : '')
+
+/** Per documento: vedi acceptAllCandidates. Si toglie con 8e-2. */
 export function summarizeAcceptAll(input: { assigned: number; failures: readonly BulkFailure[] }): BulkAssignSummary {
   const { assigned, failures } = input
   if (failures.length === 0) {
@@ -123,13 +199,82 @@ export function summarizeAcceptAll(input: { assigned: number; failures: readonly
     }
     return { kind: 'success', message: `${pluralize(assigned, 'documento assegnato', 'documenti assegnati')} alle unità proposte.`, persistent: false }
   }
-  const reasons = new Set(failures.map(f => f.error))
-  const reason = reasons.size === 1 ? ` Motivo: ${[...reasons][0]}` : ''
-  const names = namesList(failures.map(f => f.name))
   const failed = pluralize(failures.length, 'fallito', 'falliti')
-  const end = (t: string) => (t.endsWith('.') ? t : t + '.')
+  const tail = `${failed}: ${namesList(failures.map(f => f.name))}.${reasonOf(failures)}`
   if (assigned === 0) {
-    return { kind: 'error', message: end(`Nessun documento assegnato, ${failed}: ${names}.${reason}`), persistent: true }
+    return { kind: 'error', message: endSentence(`Nessun documento assegnato, ${tail}`), persistent: true }
   }
-  return { kind: 'warning', message: end(`${pluralize(assigned, 'assegnato', 'assegnati')}, ${failed}: ${names}.${reason}`), persistent: true }
+  return { kind: 'warning', message: endSentence(`${pluralize(assigned, 'assegnato', 'assegnati')}, ${tail}`), persistent: true }
+}
+
+/**
+ * Un solo messaggio per tutto il ciclo di "Accetta tutte". Il numero principale
+ * è quello che l'utente ha cliccato, cioè i gruppi (le righe): "N documenti
+ * assegnati alle unità proposte", con "(M file in tutto)" solo se ci sono
+ * versioni. Un gruppo conta come assegnato se tutti i suoi file lo sono. I
+ * fallimenti si contano in file e i nomi si dicono una volta sola. Con dei
+ * fallimenti il toast è persistente (i nomi vanno letti); senza, passa da solo.
+ */
+export function summarizeAcceptAllGroups(input: {
+  groups: readonly ReviewGroup[]
+  failedIds: ReadonlySet<string>
+  failures: readonly BulkFailure[]
+}): BulkAssignSummary {
+  const { groups, failedIds, failures } = input
+  const assigned = groups.filter(g => g.docs.every(d => !failedIds.has(d.id))).length
+  const files = groups.reduce((n, g) => n + g.docs.length, 0)
+  if (failures.length === 0) {
+    if (assigned === 0) {
+      return { kind: 'success', message: 'Niente da assegnare: nessuna proposta ad alta confidenza.', persistent: false }
+    }
+    const inAll = files > assigned ? ` (${files} file in tutto)` : ''
+    return { kind: 'success', message: `${pluralize(assigned, 'documento assegnato', 'documenti assegnati')} alle unità proposte${inAll}.`, persistent: false }
+  }
+  const failed = pluralize(failures.length, 'file non assegnato', 'file non assegnati')
+  const tail = `${failed}: ${uniqueNames(failures)}.${reasonOf(failures)}`
+  if (assigned === 0) {
+    return { kind: 'error', message: endSentence(`Nessun documento assegnato, ${tail}`), persistent: true }
+  }
+  return { kind: 'warning', message: endSentence(`${pluralize(assigned, 'documento assegnato', 'documenti assegnati')}, ${tail}`), persistent: true }
+}
+
+/**
+ * Il toast di Accetta o Cambia su una riga, cioè su un gruppo: "Documento
+ * assegnato a Unità 2 (2 versioni)", il totale dei file, senza parentesi se il
+ * gruppo è un solo documento. Con un solo file e un errore resta il formato di
+ * sempre "Nome: motivo"; con più file e fallimenti il toast è persistente e
+ * dice quanti file su quanti.
+ */
+export function summarizeGroupAssign(input: {
+  total: number
+  unitLabel: string
+  failures: readonly BulkFailure[]
+}): BulkAssignSummary {
+  const { total, unitLabel, failures } = input
+  if (failures.length === 0) {
+    return { kind: 'success', message: `Documento assegnato a ${unitLabel}${versionsSuffix(total)}.`, persistent: false }
+  }
+  return groupFailure(total, failures, `Assegnazione a ${unitLabel}`)
+}
+
+/** Come summarizeGroupAssign, per Ignora. */
+export function summarizeGroupDismiss(input: { total: number; failures: readonly BulkFailure[] }): BulkAssignSummary {
+  const { total, failures } = input
+  if (failures.length === 0) {
+    return { kind: 'success', message: `Documento lasciato senza unità${versionsSuffix(total)}: non verrà più proposto.`, persistent: false }
+  }
+  return groupFailure(total, failures, 'Ignora')
+}
+
+function groupFailure(total: number, failures: readonly BulkFailure[], what: string): BulkAssignSummary {
+  if (total === 1) {
+    return { kind: 'error', message: `${failures[0].name}: ${failures[0].error}`, persistent: true }
+  }
+  const done = total - failures.length
+  const names = uniqueNames(failures)
+  const failed = pluralize(failures.length, 'file non riuscito', 'file non riusciti')
+  if (done === 0) {
+    return { kind: 'error', message: endSentence(`${what}: nessun file su ${total}, ${failed}: ${names}.${reasonOf(failures)}`), persistent: true }
+  }
+  return { kind: 'warning', message: endSentence(`${what}: riuscita su ${done} file su ${total}, ${failed}: ${names}.${reasonOf(failures)}`), persistent: true }
 }
