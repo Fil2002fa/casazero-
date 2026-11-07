@@ -137,25 +137,11 @@ export function reviewProposal(doc: DocRow, units: readonly UnitRow[]): ReviewPr
  * non propone se ambiguo); qui si esclude il resto. Ogni gruppo assegna tutte
  * le sue versioni.
  */
-export function acceptAllGroupCandidates(docs: readonly DocRow[], units: readonly UnitRow[]): { group: ReviewGroup; unitId: string }[] {
+export function acceptAllCandidates(groups: readonly ReviewGroup[], units: readonly UnitRow[]): { group: ReviewGroup; unitId: string }[] {
   const out: { group: ReviewGroup; unitId: string }[] = []
-  for (const group of reviewGroups(docs, units)) {
+  for (const group of groups) {
     const p = reviewProposal(group.latest, units)
     if (p !== null && p.confidence === 'alta') out.push({ group, unitId: p.unitId })
-  }
-  return out
-}
-
-/**
- * Per documento, non per gruppo: la lista (ReviewList) lo usa ancora finché il
- * commit 8e-2 non passa ai gruppi; con quel commit si toglie, insieme a
- * summarizeAcceptAll.
- */
-export function acceptAllCandidates(docs: readonly DocRow[], units: readonly UnitRow[]): { doc: DocRow; unitId: string }[] {
-  const out: { doc: DocRow; unitId: string }[] = []
-  for (const doc of reviewDocs(docs, units)) {
-    const p = reviewProposal(doc, units)
-    if (p !== null && p.confidence === 'alta') out.push({ doc, unitId: p.unitId })
   }
   return out
 }
@@ -190,23 +176,6 @@ const reasonOf = (failures: readonly BulkFailure[]) => {
 }
 const versionsSuffix = (total: number) => (total > 1 ? ` (${pluralize(total, 'versione', 'versioni')})` : '')
 
-/** Per documento: vedi acceptAllCandidates. Si toglie con 8e-2. */
-export function summarizeAcceptAll(input: { assigned: number; failures: readonly BulkFailure[] }): BulkAssignSummary {
-  const { assigned, failures } = input
-  if (failures.length === 0) {
-    if (assigned === 0) {
-      return { kind: 'success', message: 'Niente da assegnare: nessuna proposta ad alta confidenza.', persistent: false }
-    }
-    return { kind: 'success', message: `${pluralize(assigned, 'documento assegnato', 'documenti assegnati')} alle unità proposte.`, persistent: false }
-  }
-  const failed = pluralize(failures.length, 'fallito', 'falliti')
-  const tail = `${failed}: ${namesList(failures.map(f => f.name))}.${reasonOf(failures)}`
-  if (assigned === 0) {
-    return { kind: 'error', message: endSentence(`Nessun documento assegnato, ${tail}`), persistent: true }
-  }
-  return { kind: 'warning', message: endSentence(`${pluralize(assigned, 'assegnato', 'assegnati')}, ${tail}`), persistent: true }
-}
-
 /**
  * Un solo messaggio per tutto il ciclo di "Accetta tutte". Il numero principale
  * è quello che l'utente ha cliccato, cioè i gruppi (le righe): "N documenti
@@ -215,7 +184,7 @@ export function summarizeAcceptAll(input: { assigned: number; failures: readonly
  * fallimenti si contano in file e i nomi si dicono una volta sola. Con dei
  * fallimenti il toast è persistente (i nomi vanno letti); senza, passa da solo.
  */
-export function summarizeAcceptAllGroups(input: {
+export function summarizeAcceptAll(input: {
   groups: readonly ReviewGroup[]
   failedIds: ReadonlySet<string>
   failures: readonly BulkFailure[]

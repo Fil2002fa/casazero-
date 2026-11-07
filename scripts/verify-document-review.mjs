@@ -29,7 +29,7 @@ try {
 const {
   BAND_LABELS, isInReview, reviewDocs, reviewProposal, acceptAllCandidates, summarizeAcceptAll,
   checkDismissProposal, DISMISS_HAS_UNIT_ERROR,
-  reviewGroups, reviewGroupKey, groupAssignments, acceptAllGroupCandidates, summarizeAcceptAllGroups,
+  reviewGroups, reviewGroupKey, groupAssignments,
   summarizeGroupAssign, summarizeGroupDismiss,
 } = M
 
@@ -112,41 +112,6 @@ check('unità proposta sconosciuta: null',
 check('fascia mancante: null',
   reviewProposal(doc({ proposed_unit_id: 'u1', unit_proposal_confidence: null }), units), null)
 
-// --- Accetta tutte ---
-{
-  const alta2 = doc({ proposed_unit_id: 'u1', unit_proposal_confidence: 'alta' })
-  const c = acceptAllCandidates(tutti.concat([alta2]), units)
-  check('candidati: solo Alta pendenti (a parità di data, per titolo)', c.map(x => [x.doc.id, x.unitId]), [[alta2.id, 'u1'], [alta.id, 'u3']])
-}
-check('candidati: Media e Bassa mai', acceptAllCandidates([media, bassa, senzaProposta], units), [])
-check('candidati: ignorato mai', acceptAllCandidates([ignorato], units), [])
-check('candidati: già assegnato mai', acceptAllCandidates([assegnato], units), [])
-check('candidati: unità sconosciuta mai',
-  acceptAllCandidates([doc({ proposed_unit_id: 'altrove', unit_proposal_confidence: 'alta' })], units), [])
-check('candidati: nessun documento', acceptAllCandidates([], units), [])
-
-// --- Riepilogo ---
-check('riepilogo: 3 assegnati',
-  summarizeAcceptAll({ assigned: 3, failures: [] }),
-  { kind: 'success', message: '3 documenti assegnati alle unità proposte.', persistent: false })
-check('riepilogo: 1 assegnato',
-  summarizeAcceptAll({ assigned: 1, failures: [] }).message, '1 documento assegnato alle unità proposte.')
-check('riepilogo: niente da assegnare',
-  summarizeAcceptAll({ assigned: 0, failures: [] }),
-  { kind: 'success', message: 'Niente da assegnare: nessuna proposta ad alta confidenza.', persistent: false })
-check('riepilogo: assegnati e falliti, motivo unico, persistente',
-  summarizeAcceptAll({ assigned: 2, failures: [{ name: 'DiCo', error: 'Errore tecnico, riprova.' }] }),
-  { kind: 'warning', message: '2 assegnati, 1 fallito: DiCo. Motivo: Errore tecnico, riprova.', persistent: true })
-check('riepilogo: motivi diversi, nessun motivo in coda',
-  summarizeAcceptAll({ assigned: 1, failures: [{ name: 'A', error: 'x' }, { name: 'B', error: 'y' }] }).message,
-  '1 assegnato, 2 falliti: A, B.')
-check('riepilogo: tutti falliti',
-  summarizeAcceptAll({ assigned: 0, failures: [{ name: 'A', error: 'x' }] }),
-  { kind: 'error', message: 'Nessun documento assegnato, 1 fallito: A. Motivo: x.', persistent: true })
-check('riepilogo: più di 3 nomi',
-  summarizeAcceptAll({ assigned: 0, failures: ['A', 'B', 'C', 'D', 'E'].map(name => ({ name, error: 'x' })) }).message,
-  'Nessun documento assegnato, 5 falliti: A, B, C e altri 2. Motivo: x.')
-
 // --- Gruppi: lo stesso file caricato più volte (E1b-8e) ---
 {
   const g = (file_name, doc_type, created_at, over = {}) => doc({ file_name, doc_type, created_at, ...over })
@@ -178,11 +143,11 @@ check('riepilogo: più di 3 nomi',
   const vecchioConAlta = g('p.pdf', 'ape', '2026-05-01T10:00:00Z', { id: 'o', proposed_unit_id: 'u1', unit_proposal_confidence: 'alta' })
   check('gruppo: la proposta è quella del più recente (vecchia con proposta, nuova senza = Nessuna proposta)',
     reviewProposal(reviewGroups([vecchioConAlta, nuovoSenza], units)[0].latest, units), null)
-  check('gruppo: e non va in Accetta tutte', acceptAllGroupCandidates([vecchioConAlta, nuovoSenza], units), [])
+  check('gruppo: e non va in Accetta tutte', acceptAllCandidates(reviewGroups([vecchioConAlta, nuovoSenza], units), units), [])
   const nuovoAlta = g('q.pdf', 'ape', '2026-05-09T10:00:00Z', { id: 'qn', proposed_unit_id: 'u2', unit_proposal_confidence: 'alta' })
   const vecchioSenza = g('q.pdf', 'ape', '2026-05-01T10:00:00Z', { id: 'qo' })
   check('gruppo: nuovo con proposta Alta = candidato con tutte le versioni',
-    acceptAllGroupCandidates([vecchioSenza, nuovoAlta], units).map(c => [c.group.docs.map(d => d.id), c.unitId]), [[['qn', 'qo'], 'u2']])
+    acceptAllCandidates(reviewGroups([vecchioSenza, nuovoAlta], units), units).map(c => [c.group.docs.map(d => d.id), c.unitId]), [[['qn', 'qo'], 'u2']])
 
   check('gruppo: assegnati e ignorati restano fuori dal gruppo',
     gids(reviewGroups([v2, g('libretto.pdf', 'manuale', '2026-05-04T10:00:00Z', { id: 'ass', unit_id: 'u1' }),
@@ -209,10 +174,24 @@ check('riepilogo: più di 3 nomi',
     groupAssignments(gr[0], 'u2').map(x => [x.doc.id, x.unitId]), [['v2', 'u2'], ['v3', 'u2'], ['v1', 'u2']])
   check('assegnazioni: Ignora usa unitId null', groupAssignments(gr[0], null).map(x => x.unitId), [null, null, null])
 
+  // Accetta tutte: le regole di sempre, ora sui gruppi
+  const cand = list => acceptAllCandidates(reviewGroups(list, units), units)
+  {
+    const alta2 = doc({ proposed_unit_id: 'u1', unit_proposal_confidence: 'alta' })
+    check('candidati: solo Alta pendenti (a parità di data, per titolo)',
+      cand(tutti.concat([alta2])).map(x => [x.group.latest.id, x.unitId]), [[alta2.id, 'u1'], [alta.id, 'u3']])
+  }
+  check('candidati: Media e Bassa mai', cand([media, bassa, senzaProposta]), [])
+  check('candidati: ignorato mai', cand([ignorato]), [])
+  check('candidati: già assegnato mai', cand([assegnato]), [])
+  check('candidati: unità sconosciuta mai',
+    cand([doc({ proposed_unit_id: 'altrove', unit_proposal_confidence: 'alta' })]), [])
+  check('candidati: nessun documento', cand([]), [])
+
   // Accetta tutte: candidati contati a gruppi
   const a2 = g('a.pdf', 'ape', '2026-05-02T10:00:00Z', { id: 'a2', proposed_unit_id: 'u1', unit_proposal_confidence: 'alta' })
   check('Accetta tutte: il pulsante conta i gruppi, non i file',
-    acceptAllGroupCandidates([a1, a2, m1, s1], units).length, 1)
+    acceptAllCandidates(reviewGroups([a1, a2, m1, s1], units), units).length, 1)
 
   // Toast del gruppo
   check('toast gruppo: 2 versioni, totale dei file',
@@ -240,27 +219,27 @@ check('riepilogo: più di 3 nomi',
   const gA = reviewGroups([a1, a2], units)[0]            // 2 file
   const gB = reviewGroups([g('z.pdf', 'ape', '2026-05-01T10:00:00Z', { id: 'z1' })], units)[0] // 1 file
   check('Accetta tutte: numero dei gruppi, file in tutto tra parentesi',
-    summarizeAcceptAllGroups({ groups: [gA, gB], failedIds: new Set(), failures: [] }),
+    summarizeAcceptAll({ groups: [gA, gB], failedIds: new Set(), failures: [] }),
     { kind: 'success', message: '2 documenti assegnati alle unità proposte (3 file in tutto).', persistent: false })
   check('Accetta tutte: senza versioni nessuna parentesi',
-    summarizeAcceptAllGroups({ groups: [gB], failedIds: new Set(), failures: [] }).message, '1 documento assegnato alle unità proposte.')
+    summarizeAcceptAll({ groups: [gB], failedIds: new Set(), failures: [] }).message, '1 documento assegnato alle unità proposte.')
   check('Accetta tutte: niente da assegnare',
-    summarizeAcceptAllGroups({ groups: [], failedIds: new Set(), failures: [] }),
+    summarizeAcceptAll({ groups: [], failedIds: new Set(), failures: [] }),
     { kind: 'success', message: 'Niente da assegnare: nessuna proposta ad alta confidenza.', persistent: false })
   check('Accetta tutte: un file non assegnato, persistente',
-    summarizeAcceptAllGroups({ groups: [gA, gB], failedIds: new Set(['z1']), failures: [{ name: 'nome.pdf', error: 'x' }] }),
+    summarizeAcceptAll({ groups: [gA, gB], failedIds: new Set(['z1']), failures: [{ name: 'nome.pdf', error: 'x' }] }),
     { kind: 'warning', message: '1 documento assegnato, 1 file non assegnato: nome.pdf. Motivo: x.', persistent: true })
   check('Accetta tutte: gruppo con un solo file fallito non conta come assegnato',
-    summarizeAcceptAllGroups({ groups: [gA, gB], failedIds: new Set(['a2']), failures: [{ name: 'a', error: 'x' }] }).message,
+    summarizeAcceptAll({ groups: [gA, gB], failedIds: new Set(['a2']), failures: [{ name: 'a', error: 'x' }] }).message,
     '1 documento assegnato, 1 file non assegnato: a. Motivo: x.')
   check('Accetta tutte: due versioni fallite, un nome e due file',
-    summarizeAcceptAllGroups({ groups: [gA, gB], failedIds: new Set(['a1', 'a2']), failures: [{ name: 'a', error: 'x' }, { name: 'a', error: 'x' }] }).message,
+    summarizeAcceptAll({ groups: [gA, gB], failedIds: new Set(['a1', 'a2']), failures: [{ name: 'a', error: 'x' }, { name: 'a', error: 'x' }] }).message,
     '1 documento assegnato, 2 file non assegnati: a. Motivo: x.')
   check('Accetta tutte: tutti falliti',
-    summarizeAcceptAllGroups({ groups: [gB], failedIds: new Set(['z1']), failures: [{ name: 'z', error: 'x' }] }),
+    summarizeAcceptAll({ groups: [gB], failedIds: new Set(['z1']), failures: [{ name: 'z', error: 'x' }] }),
     { kind: 'error', message: 'Nessun documento assegnato, 1 file non assegnato: z. Motivo: x.', persistent: true })
   check('Accetta tutte: più di 3 nomi',
-    summarizeAcceptAllGroups({ groups: [gB], failedIds: new Set(['z1']), failures: ['A', 'B', 'C', 'D', 'E'].map(name => ({ name, error: 'x' })) }).message,
+    summarizeAcceptAll({ groups: [gB], failedIds: new Set(['z1']), failures: ['A', 'B', 'C', 'D', 'E'].map(name => ({ name, error: 'x' })) }).message,
     'Nessun documento assegnato, 5 file non assegnati: A, B, C e altri 2. Motivo: x.')
 }
 
@@ -311,7 +290,34 @@ check('lista: acceptAll non rigenera a ogni passo (revalidate: false)', acc.incl
 check('lista: acceptAll un solo router.refresh', acc.split('router.refresh()').length - 1, 1)
 check('lista: acceptAll un solo toast, persistente se falliti',
   acc.split('showToast(').length - 1 === 1 && acc.includes('summary.persistent ? { persistent: true } : undefined'), true)
-check('lista: acceptAll parte solo da acceptAllCandidates', acc.includes('candidates.map('), true)
+check('lista: acceptAll parte solo da acceptAllCandidates, una assegnazione per documento del gruppo',
+  acc.includes('candidates.flatMap(') && acc.includes('groupAssignments(c.group, c.unitId)'), true)
+check('lista: acceptAll riepiloga a gruppi (summarizeAcceptAll con failedIds)',
+  acc.includes('summarizeAcceptAll({') && acc.includes('failedIds'), true)
+
+// Azioni di riga (Accetta, Cambia, Ignora): agiscono sull'intero gruppo, stesso ciclo
+const fnBody = (name) => {
+  const a = listSrc.indexOf(`async function ${name}(`)
+  const b = listSrc.indexOf('\n  }\n', a)
+  return a === -1 ? '' : listSrc.slice(a, b)
+}
+const asg = fnBody('assignGroup')
+check('lista: assignGroup esiste', asg !== '', true)
+check('lista: assignGroup passa da runUnitAssignments su tutte le versioni (groupAssignments)',
+  asg.includes('runUnitAssignments(') && asg.includes('groupAssignments(group, unitId)'), true)
+check('lista: assignGroup non rigenera a ogni passo (revalidate: false)', asg.includes('revalidate: false'), true)
+check('lista: assignGroup un solo router.refresh e un solo toast',
+  asg.split('router.refresh()').length - 1 === 1 && asg.split('showToast(').length - 1 === 1, true)
+check('lista: assignGroup usa il toast di gruppo', asg.includes('summarizeGroupAssign('), true)
+const dis = fnBody('dismissGroup')
+check('lista: dismissGroup esiste', dis !== '', true)
+check('lista: dismissGroup ignora tutte le versioni (groupAssignments con null) col solo dismissDocumentUnitProposal',
+  dis.includes('runUnitAssignments(') && dis.includes('groupAssignments(group, null)') && dis.includes('dismissDocumentUnitProposal({ documentId: input.documentId })'), true)
+check('lista: dismissGroup un solo router.refresh e un solo toast',
+  dis.split('router.refresh()').length - 1 === 1 && dis.split('showToast(').length - 1 === 1, true)
+check('lista: dismissGroup usa il toast di gruppo', dis.includes('summarizeGroupDismiss('), true)
+check('lista: nessuna azione per singolo documento (assignOne, ignoreOne, setDocumentUnit diretto)',
+  /assignOne|ignoreOne|await setDocumentUnit\(/.test(listSrc), false)
 check('lista: nessuna finestra di conferma (niente Modal)', /\bModal\b/.test(listSrc), false)
 check('lista: nessun client Supabase né completions', /supabase|completions/.test(listSrc), false)
 

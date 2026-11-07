@@ -21,7 +21,7 @@ import { DocumentTabs, tabId, tabPanelId, type DocumentTabId } from './DocumentT
 import { DocumentsTable } from './DocumentsTable'
 import { ReviewList } from './ReviewList'
 import { documentNameText, presentDocTypes } from '@/lib/document-table'
-import { reviewDocs } from '@/lib/document-review'
+import { reviewGroups } from '@/lib/document-review'
 import { otherVersions, type UnitExpectation } from '@/lib/unit-documents'
 import { batchFailureMessage, classifyBatchFailure, type BatchFailureReason } from '@/lib/batch-failures'
 import {
@@ -267,8 +267,9 @@ export function DocumentiClient({
   const [selectedId, setSelectedId] = useState<string | null>(null)
   // Tab della pagina: il commit 9 aggiunge Parti comuni.
   const [tab, setTab] = useState<DocumentTabId>('panoramica')
-  // Tab "Da rivedere" (E1b-8): senza unità e non ignorati, regole in document-review.ts.
-  const toReview = useMemo(() => reviewDocs(docs, units), [docs, units])
+  // Tab "Da rivedere" (E1b-8): senza unità e non ignorati, una riga per gruppo di
+  // versioni dello stesso file (8e), regole in document-review.ts.
+  const toReview = useMemo(() => reviewGroups(docs, units), [docs, units])
   const [docTypeFilter, setDocTypeFilter] = useState<DocType | 'all'>('all')
   // Filtri sui dati estratti (estrazione corrente soltanto): ambito e
   // "con scadenza" (data calcolata o formula dichiarata).
@@ -1030,7 +1031,7 @@ export function DocumentiClient({
       </div>
 
       <div id={tabPanelId('da-rivedere')} role="tabpanel" aria-labelledby={tabId('da-rivedere')} hidden={tab !== 'da-rivedere'}>
-        <ReviewList docs={toReview} units={units} selectedId={selectedId} onOpen={setSelectedId} />
+        <ReviewList groups={toReview} units={units} selectedId={selectedId} onOpen={setSelectedId} />
       </div>
     </div>
 
