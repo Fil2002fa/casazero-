@@ -1,13 +1,12 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { FileText, Download, Upload, X, Loader2, CheckCircle2, AlertCircle, Clock, Sparkles, ChevronDown, FileSearch } from 'lucide-react'
 import type { DocumentCategory } from '@/types/database'
 import { createUploadUrl, confirmDocument, confirmSupplierProposal } from './actions'
 import type { SupplierProposalExpectation } from './actions'
-import { ALLOWED_DOCUMENT_MIME, MAX_DOCUMENT_SIZE } from '@/lib/document-upload'
 import { pluralize } from '@/lib/pluralize'
 import { useToast } from '@/components/ui/Toast'
 import { formatDateIT } from '@/lib/formatDate'
@@ -25,7 +24,18 @@ import { documentNameText, presentDocTypes } from '@/lib/document-table'
 import { reviewGroups } from '@/lib/document-review'
 import { commonBadge, commonDocuments, type CommonDocumentRow } from '@/lib/common-documents'
 import { otherVersions, type UnitExpectation } from '@/lib/unit-documents'
-import { batchFailureMessage, classifyBatchFailure, type BatchFailureReason } from '@/lib/batch-failures'
+import { batchFailureMessage, classifyBatchFailure, describeBatchFailureReasons, type BatchFailureReason } from '@/lib/batch-failures'
+import {
+  INITIAL_FILE_STATE,
+  applyFileEvent,
+  fileRejectionReason,
+  fileStatusLabel,
+  summarizeUploadBatch,
+  uploadProgress,
+  uploadRetryIds,
+  type FileEvent,
+  type FileState,
+} from '@/lib/document-upload-batch'
 import {
   DOC_TYPE_LABELS,
   SISTEMA_LABELS,
@@ -82,13 +92,15 @@ const CAT_LABELS: Record<DocumentCategory, string> = {
 }
 
 // --- upload client-direct: un task indipendente per file selezionato ---
-type TaskStatus = 'in_coda' | 'in_caricamento' | 'fatto' | 'errore'
-
+// Lo stato di ogni file (caricamento → classificazione → estrazione) è un
+// FileState di document-upload-batch.ts: si cambia solo con eventi, mai a mano.
 type FileTask = {
   id: string
   file: File
-  status: TaskStatus
-  error?: string
+  state: FileState
+  // Solo dopo il caricamento: lega il file alla sua riga in `documents`, così
+  // classificazione ed estrazione aggiornano il file giusto per id.
+  documentId?: string
 }
 
 function makeTaskId() {
@@ -111,66 +123,72 @@ type UploadPreset = {
   expectation: { docType: DocType; label: string; category: DocumentCategory | null }
 }
 
-// Esito di un singolo file: lo status pilota l'icona di TaskRow, documentId
-// (solo su 'fatto') e' quanto serve all'auto-classificazione per sapere
+// Esito di un singolo file: lo stato finale del caricamento e, se è arrivato in
+// archivio, l'id della riga: è quanto serve all'auto-classificazione per sapere
 // ESATTAMENTE quali righe classificare, senza indovinarle da un refresh.
-type FileTaskResult = { status: TaskStatus; documentId?: string }
+type FileTaskResult = { state: FileState; documentId?: string }
+
+type EmitFileEvent = (taskId: string, event: FileEvent, documentId?: string) => void
+
+const SERVICE_DOWN_TEXT = 'Servizio non disponibile al momento'
 
 // Genera URL → carica direttamente su Supabase (bypassa il bodySizeLimit
 // di Next.js) → conferma. Ogni file è indipendente: il fallimento di uno
-// non blocca né tocca lo stato degli altri, ciascuno aggiorna solo la
-// propria riga in `tasks` via updateTask.
+// non blocca né tocca lo stato degli altri, ciascuno emette eventi solo per
+// la propria riga in `tasks`. Parte sempre da INITIAL_FILE_STATE: chi riprova
+// azzera prima lo stato del file.
 async function runFileTask(
   task: FileTask,
   ctx: UploadContext,
-  updateTask: (id: string, patch: Partial<FileTask>) => void
+  emit: EmitFileEvent
 ): Promise<FileTaskResult> {
   const { file } = task
-  updateTask(task.id, { status: 'in_caricamento' })
-
-  if (!ALLOWED_DOCUMENT_MIME.has(file.type)) {
-    updateTask(task.id, { status: 'errore', error: 'Tipo file non supportato (PDF, immagini, Word)' })
-    return { status: 'errore' }
+  let state = INITIAL_FILE_STATE
+  const step = (event: FileEvent, documentId?: string) => {
+    state = applyFileEvent(state, event)
+    emit(task.id, event, documentId)
   }
-  if (file.size > MAX_DOCUMENT_SIZE) {
-    updateTask(task.id, { status: 'errore', error: 'File troppo grande (max 50 MB)' })
-    return { status: 'errore' }
-  }
-
-  const urlResult = await createUploadUrl(ctx.residenceId, ctx.category, file.name, file.type)
-  if ('error' in urlResult) {
-    updateTask(task.id, { status: 'errore', error: urlResult.error })
-    return { status: 'errore' }
+  const fail = (error: string): FileTaskResult => {
+    step({ type: 'upload_fail', error })
+    return { state }
   }
 
-  const browserSupabase = createClient()
-  const { error: uploadError } = await browserSupabase.storage
-    .from('documents')
-    .uploadToSignedUrl(urlResult.path, urlResult.token, file)
+  step({ type: 'upload_start' })
 
-  if (uploadError) {
-    updateTask(task.id, { status: 'errore', error: `Errore upload: ${uploadError.message}` })
-    return { status: 'errore' }
+  const rejection = fileRejectionReason(file)
+  if (rejection) return fail(rejection)
+
+  // Un'eccezione (rete caduta in una server action o nell'upload) deve
+  // diventare un file fallito: se risalisse, il Promise.all del chiamante
+  // rifiuterebbe per tutti e la modale resterebbe bloccata su "Caricamento…".
+  try {
+    const urlResult = await createUploadUrl(ctx.residenceId, ctx.category, file.name, file.type)
+    if ('error' in urlResult) return fail(urlResult.error)
+
+    const browserSupabase = createClient()
+    const { error: uploadError } = await browserSupabase.storage
+      .from('documents')
+      .uploadToSignedUrl(urlResult.path, urlResult.token, file)
+    if (uploadError) return fail(`Errore upload: ${uploadError.message}`)
+
+    const title = file.name.replace(/\.[^/.]+$/, '') || file.name
+    const confirmResult = await confirmDocument({
+      residenceId: ctx.residenceId,
+      unitId: ctx.unitId,
+      category: ctx.category,
+      title,
+      storagePath: urlResult.path,
+      fileName: file.name,
+      fileDate: ctx.fileDate,
+    })
+    if ('error' in confirmResult) return fail(confirmResult.error)
+
+    step({ type: 'upload_ok' }, confirmResult.id)
+    return { state, documentId: confirmResult.id }
+  } catch (err) {
+    console.error(`[upload] ${file.name} fallito:`, err)
+    return fail('Errore tecnico, riprova.')
   }
-
-  const title = file.name.replace(/\.[^/.]+$/, '') || file.name
-  const confirmResult = await confirmDocument({
-    residenceId: ctx.residenceId,
-    unitId: ctx.unitId,
-    category: ctx.category,
-    title,
-    storagePath: urlResult.path,
-    fileName: file.name,
-    fileDate: ctx.fileDate,
-  })
-
-  if ('error' in confirmResult) {
-    updateTask(task.id, { status: 'errore', error: confirmResult.error })
-    return { status: 'errore' }
-  }
-
-  updateTask(task.id, { status: 'fatto' })
-  return { status: 'fatto', documentId: confirmResult.id }
 }
 
 interface Props {
@@ -250,6 +268,9 @@ export function DocumentiClient({
   const [tasks, setTasks]         = useState<FileTask[]>([])
   const [submitted, setSubmitted] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
+  // Valori del form dell'ultimo invio: "Riprova" li riusa tali e quali, senza
+  // rileggere il form (che dopo l'invio non c'è più).
+  const lastRun = useRef<{ ctx: UploadContext; expectedDocType: DocType | null } | null>(null)
   const router = useRouter()
   const { showToast } = useToast()
 
@@ -380,13 +401,21 @@ export function DocumentiClient({
     setShowModal(true)
   }
 
-  function updateTask(id: string, patch: Partial<FileTask>) {
-    setTasks(prev => prev.map(t => (t.id === id ? { ...t, ...patch } : t)))
+  // Un evento di stato per un file, riconosciuto per id del task (caricamento)
+  // o per id del documento (classificazione ed estrazione, che conoscono solo lui).
+  function emitFileEvent(taskId: string, event: FileEvent, documentId?: string) {
+    setTasks(prev => prev.map(t => (
+      t.id === taskId ? { ...t, state: applyFileEvent(t.state, event), ...(documentId ? { documentId } : {}) } : t
+    )))
+  }
+
+  function emitDocumentEvent(documentId: string, event: FileEvent) {
+    setTasks(prev => prev.map(t => (t.documentId === documentId ? { ...t, state: applyFileEvent(t.state, event) } : t)))
   }
 
   function handleFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? [])
-    setTasks(files.map(file => ({ id: makeTaskId(), file, status: 'in_coda' as const })))
+    setTasks(files.map(file => ({ id: makeTaskId(), file, state: INITIAL_FILE_STATE })))
   }
 
   async function handleUpload(e: React.FormEvent<HTMLFormElement>) {
@@ -397,29 +426,50 @@ export function DocumentiClient({
     const unitId   = (formData.get('unitId') as string) || null
     const category = formData.get('category') as DocumentCategory
     const fileDate = (formData.get('fileDate') as string) || null
-    const ctx: UploadContext = { residenceId, unitId, category, fileDate }
+    // Caricamento da una cella del quadro: il tipo atteso viaggia come indizio
+    // (classify-document lo confronta col tipo letto, mai lo impone).
+    lastRun.current = {
+      ctx: { residenceId, unitId, category, fileDate },
+      expectedDocType: uploadPreset?.expectation.docType ?? null,
+    }
 
     setSubmitted(true)
+    await runUploadPass(tasks)
+  }
+
+  // "Riprova": solo i file che non sono arrivati in archivio, con i valori del
+  // form di prima. Gli altri hanno già la loro riga: ricaricarli ne farebbe una
+  // seconda versione (si riprendono con Classifica documenti / Estrai dati).
+  function handleRetryFailed() {
+    if (isUploading) return
+    const ids = new Set(uploadRetryIds(tasks))
+    if (ids.size === 0) return
+    setTasks(prev => prev.map(t => (ids.has(t.id) ? { ...t, state: INITIAL_FILE_STATE } : t)))
+    void runUploadPass(tasks.filter(t => ids.has(t.id)))
+  }
+
+  // Un passaggio di caricamento sui file dati, con i valori di lastRun: sia il
+  // primo invio sia "Riprova". Un solo toast a fine caricamento, poi la
+  // classificazione dei file arrivati in archivio.
+  async function runUploadPass(toRun: FileTask[]) {
+    const run = lastRun.current
+    if (!run) return
+
     setIsUploading(true)
-
-    const uploadedTasks = tasks
-    const results = await Promise.all(uploadedTasks.map(task => runFileTask(task, ctx, updateTask)))
-
+    const results = await Promise.all(toRun.map(task => runFileTask(task, run.ctx, emitFileEvent)))
     setIsUploading(false)
+
+    const summary = summarizeUploadBatch(toRun.map((task, i) => ({ name: task.file.name, state: results[i].state })))
+    if (summary) showToast(summary.kind, summary.message, summary.persistent ? { persistent: true } : undefined)
 
     // Auto-classificazione (B4): parte da sola sui documenti appena caricati,
     // per id esatto (mai indovinati da un refresh dei props). Nessun click.
     // Continua in sottofondo anche se la modale viene chiusa — lo stato vive
     // in questo componente, non nella modale.
-    // Caricamento da una cella del quadro: il tipo atteso viaggia come indizio
-    // (classify-document lo confronta col tipo letto, mai lo impone).
-    const expectedDocType = uploadPreset?.expectation.docType ?? null
-    const justUploaded = uploadedTasks
-      .map((task, i) => ({ file: task.file, result: results[i] }))
-      .filter((x): x is { file: File; result: { status: 'fatto'; documentId: string } } =>
-        x.result.status === 'fatto' && !!x.result.documentId
-      )
-      .map(x => ({ id: x.result.documentId, title: x.file.name, expectedDocType }))
+    const justUploaded = toRun.flatMap((task, i) => {
+      const documentId = results[i].documentId
+      return documentId ? [{ id: documentId, title: task.file.name, expectedDocType: run.expectedDocType }] : []
+    })
 
     if (justUploaded.length > 0) {
       void classifyDocuments(justUploaded)
@@ -451,6 +501,7 @@ export function DocumentiClient({
     // ma in revisione, e a fine batch un solo avviso lo dice.
     const mismatches: { expected: DocType; actual: DocType; documentId: string }[] = []
     for (const [i, doc] of targets.entries()) {
+      emitDocumentEvent(doc.id, { type: 'classify_start' })
       try {
         const res = await fetch('/api/classify-document', {
           method: 'POST',
@@ -466,25 +517,31 @@ export function DocumentiClient({
             mismatches.push({ expected: result.expected_doc_type as DocType, actual: result.actual_doc_type as DocType, documentId: doc.id })
           }
           console.log(`[classifica] ${doc.title}:`, result)
-          if (result?.status === 'completata' && isExtractableDocType(typeof result.doc_type === 'string' ? result.doc_type : null)) {
-            toExtract.push(doc)
-          }
+          const extractable = result?.status === 'completata' && isExtractableDocType(typeof result.doc_type === 'string' ? result.doc_type : null)
+          emitDocumentEvent(doc.id, { type: 'classify_ok', extractable })
+          if (extractable) toExtract.push(doc)
         } else if (result?.cause === 'service_unavailable') {
           // Il servizio è giù: proseguire il batch chiamerebbe di nuovo un
           // servizio già noto non disponibile, un errore per documento alla
           // volta invece di un solo banner. Si ferma qui, non si conta come
-          // fallimento per-documento.
+          // fallimento per-documento. I file ancora in coda restano riprovabili
+          // dal bottone, e lo dicono nella loro riga.
           console.error(`[classifica] servizio non disponibile, batch interrotto a "${doc.title}":`, result?.error ?? res.statusText)
           setServiceUnavailable(true)
+          for (const stopped of targets.slice(i)) emitDocumentEvent(stopped.id, { type: 'stopped', error: SERVICE_DOWN_TEXT })
           break
         } else {
           failures++
-          reasons.push(classifyBatchFailure({ status: res.status, cause: result?.cause }))
+          const reason = classifyBatchFailure({ status: res.status, cause: result?.cause })
+          reasons.push(reason)
+          emitDocumentEvent(doc.id, { type: 'classify_fail', error: describeBatchFailureReasons([reason]) })
           console.error(`[classifica] ${doc.title} fallita:`, result?.error ?? res.statusText)
         }
       } catch (err) {
         failures++
-        reasons.push(classifyBatchFailure({ status: null, cause: undefined }))
+        const reason = classifyBatchFailure({ status: null, cause: undefined })
+        reasons.push(reason)
+        emitDocumentEvent(doc.id, { type: 'classify_fail', error: describeBatchFailureReasons([reason]) })
         console.error(`[classifica] ${doc.title} fallita:`, err)
       }
       setClassifyProgress({ done: i + 1, total: targets.length })
@@ -537,6 +594,7 @@ export function DocumentiClient({
     let failures = 0
     const reasons: BatchFailureReason[] = []
     for (const [i, doc] of targets.entries()) {
+      emitDocumentEvent(doc.id, { type: 'extract_start' })
       try {
         const res = await fetch('/api/extract-document', {
           method: 'POST',
@@ -546,23 +604,30 @@ export function DocumentiClient({
         const result = await res.json().catch(() => null)
         if (res.ok) {
           console.log(`[estrai] ${doc.title}:`, result)
+          emitDocumentEvent(doc.id, { type: 'extract_ok' })
         } else if (result?.cause === 'service_unavailable') {
           console.error(`[estrai] servizio non disponibile, batch interrotto a "${doc.title}":`, result?.error ?? res.statusText)
           setExtractServiceUnavailable(true)
+          for (const stopped of targets.slice(i)) emitDocumentEvent(stopped.id, { type: 'stopped', error: SERVICE_DOWN_TEXT })
           break
         } else if (result?.cause === 'not_extractable') {
           // Il documento è cambiato sotto (riclassificato in 'altro' o
           // tornato in revisione nel frattempo): non è un fallimento, e
           // al refresh non sarà più in pendingExtraction.
           console.warn(`[estrai] ${doc.title} non estraibile:`, result?.error)
+          emitDocumentEvent(doc.id, { type: 'extract_skip' })
         } else {
           failures++
-          reasons.push(classifyBatchFailure({ status: res.status, cause: result?.cause }))
+          const reason = classifyBatchFailure({ status: res.status, cause: result?.cause })
+          reasons.push(reason)
+          emitDocumentEvent(doc.id, { type: 'extract_fail', error: describeBatchFailureReasons([reason]) })
           console.error(`[estrai] ${doc.title} senza dati:`, result?.error ?? res.statusText)
         }
       } catch (err) {
         failures++
-        reasons.push(classifyBatchFailure({ status: null, cause: undefined }))
+        const reason = classifyBatchFailure({ status: null, cause: undefined })
+        reasons.push(reason)
+        emitDocumentEvent(doc.id, { type: 'extract_fail', error: describeBatchFailureReasons([reason]) })
         console.error(`[estrai] ${doc.title} senza dati:`, err)
       }
       setExtractProgress({ done: i + 1, total: targets.length })
@@ -588,6 +653,7 @@ export function DocumentiClient({
   }
 
   const selectedDoc = selectedId === null ? null : docs.find(d => d.id === selectedId) ?? null
+  const retryCount = uploadRetryIds(tasks).length
 
   return (
     <div className={selectedDoc ? 'xl:grid xl:grid-cols-[minmax(0,1fr)_clamp(480px,40%,640px)] xl:gap-6 xl:items-start' : ''}>
@@ -649,7 +715,7 @@ export function DocumentiClient({
                 {(isUploading || (classifying && classifyProgress)) && (
                   <p className="text-xs text-text-secondary">
                     {isUploading
-                      ? `Caricamento: ${tasks.filter(t => t.status === 'fatto' || t.status === 'errore').length} di ${tasks.length}`
+                      ? `Caricamento: ${uploadProgress(tasks.map(t => t.state)).done} di ${tasks.length}`
                       : `Classificazione: ${classifyProgress!.done} di ${classifyProgress!.total}`}
                   </p>
                 )}
@@ -659,12 +725,13 @@ export function DocumentiClient({
                   ))}
                 </div>
                 <div className="flex gap-2 pt-1">
-                  {!isUploading && tasks.some(t => t.status === 'errore') && (
+                  {retryCount > 0 && (
                     <button
-                      onClick={() => { setSubmitted(false); setTasks([]) }}
-                      className="flex-1 border border-border rounded-xl py-2.5 text-sm text-text-secondary"
+                      onClick={handleRetryFailed}
+                      disabled={isUploading || classifying || extracting}
+                      className="flex-1 border border-border rounded-xl py-2.5 text-sm text-text-secondary disabled:opacity-50"
                     >
-                      Riprova
+                      {`Riprova (${retryCount})`}
                     </button>
                   )}
                   <button
@@ -1143,21 +1210,27 @@ function DeadlinesSection({ docs, today }: { docs: DocRow[]; today: string }) {
 }
 
 function TaskRow({ task }: { task: FileTask }) {
+  const { state } = task
+  // Giro in corso: rotella. In attesa del turno (coda, caricato, classificato): orologio.
   const icon = {
-    in_coda:        <Clock className="w-4 h-4 text-text-secondary" strokeWidth={1.6} />,
-    in_caricamento: <Loader2 className="w-4 h-4 text-brand-medium animate-spin" strokeWidth={1.6} />,
-    fatto:           <CheckCircle2 className="w-4 h-4 text-brand-medium" strokeWidth={1.6} />,
-    errore:          <AlertCircle className="w-4 h-4 text-semantic-red" strokeWidth={1.6} />,
-  }[task.status]
+    in_coda:            <Clock className="w-4 h-4 text-text-secondary" strokeWidth={1.6} />,
+    in_caricamento:     <Loader2 className="w-4 h-4 text-brand-medium animate-spin" strokeWidth={1.6} />,
+    caricato:           <Clock className="w-4 h-4 text-text-secondary" strokeWidth={1.6} />,
+    in_classificazione: <Loader2 className="w-4 h-4 text-brand-medium animate-spin" strokeWidth={1.6} />,
+    classificato:       <Clock className="w-4 h-4 text-text-secondary" strokeWidth={1.6} />,
+    in_estrazione:      <Loader2 className="w-4 h-4 text-brand-medium animate-spin" strokeWidth={1.6} />,
+    completo:           <CheckCircle2 className="w-4 h-4 text-brand-medium" strokeWidth={1.6} />,
+    fallito:            <AlertCircle className="w-4 h-4 text-semantic-red" strokeWidth={1.6} />,
+  }[state.phase]
 
   return (
     <div className="flex items-start gap-2 text-sm">
       <span className="mt-0.5 flex-shrink-0">{icon}</span>
       <div className="min-w-0 flex-1">
         <p className="text-text-primary break-words lg:truncate">{task.file.name}</p>
-        {task.status === 'errore' && task.error && (
-          <p className="text-xs text-semantic-red leading-snug">{task.error}</p>
-        )}
+        <p className={`text-xs leading-snug ${state.phase === 'fallito' ? 'text-semantic-red' : 'text-text-secondary'}`}>
+          {fileStatusLabel(state)}{state.phase === 'fallito' && state.error ? `: ${state.error}` : ''}
+        </p>
       </div>
     </div>
   )
