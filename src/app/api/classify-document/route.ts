@@ -14,6 +14,16 @@ import {
   type Sistema,
 } from '@/lib/document-classification'
 import { refreshUnitProposal } from '@/lib/document-unit-proposal.server'
+import { authorizeDocumentActor } from '@/lib/document-access'
+import {
+  ClassificationWriteError,
+  TECHNICAL_ERROR_MESSAGE,
+  WRITE_ERROR_FAILURE,
+  downloadDocumentBuffer,
+  handleClassificationFailure,
+  sessionOutcome,
+  writeDocumentState,
+} from '@/lib/classification-write'
 
 // Forza runtime Node.js — @anthropic-ai/sdk e il download storage non sono
 // compatibili con Edge. maxDuration alto: una chiamata AI su un PDF di
@@ -131,19 +141,14 @@ function isValidClassificationResult(value: unknown): value is ClassificationRes
 // DocumentiClient.tsx).
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Non autenticato' }, { status: 401 })
-
-  const admin = createServiceClient()
-
-  const { data: profile } = await admin
-    .from('profiles')
-    .select('role, builder_id')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile || (profile.role !== 'super_admin' && profile.role !== 'admin')) {
-    return NextResponse.json({ error: 'Permessi insufficienti' }, { status: 403 })
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  const session = sessionOutcome({ user, error: userError })
+  if (session.kind === 'technical') {
+    console.error('[classify-document] verifica sessione fallita:', session.message)
+    return NextResponse.json({ error: TECHNICAL_ERROR_MESSAGE }, { status: 500 })
+  }
+  if (session.kind === 'unauthenticated') {
+    return NextResponse.json({ error: 'Non autenticato' }, { status: 401 })
   }
 
   const body = await req.json().catch(() => null)
@@ -152,8 +157,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Parametro documentId mancante' }, { status: 400 })
   }
 
+  // Scoping builder: service role bypassa RLS, la verifica sta in
+  // authorizeDocumentActor (src/lib/document-access.ts), fonte unica con
+  // extract-document. 403 per il ruolo sbagliato, 404 "Documento non trovato"
+  // per documento inesistente o fuori perimetro (stessa risposta per i due
+  // ruoli, per non rivelare all'admin documenti di altre residenze), 500
+  // "Errore tecnico, riprova" per un guasto di lettura: `error` mai scartato.
+  const admin = createServiceClient()
+  const actor = await authorizeDocumentActor(admin, session.userId, documentId, '[classify-document]')
+  if (!actor.ok) return NextResponse.json({ error: actor.error }, { status: actor.status })
+  const { doc } = actor
+
   // Tipo atteso (E1b, caricamento da una cella del quadro): facoltativo, ma se c'è
   // deve essere un doc_type ammesso. Un valore non valido è un 400, mai ignorato.
+  // Validato dopo l'autorizzazione: chi non può agire sul documento non impara
+  // nulla dal tipo di errore di un parametro.
   const expectedParse = parseExpectedDocType(body?.expected_doc_type)
   if (!expectedParse.ok) {
     return NextResponse.json(
@@ -162,43 +180,6 @@ export async function POST(req: NextRequest) {
     )
   }
   const expectedDocType = expectedParse.expected
-
-  const { data: doc } = await admin
-    .from('documents')
-    .select('id, title, storage_path, residence_id')
-    .eq('id', documentId)
-    .single()
-
-  if (!doc) return NextResponse.json({ error: 'Documento non trovato' }, { status: 404 })
-
-  // Scoping builder: service role bypassa RLS, la verifica va fatta qui
-  // (stesso pattern di /api/reconcile-documents e /api/fascicolo-pdf).
-  //
-  // Gemello di src/app/api/report/route.ts:142-149 (autorizzazione admin-su-residenza
-  // dietro service client). Duplicazione consapevole: unificare in un helper condiviso
-  // in un commit dedicato, dopo la demo.
-  //
-  // Entrambi i rami rispondono 404 "Documento non trovato", non 403: è la
-  // convenzione già in uso qui, e tenerla uguale per i due ruoli evita di
-  // rivelare all'admin l'esistenza di documenti fuori dalle sue residenze.
-  if (profile.role === 'super_admin') {
-    const { data: residence } = await admin
-      .from('residences')
-      .select('id')
-      .eq('id', doc.residence_id)
-      .eq('builder_id', profile.builder_id)
-      .maybeSingle()
-
-    if (!residence) return NextResponse.json({ error: 'Documento non trovato' }, { status: 404 })
-  } else {
-    const { count } = await admin
-      .from('admin_assignments')
-      .select('id', { count: 'exact', head: true })
-      .eq('profile_id', user.id)
-      .eq('residence_id', doc.residence_id)
-
-    if (!count || count === 0) return NextResponse.json({ error: 'Documento non trovato' }, { status: 404 })
-  }
 
   // Corto circuito, non unico discriminante: chiave assente e chiave vuota
   // (es. riga duplicata in .env.local) vanno trattate come lo stesso caso,
@@ -209,36 +190,37 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Servizio di classificazione non disponibile', cause: 'service_unavailable' }, { status: 503 })
   }
 
-  await admin.from('documents').update({ classification_status: 'in_corso' }).eq('id', documentId)
+  // Se questa scrittura fallisce non si spende la chiamata AI e non c'è nulla
+  // da riportare indietro: il documento non è mai entrato in 'in_corso'.
+  try {
+    await writeDocumentState(admin, documentId, { classification_status: 'in_corso' }, 'in_corso')
+  } catch (err) {
+    if (err instanceof ClassificationWriteError) {
+      return NextResponse.json(WRITE_ERROR_FAILURE.body, { status: WRITE_ERROR_FAILURE.status })
+    }
+    throw err
+  }
 
   try {
-    const { data: fileBlob, error: downloadError } = await admin.storage
-      .from('documents')
-      .download(doc.storage_path)
-
-    if (downloadError || !fileBlob) {
-      throw new Error(`Errore download storage: ${downloadError?.message ?? 'sconosciuto'}`)
-    }
-
-    const arrayBuffer = await fileBlob.arrayBuffer()
+    const arrayBuffer = await downloadDocumentBuffer(admin, doc.storage_path)
 
     if (!hasPdfMagicBytes(arrayBuffer)) {
-      await admin.from('documents').update({
+      await writeDocumentState(admin, documentId, {
         classification_status: 'da_revisionare',
         extracted_metadata: {
           skipped_reason: 'tipo file non supportato per classificazione automatica',
         },
-      }).eq('id', documentId)
+      }, 'da_revisionare (non PDF)')
       return NextResponse.json({ status: 'da_revisionare', reason: 'not_a_pdf' })
     }
 
     if (arrayBuffer.byteLength > MAX_PDF_BYTES_FOR_API) {
-      await admin.from('documents').update({
+      await writeDocumentState(admin, documentId, {
         classification_status: 'da_revisionare',
         extracted_metadata: {
           nota: 'PDF oltre 32MB: limite della richiesta API, classificazione automatica saltata',
         },
-      }).eq('id', documentId)
+      }, 'da_revisionare (oltre 32MB)')
       return NextResponse.json({ status: 'da_revisionare', reason: 'file_too_large' })
     }
 
@@ -333,7 +315,7 @@ export async function POST(req: NextRequest) {
       partita_iva_installatore: isDichiarazioneConformita ? normalizeVatNumber(parsed.partita_iva_installatore) : null,
     }
 
-    await admin.from('documents').update({
+    await writeDocumentState(admin, documentId, {
       classification_status: finalStatus,
       doc_type: parsed.doc_type,
       // Colonna `sistema` = verità (per ora, dalla proposta AI; l'umano la
@@ -342,7 +324,7 @@ export async function POST(req: NextRequest) {
       sistema: parsed.sistema,
       classification_confidence: parsed.confidence,
       extracted_metadata: extractedMetadata,
-    }).eq('id', documentId)
+    }, 'classificazione finale')
 
     // Proposta di unità dal testo del verbale (E1b). Mai un'assegnazione, e un
     // guasto qui non cambia l'esito della classificazione già scritta.
@@ -361,22 +343,10 @@ export async function POST(req: NextRequest) {
       usage: response.usage,
     })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Errore sconosciuto'
-
-    if (isServiceUnavailableError(err)) {
-      // Il servizio è il problema, non il documento: nessuno stato zombie su
-      // 'in_corso', ma nemmeno 'fallita' (che significherebbe "documento non
-      // classificabile"). Rollback a 'non_classificato' per farlo rientrare
-      // nella coda normale non appena il servizio torna disponibile.
-      console.error(`[classify-document] servizio non disponibile (documentId=${documentId}):`, message)
-      await admin.from('documents').update({ classification_status: 'non_classificato' }).eq('id', documentId)
-      return NextResponse.json({ error: message, cause: 'service_unavailable' }, { status: 503 })
-    }
-
-    // Nessuno stato zombie: qualunque errore sul documento (download, parsing,
-    // schema non conforme, refusal) risolve sempre in 'fallita' — mai output
-    // non validato scritto in doc_type.
-    await admin.from('documents').update({ classification_status: 'fallita' }).eq('id', documentId)
-    return NextResponse.json({ error: message, cause: 'document_error' }, { status: 502 })
+    // Nessuno stato zombie su 'in_corso': ogni ramo riporta il documento in
+    // coda ('non_classificato': scrittura o storage fallito, servizio AI giù)
+    // o lo chiude ('fallita': errore sul documento). Rollback loggato se fallisce.
+    const failure = await handleClassificationFailure(admin, documentId, err, isServiceUnavailableError(err))
+    return NextResponse.json(failure.body, { status: failure.status })
   }
 }

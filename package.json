@@ -23,6 +23,7 @@
     "verify:contrast": "node scripts/verify-cell-contrast.mjs",
     "verify:unitdocs": "node --experimental-strip-types --no-warnings scripts/verify-unit-documents.mjs",
     "verify:schede": "node --experimental-strip-types --no-warnings scripts/verify-residence-export.mjs",
+    "verify:classifywrite": "node --experimental-strip-types --no-warnings scripts/verify-classify-write.mjs",
     "verify:batch": "node --experimental-strip-types --no-warnings scripts/verify-batch-failures.mjs",
     "verify:docunit": "node --experimental-strip-types --no-warnings scripts/verify-document-unit.mjs",
     "verify:docdelete": "node --experimental-strip-types --no-warnings scripts/verify-document-delete.mjs",

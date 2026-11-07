@@ -4,10 +4,10 @@
  * super_admin del builder proprietario della residenza, oppure admin
  * assegnato a quella residenza.
  *
- * Stesso perimetro di classify-document (route.ts, blocco "Scoping builder").
- * Questa è la fonte per il codice NUOVO (extract-document); la copia in
- * classify-document non è stata toccata — resta byte-identica per decisione
- * del 18/09 — ed è candidata a migrare qui in un commit di sola pulizia.
+ * Fonte unica per extract-document e classify-document. classify-document
+ * ha migrato qui la sua copia inline (deroga alla regola "byte-identica" del
+ * 18/09, approvata, commit fix classify): la copia scartava `error` e
+ * trasformava un guasto tecnico in 401/403/404.
  * api/report usa già authorizeResidenceActor, più sotto.
  *
  * Convenzione ereditata: entrambi i rami negativi rispondono 404 "Documento
@@ -104,8 +104,8 @@ export async function authorizeDocumentActor(
 // Livello RESIDENZA: super_admin del builder proprietario, oppure admin
 // assegnato alla residenza. Per le route che agiscono sulla residenza intera
 // (fascicolo-pdf, documenti-xlsx, report). Fonte unica per il codice nuovo;
-// le copie ancora inline in classify-document e manutenzioni/actions.ts
-// sono candidate a migrare qui in un commit di sola pulizia.
+// la copia ancora inline in manutenzioni/actions.ts è candidata a migrare
+// qui in un commit di sola pulizia.
 //
 // Convenzione di stato ereditata da fascicolo-pdf, la prima route migrata,
 // così che la migrazione sia una prova di equivalenza: 403 "Accesso negato"
