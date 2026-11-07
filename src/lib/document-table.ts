@@ -165,7 +165,7 @@ export type BulkAssignSummary = { kind: 'success' | 'warning' | 'error'; message
 
 const MAX_NAMES_IN_MESSAGE = 3
 
-function endSentence(text: string): string {
+export function endSentence(text: string): string {
   return text.endsWith('.') ? text : text + '.'
 }
 
