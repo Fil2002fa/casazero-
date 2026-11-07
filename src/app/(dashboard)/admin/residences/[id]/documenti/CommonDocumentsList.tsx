@@ -20,18 +20,21 @@ import { pluralize } from '@/lib/pluralize'
 // common-documents.ts (verify:common): qui solo lo schermo. Il contatore del
 // tab e quello di questa pagina vengono dallo stesso risultato.
 //
-// Riga caricata: tutta la riga apre il pannello laterale. Il click vive sul <li>;
-// il bottone col nome serve alla tastiera e agli screen reader (Invio e Spazio
-// generano un click che risale alla riga): nessun elemento interattivo ne
-// contiene un altro. Le azioni di riga (Non applicabile) stanno in un
-// contenitore fratello che ferma la propagazione, come in ReviewList.
+// Riga caricata: tutta la riga apre il pannello laterale. Riga mancante: tutta la
+// riga apre il caricamento con "Parti comuni" e il tipo della voce già scelti
+// (onUpload, lo stesso percorso della cella mancante del quadro). Il click vive
+// sul <li>; il bottone col nome serve alla tastiera e agli screen reader (Invio e
+// Spazio generano un click che risale alla riga): nessun elemento interattivo ne
+// contiene un altro. "Apri" e "Carica" sono etichette visive della riga. Le azioni
+// di riga (Non applicabile) stanno in un contenitore fratello che ferma la
+// propagazione, come in ReviewList.
 // Se la checklist cita un documento che la lista non ha più (le due letture sono
 // separate) la riga resta "caricata" ma non è cliccabile: niente bottone, niente
 // apertura. Si risistema al prossimo refresh.
 
 const FOCUS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium'
 
-export function CommonDocumentsList({ result, residenceId, unclassifiedCount, markedByNames, canManageChecklist, selectedId, onOpen }: {
+export function CommonDocumentsList({ result, residenceId, unclassifiedCount, markedByNames, canManageChecklist, selectedId, onOpen, onUpload }: {
   // null = lettura della checklist fallita: mai "niente da caricare".
   result: CommonDocuments | null
   residenceId: string
@@ -40,6 +43,7 @@ export function CommonDocumentsList({ result, residenceId, unclassifiedCount, ma
   canManageChecklist: boolean
   selectedId: string | null
   onOpen: (id: string) => void
+  onUpload: (row: CommonDocumentRow) => void
 }) {
   const router = useRouter()
   const [excludedOpen, setExcludedOpen] = useState(false)
@@ -103,6 +107,7 @@ export function CommonDocumentsList({ result, residenceId, unclassifiedCount, ma
               canManageChecklist={canManageChecklist}
               selected={row.doc !== null && row.doc.id === selectedId}
               onOpen={onOpen}
+              onUpload={onUpload}
             />
           ))}
         </ul>
@@ -147,15 +152,16 @@ export function CommonDocumentsList({ result, residenceId, unclassifiedCount, ma
 
 // Una voce attesa. Caricata: verde chiaro, spunta, nome della voce, nome del file
 // in piccolo, "Apri" come etichetta visiva della riga. Mancante: pallino
-// tratteggiato, nome della voce, "Da caricare". La nota di "Non applicabile" si
+// tratteggiato, nome della voce, "Da caricare", "Carica" come etichetta. La nota di "Non applicabile" si
 // precompila da exp.note a ogni apertura del form, non solo al mount: l'action fa
 // upsert e un form vuoto cancellerebbe una nota già presente.
-function CommonRow({ row, residenceId, canManageChecklist, selected, onOpen }: {
+function CommonRow({ row, residenceId, canManageChecklist, selected, onOpen, onUpload }: {
   row: CommonDocumentRow
   residenceId: string
   canManageChecklist: boolean
   selected: boolean
   onOpen: (id: string) => void
+  onUpload: (row: CommonDocumentRow) => void
 }) {
   const router = useRouter()
   const exp = row.expectation
@@ -193,7 +199,11 @@ function CommonRow({ row, residenceId, canManageChecklist, selected, onOpen }: {
   const base = loaded
     ? 'border-brand-medium/30 bg-brand-light/50'
     : 'border-dashed border-border bg-surface'
-  const interactive = openable ? 'cursor-pointer hover:border-brand-medium hover:shadow-sm transition-shadow' : ''
+  // Una riga mancante apre sempre il caricamento; una caricata senza documento non fa niente.
+  const uploadable = !loaded
+  const interactive = openable || uploadable
+    ? 'cursor-pointer hover:border-brand-medium hover:shadow-sm transition-shadow'
+    : ''
 
   const content = (
     <>
@@ -214,12 +224,15 @@ function CommonRow({ row, residenceId, canManageChecklist, selected, onOpen }: {
       {openable && (
         <span className="flex-shrink-0 text-xs font-medium text-brand-dark" aria-hidden="true">Apri</span>
       )}
+      {uploadable && (
+        <span className="flex-shrink-0 text-xs font-medium text-brand-dark" aria-hidden="true">Carica</span>
+      )}
     </>
   )
 
   return (
     <li
-      onClick={openable ? () => onOpen(doc.id) : undefined}
+      onClick={openable ? () => onOpen(doc.id) : uploadable ? () => onUpload(row) : undefined}
       className={`rounded-lg border p-3 ${base} ${interactive} ${selected ? 'ring-2 ring-brand-medium' : ''}`}
     >
       {openable ? (
@@ -227,6 +240,14 @@ function CommonRow({ row, residenceId, canManageChecklist, selected, onOpen }: {
           type="button"
           aria-pressed={selected}
           aria-label={`${row.label}, caricato${row.scopeLabel ? `, ${row.scopeLabel}` : ''}, ${doc.file_name}. Apri il documento`}
+          className={`flex w-full items-start gap-2.5 text-left rounded ${FOCUS}`}
+        >
+          {content}
+        </button>
+      ) : uploadable ? (
+        <button
+          type="button"
+          aria-label={`${row.label}${row.scopeLabel ? `, ${row.scopeLabel}` : ''}, da caricare. Carica il documento`}
           className={`flex w-full items-start gap-2.5 text-left rounded ${FOCUS}`}
         >
           {content}

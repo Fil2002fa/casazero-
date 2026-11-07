@@ -23,7 +23,7 @@ import { ReviewList } from './ReviewList'
 import { CommonDocumentsList } from './CommonDocumentsList'
 import { documentNameText, presentDocTypes } from '@/lib/document-table'
 import { reviewGroups } from '@/lib/document-review'
-import { commonBadge, commonDocuments } from '@/lib/common-documents'
+import { commonBadge, commonDocuments, type CommonDocumentRow } from '@/lib/common-documents'
 import { otherVersions, type UnitExpectation } from '@/lib/unit-documents'
 import { batchFailureMessage, classifyBatchFailure, type BatchFailureReason } from '@/lib/batch-failures'
 import {
@@ -102,6 +102,13 @@ type UploadContext = {
   unitId: string | null
   category: DocumentCategory
   fileDate: string | null
+}
+
+// Cosa precarica la modale: la voce attesa (tipo, nome, categoria se nota) e
+// l'unità, o null per una voce di Parti comuni. UnitExpectation vi rientra.
+type UploadPreset = {
+  unitId: string | null
+  expectation: { docType: DocType; label: string; category: DocumentCategory | null }
 }
 
 // Esito di un singolo file: lo status pilota l'icona di TaskRow, documentId
@@ -236,8 +243,10 @@ export function DocumentiClient({
   // --- upload modal state ---
   const [showModal, setShowModal] = useState(false)
   const [scope, setScope]         = useState<'residenza' | 'unita'>('residenza')
-  // Caricamento aperto da una cella vuota del quadro: unità e voce già scelte.
-  const [uploadPreset, setUploadPreset] = useState<{ unitId: string; expectation: UnitExpectation } | null>(null)
+  // Caricamento aperto da una cella vuota del quadro (unità e voce già scelte) o da
+  // una riga mancante di Parti comuni (unitId null: documento della residenza).
+  // category null = tipo senza categoria mappata: nella modale NON si precarica.
+  const [uploadPreset, setUploadPreset] = useState<UploadPreset | null>(null)
   const [tasks, setTasks]         = useState<FileTask[]>([])
   const [submitted, setSubmitted] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
@@ -358,6 +367,16 @@ export function DocumentiClient({
     setSubmitted(false)
     setUploadPreset({ unitId, expectation })
     setScope('unita')
+    setShowModal(true)
+  }
+
+  // Riga mancante di Parti comuni: stessa modale, destinazione Residenza (nessuna
+  // unità) e tipo della voce già scelto. Stessa strada dei documenti di residenza.
+  function openUploadForCommon(row: CommonDocumentRow) {
+    setTasks([])
+    setSubmitted(false)
+    setUploadPreset({ unitId: null, expectation: { docType: row.docType, label: row.label, category: row.category } })
+    setScope('residenza')
     setShowModal(true)
   }
 
@@ -664,7 +683,11 @@ export function DocumentiClient({
                 {uploadPreset && (
                   <p className="text-xs text-text-secondary bg-background rounded-lg px-3 py-2">
                     Stai caricando: <span className="font-medium text-text-primary">{uploadPreset.expectation.label}</span>
-                    {' '}per <span className="font-medium text-text-primary">{units.find(u => u.id === uploadPreset.unitId)?.label ?? 'l’unità scelta'}</span>.
+                    {' '}per <span className="font-medium text-text-primary">
+                      {uploadPreset.unitId === null
+                        ? 'Parti comuni'
+                        : units.find(u => u.id === uploadPreset.unitId)?.label ?? 'l’unità scelta'}
+                    </span>.
                     Il tipo lo conferma la classificazione dopo il caricamento.
                   </p>
                 )}
@@ -720,9 +743,13 @@ export function DocumentiClient({
                   <select
                     name="category"
                     required
-                    defaultValue={uploadPreset?.expectation.category}
+                    defaultValue={uploadPreset ? (uploadPreset.expectation.category ?? '') : undefined}
                     className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
                   >
+                    {/* Tipo senza categoria mappata: nessun valore indovinato, si sceglie. */}
+                    {uploadPreset && uploadPreset.expectation.category === null && (
+                      <option value="" disabled>Scegli categoria…</option>
+                    )}
                     {CATEGORIES.map(c => (
                       <option key={c.value} value={c.value}>{c.label}</option>
                     ))}
@@ -1039,6 +1066,7 @@ export function DocumentiClient({
           canManageChecklist={canManageChecklist}
           selectedId={selectedId}
           onOpen={setSelectedId}
+          onUpload={openUploadForCommon}
         />
       </div>
 
