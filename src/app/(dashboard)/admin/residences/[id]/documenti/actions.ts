@@ -6,6 +6,7 @@ import { createServiceClient } from '@/lib/supabase/admin'
 import { requireCaller } from '@/lib/require-caller'
 import { authorizeDocumentActor, PG_INVALID_TEXT_REPRESENTATION } from '@/lib/document-access'
 import { checkUnitAssignment, documentUnitChangeEventUnitId, documentUnitChangePayload } from '@/lib/document-unit'
+import { checkDismissProposal } from '@/lib/document-review'
 import { extractionIsCurrent } from '@/lib/document-extraction'
 import {
   documentCorrectionPayload,
@@ -1188,6 +1189,77 @@ export async function setDocumentUnit(input: {
   })
 
   if (revalidate) revalidatePath(`/admin/residences/${doc.residence_id}/documenti`)
+  return { success: true }
+}
+
+// ============================================================
+// Ignora la proposta di unità (E1b, tab "Da rivedere", commit 8b).
+//
+// Scrive documents.unit_proposal_dismissed_at = now(): "una persona ha scelto
+// di lasciare questo documento senza unità". Da quel momento il documento
+// esce da "Da rivedere" e la proposta non si ripropone (refreshUnitProposal e
+// canReceiveUnitProposal guardano la stessa colonna). Non tocca unit_id, la
+// proposta e la fascia; non scrive nel registro attività (decisione E1b-8:
+// non cambia nessun dato del fascicolo) e non ha "Annulla".
+//
+// Gate come setDocumentUnit: requireCaller + authorizeDocumentActor, poi la
+// scrittura passa dal client di SESSIONE, così la policy "documents: admin e
+// super_admin gestiscono" resta la seconda barriera. L'UPDATE ripete nel WHERE
+// le condizioni (senza unità, non ignorato): se nel frattempo qualcuno ha
+// assegnato il documento, non scrive. Zero righe = si rilegge lo stato per
+// distinguere "già ignorato" (successo), "ha già un'unità" (esito di dominio)
+// e "filtrato dalla RLS" (non accessibile).
+// ============================================================
+
+export type DismissUnitProposalResult = { success: true } | { error: string }
+
+export async function dismissDocumentUnitProposal(input: {
+  documentId: string
+}): Promise<DismissUnitProposalResult> {
+  const { documentId } = input ?? {}
+  if (typeof documentId !== 'string' || documentId === '') return { error: 'Parametri non validi' }
+
+  const caller = await requireCaller('dismissDocumentUnitProposal', ['admin', 'super_admin'])
+  if ('error' in caller) return { error: caller.error }
+
+  const svc = createServiceClient()
+  const actor = await authorizeDocumentActor(svc, caller.userId, documentId, '[dismissDocumentUnitProposal]')
+  if (!actor.ok) return { error: actor.error }
+  const { doc } = actor
+
+  const supabase = await createClient()
+  const { data: updated, error: updateError } = await supabase
+    .from('documents')
+    .update({ unit_proposal_dismissed_at: new Date().toISOString() })
+    .eq('id', documentId)
+    .eq('residence_id', doc.residence_id)
+    .is('unit_id', null)
+    .is('unit_proposal_dismissed_at', null)
+    .select('id')
+  if (updateError) {
+    console.error('[dismissDocumentUnitProposal] update fallito', { documentId, code: updateError.code, message: updateError.message })
+    return { error: UNIT_TECH_ERROR }
+  }
+
+  if (!updated || updated.length === 0) {
+    const { data: state, error: stateError } = await svc
+      .from('documents')
+      .select('unit_id, unit_proposal_dismissed_at')
+      .eq('id', documentId)
+      .maybeSingle()
+    if (stateError) {
+      console.error('[dismissDocumentUnitProposal] rilettura fallita', { documentId, code: stateError.code, message: stateError.message })
+      return { error: UNIT_TECH_ERROR }
+    }
+    if (!state) return { error: 'Documento non trovato' }
+    const check = checkDismissProposal(state as { unit_id: string | null; unit_proposal_dismissed_at: string | null })
+    if (!check.ok) return { error: check.error }
+    if (check.change === 'invariata') return { success: true }
+    // Senza unità e non ignorato, ma l'UPDATE non ha toccato niente: la RLS ha filtrato la riga.
+    return { error: 'Documento non trovato o non accessibile' }
+  }
+
+  revalidatePath(`/admin/residences/${doc.residence_id}/documenti`)
   return { success: true }
 }
 

@@ -89,6 +89,26 @@ export function acceptAllCandidates(docs: readonly DocRow[], units: readonly Uni
   return out
 }
 
+export const DISMISS_HAS_UNIT_ERROR = 'Il documento ha già un’unità: non c’è niente da ignorare.'
+
+export type DismissCheck =
+  | { ok: true; change: 'ignorata' | 'invariata' }
+  | { ok: false; error: string }
+
+/**
+ * Se "Ignora" si può applicare al documento così com'è ORA (letto dal DB).
+ * Ignorare vuol dire "lasciare questo documento senza unità": non ha senso se
+ * l'unità c'è già. Già ignorato = invariata, e l'action risponde successo
+ * senza riscrivere niente (idempotente, come setDocumentUnit).
+ */
+export function checkDismissProposal(
+  doc: Pick<DocRow, 'unit_id' | 'unit_proposal_dismissed_at'>,
+): DismissCheck {
+  if (doc.unit_id !== null) return { ok: false, error: DISMISS_HAS_UNIT_ERROR }
+  if (doc.unit_proposal_dismissed_at !== null) return { ok: true, change: 'invariata' }
+  return { ok: true, change: 'ignorata' }
+}
+
 /**
  * Un solo messaggio per tutto il ciclo di "Accetta tutte": "N assegnati, M
  * falliti: nomi". Con dei fallimenti il toast è persistente (i nomi vanno

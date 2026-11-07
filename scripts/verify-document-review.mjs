@@ -15,6 +15,7 @@
 //
 // Exit: 0 = ok; 1 = caso divergente; 2 = import fallito.
 // ============================================================
+import { readFileSync } from 'node:fs'
 import { register } from 'node:module'
 register('./ts-resolve-hooks.mjs', import.meta.url)
 
@@ -25,7 +26,10 @@ try {
   console.error(`\n✗ Impossibile importare il modulo: ${err.message}`)
   process.exit(2)
 }
-const { BAND_LABELS, isInReview, reviewDocs, reviewProposal, acceptAllCandidates, summarizeAcceptAll } = M
+const {
+  BAND_LABELS, isInReview, reviewDocs, reviewProposal, acceptAllCandidates, summarizeAcceptAll,
+  checkDismissProposal, DISMISS_HAS_UNIT_ERROR,
+} = M
 
 let fallimenti = 0
 let eseguiti = 0
@@ -140,6 +144,40 @@ check('riepilogo: tutti falliti',
 check('riepilogo: più di 3 nomi',
   summarizeAcceptAll({ assigned: 0, failures: ['A', 'B', 'C', 'D', 'E'].map(name => ({ name, error: 'x' })) }).message,
   'Nessun documento assegnato, 5 falliti: A, B, C e altri 2. Motivo: x.')
+
+// --- Ignora: regola pura ---
+check('ignora: senza unità e non ignorato',
+  checkDismissProposal({ unit_id: null, unit_proposal_dismissed_at: null }), { ok: true, change: 'ignorata' })
+check('ignora: già ignorato = invariata (successo, nessuna riscrittura)',
+  checkDismissProposal({ unit_id: null, unit_proposal_dismissed_at: '2026-11-07T10:00:00Z' }), { ok: true, change: 'invariata' })
+check('ignora: con unità = errore di dominio',
+  checkDismissProposal({ unit_id: 'u1', unit_proposal_dismissed_at: null }), { ok: false, error: DISMISS_HAS_UNIT_ERROR })
+check('ignora: con unità e già ignorato = errore di dominio',
+  checkDismissProposal({ unit_id: 'u1', unit_proposal_dismissed_at: '2026-11-07T10:00:00Z' }), { ok: false, error: DISMISS_HAS_UNIT_ERROR })
+
+// --- Ignora: la server action non fa altro che scrivere dismissed_at ---
+// Guardia sul sorgente: l'action non deve scrivere unit_id, la proposta, il
+// registro attività né il fascicolo, e deve ripetere le condizioni nel WHERE.
+const actionsSrc = readFileSync(
+  new URL('../src/app/(dashboard)/admin/residences/[id]/documenti/actions.ts', import.meta.url), 'utf8',
+)
+const start = actionsSrc.indexOf('export async function dismissDocumentUnitProposal')
+const end = actionsSrc.indexOf('\n// ====', start)
+const body = start === -1 ? '' : actionsSrc.slice(start, end === -1 ? undefined : end)
+check('action: esiste', start !== -1, true)
+check('action: gate di ruolo admin e super_admin',
+  body.includes("requireCaller('dismissDocumentUnitProposal', ['admin', 'super_admin'])"), true)
+check('action: perimetro via authorizeDocumentActor', body.includes('authorizeDocumentActor('), true)
+check('action: scrive solo unit_proposal_dismissed_at',
+  body.includes('.update({ unit_proposal_dismissed_at: new Date().toISOString() })'), true)
+check('action: WHERE senza unità e non ignorato',
+  body.includes(".is('unit_id', null)") && body.includes(".is('unit_proposal_dismissed_at', null)"), true)
+check('action: update dal client di sessione',
+  /const supabase = await createClient\(\)\s+const \{ data: updated, error: updateError \} = await supabase\s+\.from\('documents'\)\s+\.update/.test(body), true)
+check('action: nessun evento nel registro', body.includes('logActivityEvent('), false)
+check('action: non tocca completions', body.includes('.from(\'completions\')'), false)
+check('action: non scrive unit_id né la proposta',
+  /\.update\(\{[^}]*(unit_id|proposed_unit_id|unit_proposal_confidence)/.test(body), false)
 
 if (fallimenti > 0) {
   console.error(`\n✗ ${fallimenti} casi divergenti su ${eseguiti}`)
