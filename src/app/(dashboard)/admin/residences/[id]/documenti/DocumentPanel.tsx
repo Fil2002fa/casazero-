@@ -8,6 +8,7 @@ import { useToast } from '@/components/ui/Toast'
 import { humanizeDocumentTitle } from '@/lib/documentTitle'
 import { formatDateIT } from '@/lib/formatDate'
 import { pluralize } from '@/lib/pluralize'
+import { BAND_LABELS } from '@/lib/document-review'
 import {
   DOC_TYPES,
   DOC_TYPE_LABELS,
@@ -58,8 +59,6 @@ import { DocumentPreview } from './DocumentPreview'
 
 const INPUT_CLASS =
   'w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium'
-
-const BAND_LABELS = { alta: 'Alta', media: 'Media', bassa: 'Bassa' } as const
 
 function aiLabel(field: CorrectionField): string {
   if (field.ai === null) return 'non riportato'
