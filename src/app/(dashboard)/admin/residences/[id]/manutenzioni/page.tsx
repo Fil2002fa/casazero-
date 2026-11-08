@@ -6,6 +6,7 @@ import { requireRole } from '@/lib/auth'
 import { ManutenzioniClient } from './ManutenzioniClient'
 import type { ItemRow, CompletionRow, FilterState, AttentionModeFilter } from './ManutenzioniClient'
 import { normalizeEmbed } from '@/lib/postgrest-embed'
+import { todayISO } from '@/lib/maintenance-status'
 
 export const metadata: Metadata = { title: 'Panoramica manutenzioni' }
 
@@ -121,6 +122,7 @@ export default async function ResidenceManutenzioniPage({ params, searchParams }
         initialFilter={initialFilter}
         initialModeFilter={initialModeFilter}
         canManagePlan={profile.role === 'super_admin'}
+        today={todayISO()}
       />
     </>
   )

@@ -7,6 +7,7 @@ import { AwaitingDeliveryLine, AwaitingDeliveryChip } from '@/components/Awaitin
 import { FilterCounters } from '@/components/FilterCounters'
 import { Select } from '@/components/ui/Input'
 import { ItemConfigForm } from './ItemConfigForm'
+import { MaintenanceList } from './MaintenanceList'
 import { setTemplateActivationForResidence } from '../fornitori/actions'
 import { sollecitaItem, type SollecitoResult } from './actions'
 import { isOverdueLive, isInCorso, isAwaitingDelivery, resolveCompletionMode } from '@/lib/maintenance-status'
@@ -101,6 +102,9 @@ interface Props {
   // senza default, così un chiamante che dimentica di passarla fallisce in build
   // invece di nascondere in silenzio i bottoni al super_admin.
   canManagePlan: boolean
+  // Data di oggi (ISO) calcolata dal server, per la lista per voce: stessa
+  // data in server render e client, niente mismatch di hydration.
+  today: string
 }
 
 // Azione di composizione piano in transito verso il modale di conferma (preview-before-apply).
@@ -196,7 +200,7 @@ function sollecitaConfirmCopy(mode: CompletionMode, unitLabel: string, title: st
   }
 }
 
-export function ManutenzioniClient({ residenceId, residenceName, items, completions, suppliers, unitPrimaryNames, initialFilter = null, initialModeFilter = null, canManagePlan }: Props) {
+export function ManutenzioniClient({ residenceId, residenceName, items, completions, suppliers, unitPrimaryNames, initialFilter = null, initialModeFilter = null, canManagePlan, today: todayServer }: Props) {
   const { showToast } = useToast()
   // Un item per volta: Set di id in corso, cosi' il disabled riguarda solo il
   // pulsante cliccato e non l'intera zona attenzione.
@@ -208,6 +212,14 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
   const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null)
   const [expandedCompletion, setExpandedCompletion] = useState<string | null>(null)
   const [planView, setPlanView] = useState<'attive' | 'escluse'>('attive')
+  // Scheda Attive: la lista per voce è la vista di default; "per unità" è la
+  // vista precedente (zona attenzione, drill-down con Configura per unità,
+  // Completate), che resta raggiungibile finché Configura per voce non la
+  // sostituisce (commit 3a). I link con ?filtro= o ?modalita= (es. la card
+  // Scadute della residenza) aprono quella: i filtri vivono solo lì.
+  const [attiveView, setAttiveView] = useState<'lista' | 'per_unita'>(
+    initialFilter !== null || initialModeFilter !== null ? 'per_unita' : 'lista'
+  )
   // La vista Escluse è composizione del piano, riservata al costruttore: se lo stato
   // finisse su 'escluse' per qualunque via (oggi nessuna, ma niente lo garantisce in
   // futuro — es. un parametro URL), l'admin va forzato su 'attive' invece di atterrare
@@ -399,8 +411,39 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
         </div>
       )}
 
-      {effectivePlanView === 'attive' && (
+      {effectivePlanView === 'attive' && attiveView === 'lista' && (
+        <MaintenanceList
+          items={items}
+          completions={completions}
+          today={todayServer}
+          unitOptions={unitOptions}
+          selectedUnitId={selectedUnitId}
+          onSelectUnit={id => { setSelectedUnitId(id); setExpandedTemplate(null) }}
+          // Il pannello di dettaglio arriva col commit 2a: per ora il click non apre nulla.
+          onOpen={() => {}}
+          headerAction={
+            <button
+              type="button"
+              onClick={() => setAttiveView('per_unita')}
+              className="rounded-lg border border-border bg-surface px-3 h-11 md:h-9 text-sm font-medium text-brand-dark hover:bg-background cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium"
+            >
+              Configura per unità
+            </button>
+          }
+        />
+      )}
+
+      {effectivePlanView === 'attive' && attiveView === 'per_unita' && (
       <>
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => setAttiveView('lista')}
+          className="rounded-lg border border-border bg-surface px-3 h-11 md:h-9 text-sm font-medium text-brand-dark hover:bg-background cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium"
+        >
+          Torna alla lista
+        </button>
+      </div>
       {/* Contatori-filtro: stessa partizione della lista, toggle se già attivi */}
       <FilterCounters
         label="Filtra il piano per stato"
