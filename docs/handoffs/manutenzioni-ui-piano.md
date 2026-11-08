@@ -56,6 +56,7 @@ Regola del ritardo e anticipo non hanno commit: nessuna colonna `due_rule` né `
 
 - 0: piano, `7965959`.
 - 1: lista costruttore, `d354310`. Ordine dei gruppi deciso da Filippo: Scadute, Entro 30 giorni, In corso, Più avanti, In attesa di consegna, Consigliate (è anche il rango dello stato peggiore di una voce). `verify:maintlist` a 89 casi.
+- 2a: pannello di dettaglio, `2a086db`. `verify:maintdetail` a 68 casi, 9 mutazioni a mano rilevate con ripristino identico.
 
 ## 2a — pannello di dettaglio (piano approvato, nessuna migrazione)
 
@@ -107,3 +108,74 @@ Clic sulla riga → pannello a destra sopra la pagina (la lista non si sposta), 
 - "19 voci attive" in CLAUDE.md contro 35 nel DB (19 del catalogo v2 + 16 accese dalla migrazione 035).
 - CLAUDE.md dice che le viste residente e admin leggono ancora `priority`: il grep non trova letture reali (una `select('*')` non comparirebbe). Il dual-write resta finché Filippo non lo chiude.
 - CLAUDE.md dice "INSERT su `completions` solo ruolo admin": la policy ammette anche `client` (completamento del residente).
+
+## 3a — Configura per voce (FASE 0 chiusa il 2026-11-08, piano approvato con D1-D5, nessuna riga di codice scritta)
+
+Obiettivo: tab **Piano | Configura | Escluse**. In Configura una riga per voce (Voce, Ambito, Chi la chiude, Obbligo, Frequenza, Fornitore, Garanzia); clic → pannello laterale con Cosa (obbligo in sola lettura, info garanzia) e Chi e dove (chi la chiude, fornitore), un solo Salva. Frequenza fuori (3b). Solo super_admin del builder della residenza.
+
+### Riscontri
+
+1. **`updateMaintenanceItemConfig` oggi** (`fornitori/actions.ts:126-213`), riga per riga:
+   - Ruolo: `['admin','super_admin']` (`:151`), nessuno scope builder o residenza nel codice. `residenceId` serve solo a `revalidatePath` e ai log; il WHERE è `.eq('id', itemId)` (`:199`). L'unica barriera di scope è la RLS.
+   - **Mass-assignment (B53)**: `updatePayload = { ...data }` (`:155`). Il tipo TS non esiste a runtime: una chiamata costruita a mano può scrivere `status`, `next_due_date`, `obligation_type`, `due_basis_override` (super_admin) e ogni colonna non protetta dal trigger `czero_maintenance_items_role_column_guard`, che blocca solo id, template_id, residence_id, unit_id, created_at (tutti i ruoli), `activation_status` e `due_basis_override` (admin).
+   - Nessuna validazione: `completion_mode` solo dall'enum DB; `frequency_months` senza minimo (nel DB esiste 699 su teolo); `warranty_info` senza lunghezza; `supplier_id` solo FK (la FK ignora la RLS: un uuid di un fornitore di un altro builder si collega).
+   - Dual-write `:161-167`: `completion_mode` ha precedenza e scrive `priority = modeToPriority(mode)`; se arriva solo `priority` deriva la modalità. `modeToPriority`/`priorityToMode` sono private di quel file (`:14-32`).
+   - Ramo promemoria `:169-192`: se la priority effettiva è N1, `status='in_attesa'` e, con frequenza nota (payload, poi voce, poi template), `next_due_date = oggi + freq`, **per ogni riga toccata, sovrascrivendo la data esistente**. Nessun ramo per il passaggio inverso (da promemoria a residente o amministratore): data e status restano quelli del promemoria.
+   - Esito: `.select('id')` e 0 righe toccate = errore di dominio (`:206`).
+2. **`obligation_type` non è scritto da nessuna parte dell'app**: nessun `.update`/`.insert` lo include (grep in `src/`); `ItemConfigForm.tsx:10-15` lo dichiara "fatto normativo del catalogo"; `supabase/maintenance/riallinea_assi_voci.sql` (decisione del 31/10) lo ha messo NULL su tutte le voci. DB: 0 voci con `obligation_type` non nullo. Resta scrivibile solo a livello DB (la policy super_admin è ALL, quella admin UPDATE, il guard non lo copre). I lettori (lista, pannello, PDF, report, export) usano già `item ?? template`.
+3. **Admin e RLS**: la policy `items: admin aggiorna stato` (UPDATE, `czero_can_access_residence`) lascia a un admin assegnato scrivere via PostgREST `completion_mode`, `supplier_id`, `warranty_info`, `frequency_months`, `obligation_type`, `status`, `next_due_date`. Il gate nell'action è una barriera applicativa, non di sicurezza dei dati. Nessuna modifica RLS in questo lavoro; estendere il guard alle colonne di configurazione per l'admin è un candidato a migrazione a parte (restringe, non allarga), da decidere.
+4. **Registro attività**: `updateMaintenanceItemConfig` **non scrive in `activity_events`**. Scrive solo `setTemplateActivationForResidence` (`voce_archiviata`, `:277-292`). Il CHECK sugli event_type ha 13 valori, nessuno per la configurazione. Segnalato, non incluso nel 3a (aggiungere `voce_configurata` richiederebbe una migrazione come 049/051/053, più `ActivityEventType` e `activity-event-view.ts`).
+5. **Gate esistente da riusare**: `authorizeResidenceActor(admin, userId, residenceId, prefix)` (`document-access.ts:134`) restituisce `{ ok, residence, role }`, con il super_admin vincolato a `residence.builder_id === profile.builder_id` e 403/404/500 distinti. `checkAdminInScope` (`admin-scope.ts:20`) è invece il perimetro dei PROFILI admin, non delle residenze: qui non è il pattern giusto. Si usa `authorizeResidenceActor` con service client accettando solo `role === 'super_admin'`; le scritture passano dal client di sessione, così la RLS resta la seconda barriera.
+6. **Dati (SELECT di sola lettura, 8/11)**: 417 voci promemoria incluse, 0 con data passata, 27 su unità non consegnate (con data), 1 con completamenti; 742 voci non promemoria incluse, 0 in_corso, 0 senza data su unità consegnate; 0 voci di parti comuni con modalità residente. Il cron (`api/cron/daily/route.ts:97-114`) per i promemoria fa avanzare `next_due_date` di una frequenza e notifica solo se `status='in_attesa'`: un promemoria con status diverso non viene mai elaborato.
+7. **Drift noto**: le RPC di creazione unità (044) lasciano `completion_mode`/`obligation_type` NULL e non portano la configurazione per voce: una unità aggiunta dopo una configurazione per voce nasce con i valori del template, quindi comparirà "Valori diversi". Non gestito nel 3a.
+
+### Risposte alle sei domande
+
+1. **Come diventa per voce senza allargare cosa si scrive**: nuova action `configureVoce(residenceId, templateId, changes)`. Il client manda solo template e residenza più i campi cambiati; le righe le legge il server (`residence_id` + `template_id`), mai una lista di id dal client. Whitelist esplicita a mano (nessuno spread), validata: `completion_mode` ∈ enum (e `residente` rifiutato sulle parti comuni), `warranty_info` trim, massimo 500 caratteri, vuoto → NULL, `supplier_id` ∈ fornitori dello stesso builder della residenza (controllo con la RLS di sessione più `builder_id`) oppure NULL. `obligation_type`, `frequency_months`, `status`, `next_due_date`, `activation_status`, `due_basis_override`, `priority` non sono accettati dal client: `priority` la deriva il server dalla modalità (dual-write mantenuto, con `modeToPriority` spostato in `src/lib/completion-mode.ts` perché un file `'use server'` può esportare solo funzioni async). La vecchia action viene ristretta nel commit 3a-5.
+2. **Cambio di modalità da e verso promemoria** (sono le uniche righe con regole di data e status; tra residente e amministratore data e status non si toccano):
+   - **Verso promemoria**: per le righe incluse `status = in_attesa` sempre (il cron elabora solo `in_attesa`, quindi uno `scaduta` o `in_corso` resterebbe muto); `next_due_date` **resta** se è oggi o futura, **diventa oggi + frequenza** se è passata o nulla. Oggi la action la riporta a oggi + frequenza per tutte: per la voce azzererebbe le scadenze di ogni unità.
+   - **Da promemoria**: lo status resta `in_attesa`; la data resta, tranne sulle unità **non consegnate senza override** (`due_basis_override` nullo, `unitNotDelivered`) dove torna NULL ("In attesa di consegna", stessa regola del cancello di `setTemplateActivationForResidence:337-341` e di `planDeliveryRecalc`), così il passaggio non fa nascere una data su un'unità invenduta. Le righe con completamenti tengono la data (la riscrive il trigger). Anteprima prima di salvare: "N unità tornano in attesa di consegna, N risultano scadute subito".
+   - Le righe archiviate ricevono i campi di configurazione ma non le regole di data e status (alla re-inclusione `setTemplateActivationForResidence` le ricalcola da oggi).
+   - **Richiede una tua decisione (D3)**: è un comportamento nuovo rispetto a oggi.
+3. **Registro attività**: no, come al riscontro 4. Segnalato e basta.
+4. **Atomicità**: oggi un UPDATE per riga. Per voce, a parità di payload basta **un solo statement** `.update(...).eq('residence_id').eq('template_id')`, atomico. Con un cambio di modalità le righe hanno date diverse (bucket): più statement, non atomici in REST, e un fallimento a metà lascia la modalità cambiata e le date no; un secondo salvataggio non lo ripara perché vede la modalità già cambiata. Proposta: **una RPC `czero_configure_voce(...)`** (migrazione 054, additiva, `SECURITY INVOKER` così RLS e guard restano, controllo interno `czero_user_role() = 'super_admin'`, `REVOKE` ad anon). Il TS calcola il piano con l'helper puro e passa un jsonb `{id, completion_mode, priority, status, next_due_date, supplier_id, warranty_info}[]`; la funzione lo applica in un'unica transazione e restituisce le righe toccate. Se fallisce, nessuna riga cambia. **Richiede il tuo ok sulla migrazione (D2)**; senza, si ripiega su una sequenza di statement con rollback manuale, che sconsiglio.
+5. **Fornitore per voce**: una scelta per tutte le unità. Dove le unità divergono (Santa Giustina) il select parte su "Valori diversi tra le unità" (valore sentinella, mai inviato); se l'utente non lo cambia il campo non entra nel payload e **nessuna riga viene toccata per quel campo** (se nessun campo cambia, nessuna scrittura e Salva disabilitato). Scegliere "— nessuno —" scrive NULL su tutte.
+6. **Helper puro** `src/lib/maintenance-config.ts` (più `src/lib/completion-mode.ts`): `uniformValue(values)` (comune o diversi, con il valore), `buildConfigRows(items)` (righe del tab), `buildConfigChanges(current, draft)` (solo i campi toccati, sentinella "diversi" mai scritta), `validateConfigChanges` (whitelist), `planConfigWrite(rows, changes, today)` (per riga: campi, priority derivata, regole di data e status del punto 2, riepilogo per l'anteprima). `scripts/verify-maintenance-config.mjs` e `npm run verify:maintconfig`, con mutazioni a mano su tutte le regole (ramo promemoria senza reset dello status, cancello di consegna, spread del payload, campo non toccato che finisce scritto, sentinella scritta) e ripristino identico.
+
+### Tab e percorso verso la frequenza
+
+- Controllo a segmenti, solo per chi ha `canManagePlan` (oggi già così: l'admin non vede nessuna scheda): **Piano** (l'attuale "Attive", rinominata), **Configura** (nuova), **Escluse** (invariata, azioni attuali comprese: il commit 4 la riscrive).
+- Frequenza fino al 3b: il bottone "Configura per unità" (testata della lista e fondo del pannello) resta, ribattezzato **"Frequenza per unità"**; porta alla vista per unità, dove `ItemConfigForm` mostra **solo il campo Frequenza** (con l'avviso "ancorata a una norma di legge") e Salva scrive solo `frequency_months` (la vecchia action ristretta). Modalità, fornitore e garanzia per unità spariscono da lì: si cambiano solo per voce. Con il 3b il bottone e la vista per unità spariscono.
+- L'admin perde la modifica per unità che oggi ha (`ItemConfigForm` è visibile anche a lui): coerente con la decisione 4 (Configura solo super_admin).
+
+### Pannello e UI
+
+- Il guscio del 2a (portal, sfondo cliccabile, X, `useDialogFocus`) viene estratto in un componente condiviso `SidePanel` (commit di solo refactor, pannello di dettaglio invariato), usato anche dal pannello Configura.
+- Sezioni **Cosa** (obbligo in sola lettura con la sua pillola, info garanzia) e **Chi e dove** (chi la chiude, fornitore), footer con un solo Salva (disabilitato senza modifiche), riepilogo sopra ("Cambi chi la chiude su 12 unità"), passo di conferma dentro il pannello quando il piano tocca date o status. Errori distinti: permessi, non trovata, errore tecnico "riprova"; mai `error` scartato.
+- Campo misto: "Valori diversi tra le unità" come segnaposto, non toccato se l'utente non lo cambia.
+- Tab Configura: stessa griglia e stesso stile della lista; le voci sono quelle del piano attivo; i fornitori misti si leggono "Valori diversi".
+
+### Ordine dei commit
+
+| # | Commit | Migrazione |
+|---|---|---|
+| 3a-1 | `completion-mode.ts`, `maintenance-config.ts`, `verify:maintconfig` con mutazioni | no |
+| 3a-2 | Estrazione di `SidePanel` dal pannello 2a (solo refactor, schermate invariate) | no |
+| 3a-3 | RPC `czero_configure_voce` (054) e action `configureVoce` con gate | sì (D2) |
+| 3a-4 | Tab Piano / Configura / Escluse, tabella e pannello Configura | no |
+| 3a-5 | Vecchia action ristretta a `frequency_months`, super_admin con scope, validata; `ItemConfigForm` a sola frequenza; bottone "Frequenza per unità"; chiusura B53 | no |
+
+### Prove previste
+
+- `npm run verify`, `verify:maintconfig`, `verify:maintlist`, `verify:maintdetail`.
+- **SQL con `BEGIN; …; ROLLBACK`** (una transazione per esecuzione): scrittura su più righe di una voce di TEST wizard A, rifiuto per un admin, rifiuto cross-builder, atomicità (una riga fallisce → nessuna cambia), voce mista non toccata se il campo non cambia. Se un probe non è eseguibile per un limite d'ambiente lo dichiaro nel footer con il motivo.
+- **DevTools su TEST wizard A** con scrittura vera: SELECT prima e dopo, ripristino dei valori e verifica del ripristino identico. Mai scrittura su teolo, Santa Giustina, Portello, Bassanello (lì solo lettura per vedere "Valori diversi").
+- Pannelli a 1440 e 390 px con Tab, Escape, Invio; console e rete.
+
+### Decisioni confermate da Filippo (2026-11-08)
+
+- **D1 Obbligo — CONFERMATA: sola lettura per tutte le voci** (decisione del 31/10, nessun codice lo scrive, 0 override). B e C modificabili per voce restano scartati: richiederebbero di scrivere `obligation_type` sulle righe.
+- **D2 Atomicità — CONFERMATA: RPC `czero_configure_voce` con migrazione 054** (additiva, un'unica transazione). Prima di applicarla: SQL mostrato per intero e riga in `docs/migrations.log`.
+- **D3 Date nel passaggio da e verso promemoria — CONFERMATA: regole del punto 2 con anteprima** (tenere le date future, reset di passate e nulle verso promemoria; cancello di consegna al ritorno a modalità a tempo; "N unità tornano in attesa di consegna, N risultano scadute subito" prima di salvare).
+- **D4 Righe archiviate — CONFERMATA: ricevono i soli campi di configurazione**, senza regole di data e status (alla re-inclusione le ricalcola `setTemplateActivationForResidence`).
+- **D5 Parti comuni — CONFERMATA: `residente` rifiutato lato server** (e nascosto in UI): il cron notifica un residente solo se c'è `unit_id`.
