@@ -304,6 +304,11 @@ export function DocumentiClient({
   const [extractFailureReasons, setExtractFailureReasons] = useState<BatchFailureReason[]>([])
   const [extractServiceUnavailable, setExtractServiceUnavailable] = useState(false)
   const [reviewOnly, setReviewOnly] = useState(false)
+  // Un batch (caricamento, classificazione o estrazione) è in corso: gira nel
+  // browser, quindi chiudere o ricaricare la scheda lo interrompe a metà. Fonte
+  // unica per l'avviso del browser e per le due righe di testo (B58). Non dipende
+  // da showModal: il batch continua con la modale chiusa.
+  const batchBusy = isUploading || classifying || extracting
   // Documento aperto nel pannello laterale (E1b): un solo pannello per pagina.
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [tab, setTab] = useState<DocumentTabId>('panoramica')
@@ -482,6 +487,18 @@ export function DocumentiClient({
       window.removeEventListener('drop', onDrop)
     }
   }, [showModal])
+
+  // Avviso del browser solo mentre un batch è in corso; tolto a batch finito e
+  // allo smontaggio. Non copre la navigazione interna del menu (nessun unload).
+  useEffect(() => {
+    if (!batchBusy) return
+    function onBeforeUnload(e: BeforeUnloadEvent) {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [batchBusy])
 
   async function handleUpload(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -784,6 +801,9 @@ export function DocumentiClient({
                       : `Classificazione: ${classifyProgress!.done} di ${classifyProgress!.total}`}
                   </p>
                 )}
+                {batchBusy && (
+                  <p className="text-xs text-text-secondary">Non chiudere la pagina finché non finisce.</p>
+                )}
                 <div className="space-y-1.5">
                   {tasks.map(task => (
                     <TaskRow key={task.id} task={task} />
@@ -1002,6 +1022,10 @@ export function DocumentiClient({
           </button>
         )}
       </div>
+
+      {batchBusy && !showModal && (
+        <p className="text-xs text-text-secondary">Non chiudere la pagina finché non finisce.</p>
+      )}
 
       {/* Esito sobrio a fine batch: sopravvive alla chiusura della modale
           (l'auto-classificazione continua in sottofondo). "Classifica
