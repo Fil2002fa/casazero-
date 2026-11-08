@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { FileText, Download, Upload, X, Loader2, CheckCircle2, AlertCircle, Clock, Sparkles, ChevronDown, FileSearch } from 'lucide-react'
@@ -132,6 +132,9 @@ type FileTaskResult = { state: FileState; documentId?: string }
 type EmitFileEvent = (taskId: string, event: FileEvent, documentId?: string) => void
 
 const SERVICE_DOWN_TEXT = 'Servizio non disponibile al momento'
+
+// Solo i trascinamenti di file: testo e link trascinati non si toccano.
+const dragHasFiles = (e: { dataTransfer: DataTransfer | null }) => Array.from(e.dataTransfer?.types ?? []).includes('Files')
 
 // Genera URL → carica direttamente su Supabase (bypassa il bodySizeLimit
 // di Next.js) → conferma. Ogni file è indipendente: il fallimento di uno
@@ -270,6 +273,8 @@ export function DocumentiClient({
   // Cosa dire dopo una selezione: oltre il tetto (nessun file entra) o file
   // esclusi per tipo/dimensione. Resta visibile fino alla selezione successiva.
   const [selectionNotice, setSelectionNotice] = useState<{ text: string; overLimit: boolean } | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const dropZoneRef = useRef<HTMLDivElement>(null)
   const [submitted, setSubmitted] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   // Valori del form dell'ultimo invio: "Riprova" li riusa tali e quali, senza
@@ -436,6 +441,47 @@ export function DocumentiClient({
     e.target.value = ''
     applySelection(files)
   }
+
+  // Trascinamento sulla zona (solo senza preset): stessa strada del selettore.
+  // Un drop senza file (testo, elemento della pagina) non tocca la lista.
+  function handleZoneDragOver(e: React.DragEvent<HTMLDivElement>) {
+    if (!dragHasFiles(e)) return
+    e.preventDefault()
+    setIsDragging(true)
+  }
+
+  function handleZoneDragLeave(e: React.DragEvent<HTMLDivElement>) {
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setIsDragging(false)
+  }
+
+  function handleZoneDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault()
+    setIsDragging(false)
+    const files = Array.from(e.dataTransfer.files)
+    if (files.length > 0) applySelection(files)
+  }
+
+  // Modale aperta: una caduta di file fuori dalla zona non deve aprire il PDF
+  // nella scheda (e far perdere la pagina). Fuori dalla zona il cursore dice no.
+  useEffect(() => {
+    if (!showModal) return
+    function onDragOver(e: DragEvent) {
+      if (!dragHasFiles(e)) return
+      e.preventDefault()
+      if (e.dataTransfer) e.dataTransfer.dropEffect = dropZoneRef.current?.contains(e.target as Node) ? 'copy' : 'none'
+    }
+    function onDrop(e: DragEvent) {
+      if (!dragHasFiles(e)) return
+      e.preventDefault()
+      setIsDragging(false)
+    }
+    window.addEventListener('dragover', onDragOver)
+    window.addEventListener('drop', onDrop)
+    return () => {
+      window.removeEventListener('dragover', onDragOver)
+      window.removeEventListener('drop', onDrop)
+    }
+  }, [showModal])
 
   async function handleUpload(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -851,7 +897,12 @@ export function DocumentiClient({
                 </div>
 
                 {/* File */}
-                <div className="space-y-1.5">
+                {/* Con preset (un solo file atteso) niente zona: stesso div, senza bordo né handler. */}
+                <div
+                  ref={uploadPreset === null ? dropZoneRef : undefined}
+                  className={`space-y-1.5 ${uploadPreset === null ? `rounded-xl border-2 border-dashed p-3 ${isDragging ? 'border-brand-medium bg-brand-light/40' : 'border-border'}` : ''}`}
+                  {...(uploadPreset === null && { onDragEnter: handleZoneDragOver, onDragOver: handleZoneDragOver, onDragLeave: handleZoneDragLeave, onDrop: handleZoneDrop })}
+                >
                   <label className="text-xs font-medium text-text-secondary block">File *</label>
                   {/* Senza `required`: l'input resta vuoto per costruzione, la
                       lista vive in `tasks` e Carica è disabilitato a lista vuota. */}
@@ -871,7 +922,7 @@ export function DocumentiClient({
                   <p className="text-xs text-text-secondary">
                     {tasks.length > 0
                       ? pluralize(tasks.length, 'file selezionato', 'file selezionati')
-                      : 'PDF, immagini, Word · max 50 MB per file'}
+                      : `${uploadPreset === null ? 'Trascina qui i file o scegli dal computer · ' : ''}PDF, immagini, Word · max 50 MB per file`}
                   </p>
                   {tasks.length > 0 && (
                     <ul className="max-h-40 overflow-y-auto space-y-0.5">
