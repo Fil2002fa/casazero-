@@ -22,6 +22,25 @@ export const OBLIGATION_LABELS: Record<ObligationType, string> = {
   C: 'Consiglio',
 }
 
+/** Chi chiude la voce, in frase: pannello di dettaglio della vista costruttore. */
+export const MODE_ACTOR_PHRASES: Record<CompletionMode, string> = {
+  residente:      'Lo fa il residente',
+  amministratore: 'Lo fa l’amministratore',
+  promemoria:     'Solo promemoria',
+}
+
+/**
+ * Regola con cui si fissa la prossima data. Oggi è implicita nella modalità
+ * (trigger sul completamento = dall'ultima esecuzione; cron dei promemoria =
+ * date fisse) e si legge soltanto: non esiste una colonna che la configuri.
+ */
+export type DueRule = 'dall_ultima' | 'date_fisse'
+
+export const DUE_RULE_LABELS: Record<DueRule, string> = {
+  dall_ultima: 'Dall’ultima esecuzione',
+  date_fisse:  'Date fisse',
+}
+
 // Stessa parola dello StatusBadge: lo stato "in_attesa" si legge "Pianificata".
 export const MAINTENANCE_STATUS_LABELS: Record<MaintenanceStatus, string> = {
   scaduta:    'Scaduta',

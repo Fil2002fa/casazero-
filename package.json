@@ -37,7 +37,8 @@
     "verify:consegna": "node --experimental-strip-types --no-warnings scripts/verify-delivery-recalc.mjs",
     "verify:link": "node --experimental-strip-types --no-warnings scripts/verify-maintenance-links.mjs",
     "verify:assegnazione": "node --experimental-strip-types --no-warnings scripts/verify-admin-assignment.mjs",
-    "verify:maintlist": "node --experimental-strip-types --no-warnings scripts/verify-maintenance-list.mjs"
+    "verify:maintlist": "node --experimental-strip-types --no-warnings scripts/verify-maintenance-list.mjs",
+    "verify:maintdetail": "node --experimental-strip-types --no-warnings scripts/verify-maintenance-detail.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.4",

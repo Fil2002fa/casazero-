@@ -127,7 +127,7 @@ export function addDaysISO(iso: string, days: number): string {
 }
 
 /** Etichette con numero in ordine naturale: "Unità 2" prima di "Unità 10". */
-function compareLabels(a: string, b: string): number {
+export function compareLabels(a: string, b: string): number {
   return a.localeCompare(b, 'it', { numeric: true })
 }
 
@@ -142,12 +142,25 @@ function compareLabels(a: string, b: string): number {
  * 30 giorni. Una istanza datata che arriva in fondo ha data >= oggi: il passato
  * è già stato preso da isOverdueLive o da isInCorso.
  */
-function timedState(i: ListItem, today: string, soonLimit: string): ListState {
+export function timedState(i: ListItem, today: string, soonLimit: string): ListState {
   if (isOverdueLive(i, today)) return 'scaduta'
   if (isInCorso(i)) return 'in_corso'
   if (isAwaitingDelivery(i)) return 'in_attesa_consegna'
   const due = i.next_due_date
   return due !== null && due <= soonLimit ? 'entro_30' : 'piu_avanti'
+}
+
+/** Stesso stato della riga di lista, per la griglia unità del pannello di dettaglio. */
+export { timedState as itemState }
+
+/** Ultima esecuzione per istanza (completed_at massimo). Solo lettura sui completamenti. */
+export function lastCompletionByItem(completions: readonly ListCompletion[]): Map<string, string> {
+  const lastByItem = new Map<string, string>()
+  for (const c of completions) {
+    const cur = lastByItem.get(c.item_id)
+    if (cur === undefined || c.completed_at > cur) lastByItem.set(c.item_id, c.completed_at)
+  }
+  return lastByItem
 }
 
 function distinct<T>(values: readonly (T | null)[], order?: readonly T[]): T[] {
@@ -174,11 +187,7 @@ export function buildMaintenanceList(
 ): MaintenanceListRow[] {
   const soonLimit = addDaysISO(today, SOON_WINDOW_DAYS)
 
-  const lastByItem = new Map<string, string>()
-  for (const c of completions) {
-    const cur = lastByItem.get(c.item_id)
-    if (cur === undefined || c.completed_at > cur) lastByItem.set(c.item_id, c.completed_at)
-  }
+  const lastByItem = lastCompletionByItem(completions)
 
   const byTemplate = new Map<string, ListItem[]>()
   for (const i of items) {
@@ -245,6 +254,11 @@ export function buildMaintenanceList(
   }
 
   return rows.sort(compareRows)
+}
+
+/** "Parti comuni" o "N unità": una sola frase per la riga della lista e per il pannello. */
+export function rowScopeLabel(row: Pick<MaintenanceListRow, 'isCommon' | 'unitCount'>): string {
+  return row.isCommon ? 'Parti comuni' : pluralize(row.unitCount, 'unità', 'unità')
 }
 
 /** Gruppo, poi scadenza crescente (senza data in coda), poi titolo. */

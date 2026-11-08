@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { ChevronDown, ChevronUp, Bell } from 'lucide-react'
 import { MaintenanceBadge } from '@/components/MaintenanceBadge'
 import { AwaitingDeliveryLine, AwaitingDeliveryChip } from '@/components/AwaitingDelivery'
@@ -8,6 +8,8 @@ import { FilterCounters } from '@/components/FilterCounters'
 import { Select } from '@/components/ui/Input'
 import { ItemConfigForm } from './ItemConfigForm'
 import { MaintenanceList } from './MaintenanceList'
+import { MaintenanceDetailPanel } from './MaintenanceDetailPanel'
+import { buildVoceDetail, type VoceDetail } from '@/lib/maintenance-detail'
 import { setTemplateActivationForResidence } from '../fornitori/actions'
 import { sollecitaItem, type SollecitoResult } from './actions'
 import { isOverdueLive, isInCorso, isAwaitingDelivery, resolveCompletionMode } from '@/lib/maintenance-status'
@@ -44,7 +46,7 @@ export type ItemRow = {
     is_active: boolean
   } | null
   units: { label: string; delivery_date: string | null } | null
-  suppliers: { id: string; name: string } | null
+  suppliers: { id: string; name: string; phone: string | null; email: string | null } | null
 }
 
 export type CompletionRow = {
@@ -68,6 +70,11 @@ function resolveAxes(item: ItemRow) {
     obligation: (item.obligation_type ?? tpl?.obligation_type) as ObligationType,
     priority:   (item.priority ?? tpl?.priority ?? 'N2') as MaintenancePriority,
   }
+}
+
+// Chiave del blocco-voce espanso nella vista per unità (categoria → titolo).
+function templateKey(category: string, title: string) {
+  return `${category}__${title}`
 }
 
 function daysOverdue(dateStr: string | null, today: Date): number {
@@ -210,6 +217,11 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null)
   const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null)
+  // Voce aperta nel pannello di dettaglio (lista per voce, commit 2a).
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
+  // Voce da portare in vista dopo "Configura per unità" dal pannello (ref: non
+  // è stato da rendere, serve solo all'effetto di scorrimento qui sotto).
+  const scrollTargetRef = useRef<string | null>(null)
   const [expandedCompletion, setExpandedCompletion] = useState<string | null>(null)
   const [planView, setPlanView] = useState<'attive' | 'escluse'>('attive')
   // Scheda Attive: la lista per voce è la vista di default; "per unità" è la
@@ -230,6 +242,33 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
   const [sollecitaConfirm, setSollecitaConfirm] = useState<SollecitaConfirmState | null>(null)
 
   const today = new Date()
+
+  // Pannello di dettaglio: la voce intera (mai filtrata dal filtro-unità, che ne
+  // evidenzia solo la riga). I fornitori li vede solo chi compone il piano.
+  const detail = useMemo(
+    () => selectedTemplateId === null
+      ? null
+      : buildVoceDetail(selectedTemplateId, items, completions, todayServer, {
+          highlightUnitId: selectedUnitId,
+          showSuppliers: canManagePlan,
+        }),
+    [selectedTemplateId, items, completions, todayServer, selectedUnitId, canManagePlan],
+  )
+  // Identità stabile: useDialogFocus la mette nelle dipendenze dell'effetto.
+  const closeDetail = useCallback(() => setSelectedTemplateId(null), [])
+  const configureFromDetail = useCallback((d: VoceDetail) => {
+    scrollTargetRef.current = d.templateId
+    setSelectedTemplateId(null)
+    setActiveFilter(null) // un filtro Scadute/In corso potrebbe nascondere proprio questa voce
+    setAttiveView('per_unita')
+    setExpandedTemplate(templateKey(d.category, d.title))
+  }, [])
+  useEffect(() => {
+    const id = scrollTargetRef.current
+    if (id === null || attiveView !== 'per_unita') return
+    scrollTargetRef.current = null
+    document.getElementById(`voce-${id}`)?.scrollIntoView({ block: 'start' })
+  }, [attiveView, expandedTemplate])
 
   const sollecitaCopy = sollecitaConfirm
     ? sollecitaConfirmCopy(sollecitaConfirm.mode, sollecitaConfirm.unitLabel, sollecitaConfirm.title, sollecitaConfirm.days)
@@ -419,8 +458,7 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
           unitOptions={unitOptions}
           selectedUnitId={selectedUnitId}
           onSelectUnit={id => { setSelectedUnitId(id); setExpandedTemplate(null) }}
-          // Il pannello di dettaglio arriva col commit 2a: per ora il click non apre nulla.
-          onOpen={() => {}}
+          onOpen={setSelectedTemplateId}
           headerAction={
             <button
               type="button"
@@ -660,11 +698,11 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
                   // già, quindi un gruppo di promemoria non mostra mai il chip.
                   const inAttesa = typeItems.filter(isAwaitingDelivery).length
                   const freq = rep.frequency_months ?? rep.maintenance_templates?.frequency_months
-                  const key = `${cat}__${title}`
+                  const key = templateKey(cat, title)
                   const isExpanded = expandedTemplate === key
 
                   return (
-                    <div key={title} className="bg-surface rounded-xl border border-border overflow-hidden">
+                    <div key={title} id={`voce-${rep.template_id}`} className="bg-surface rounded-xl border border-border overflow-hidden">
                       <button
                         onClick={() => setExpandedTemplate(isExpanded ? null : key)}
                         className="w-full p-3 flex items-center gap-3 text-left"
@@ -786,6 +824,8 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
           )}
         </section>
       )}
+
+      <MaintenanceDetailPanel detail={detail} onClose={closeDetail} onConfigure={configureFromDetail} />
 
       {/* Modale di conferma (preview-before-apply): dichiara righe toccate ed effetto */}
       {pendingAction && (

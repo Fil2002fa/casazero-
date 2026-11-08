@@ -44,7 +44,7 @@ export default async function ResidenceManutenzioniPage({ params, searchParams }
         completion_mode, obligation_type, activation_status,
         maintenance_templates(title, category, priority, frequency_months, scope, completion_mode, obligation_type, is_active),
         units(label, delivery_date),
-        suppliers(id, name)
+        suppliers(id, name, phone, email)
       `)
       .eq('residence_id', residenceId)
       .order('next_due_date', { ascending: true, nullsFirst: false }),

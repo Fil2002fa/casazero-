@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { AwaitingDeliveryChip } from '@/components/AwaitingDelivery'
 import { PromemoriaBadge } from '@/components/ui/Badge'
 import { Input, Select } from '@/components/ui/Input'
@@ -9,13 +9,12 @@ import { formatDateIT } from '@/lib/formatDate'
 import { formatFrequency } from '@/lib/formatFrequency'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import {
-  buildMaintenanceList, filterRows, groupRows, hasActiveFilters, itemsForUnit, listSummary, summaryPills,
-  LIST_STATE_LABELS,
+  buildMaintenanceList, filterRows, groupRows, hasActiveFilters, itemsForUnit, listSummary, rowScopeLabel, summaryPills,
   type ListCompletion, type ListGroupKey, type ListItem, type ListPillKind, type MaintenanceListRow,
 } from '@/lib/maintenance-list'
 import { MODE_LABELS, OBLIGATION_LABELS } from '@/lib/maintenance-labels'
-import { pluralize } from '@/lib/pluralize'
 import type { ObligationType } from '@/types/database'
+import { StateBadge } from './StateBadge'
 
 // Lista del piano per voce (tab Attive). Regola, ordine e testi stanno in
 // src/lib/maintenance-list.ts (verify:maintlist): qui solo lo schermo.
@@ -44,15 +43,6 @@ const PILL_STYLES: Record<ListPillKind, string> = {
   clear: 'bg-brand-light text-brand-dark',
 }
 
-// Rosso e ambra solo per lo stato: il resto è neutro.
-const STATE_STYLES: Record<Exclude<ListGroupKey, 'consigliate'>, string> = {
-  scaduta: 'bg-semantic-red-bg text-semantic-red',
-  in_corso: 'bg-semantic-amber-bg text-semantic-amber',
-  entro_30: 'bg-semantic-amber-bg text-semantic-amber',
-  piu_avanti: 'bg-background text-text-secondary',
-  in_attesa_consegna: 'bg-background text-text-secondary',
-}
-
 const GROUP_TITLE_STYLES: Partial<Record<ListGroupKey, string>> = {
   scaduta: 'text-semantic-red',
   entro_30: 'text-semantic-amber',
@@ -70,7 +60,7 @@ type Props = {
   unitOptions: readonly { id: string; label: string }[]
   selectedUnitId: string | null
   onSelectUnit: (unitId: string | null) => void
-  /** Apre il dettaglio della voce. Il pannello arriva col commit 2a. */
+  /** Apre il pannello di dettaglio della voce. */
   onOpen: (templateId: string) => void
   /** Azione a destra delle pillole (oggi: il passaggio alla vista per unità). */
   headerAction?: React.ReactNode
@@ -217,15 +207,24 @@ export function MaintenanceList({ items, completions, today, unitOptions, select
 }
 
 function ListRow({ row, onOpen }: { row: MaintenanceListRow; onOpen: (templateId: string) => void }) {
-  const scope = row.isCommon ? 'Parti comuni' : pluralize(row.unitCount, 'unità', 'unità')
+  const scope = rowScopeLabel(row)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  // Un clic sulla <li> non focalizza niente (e Safari non focalizza il bottone
+  // al clic): il focus va sul bottone PRIMA di aprire il pannello, così alla
+  // chiusura useDialogFocus lo restituisce a questa riga e non al body.
+  function open() {
+    buttonRef.current?.focus()
+    onOpen(row.templateId)
+  }
   return (
     <li
-      onClick={() => onOpen(row.templateId)}
+      onClick={open}
       className="cursor-pointer py-3 transition-colors hover:bg-background"
     >
       <div className={cn(COLS, 'items-center')}>
         <div className="min-w-0">
           <button
+            ref={buttonRef}
             type="button"
             className="block max-w-full text-left text-sm font-medium text-text-primary break-words cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium rounded"
           >
@@ -247,9 +246,7 @@ function ListRow({ row, onOpen }: { row: MaintenanceListRow; onOpen: (templateId
         <Cell label="Stato">
           {row.group === 'consigliate' ? <Dash /> : (
             <div className="space-y-1">
-              <span className={cn('inline-flex items-center rounded-full h-[22px] px-2.5 text-xs font-medium whitespace-nowrap', STATE_STYLES[row.group])}>
-                {LIST_STATE_LABELS[row.group]}
-              </span>
+              <StateBadge state={row.group} />
               {row.awaitingCount > 0 && row.awaitingCount < row.timedCount && (
                 <div><AwaitingDeliveryChip count={row.awaitingCount} total={row.timedCount} /></div>
               )}
