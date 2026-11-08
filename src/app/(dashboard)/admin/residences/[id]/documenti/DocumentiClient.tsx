@@ -15,6 +15,7 @@ import { DateField } from '@/components/DateField'
 import { DocumentPanel } from './DocumentPanel'
 import { PanelShell } from './PanelShell'
 import { UnitDocumentMatrix } from './UnitDocumentMatrix'
+import { UnitMatrixSummary } from './UnitMatrixSummary'
 import { ClassificationBadge } from './ClassificationBadge'
 import { DocumentTabs, tabId, tabPanelId, type DocumentTabId } from './DocumentTabs'
 import { DocumentsTable } from './DocumentsTable'
@@ -23,7 +24,8 @@ import { CommonDocumentsList } from './CommonDocumentsList'
 import { documentNameText, presentDocTypes } from '@/lib/document-table'
 import { reviewGroups } from '@/lib/document-review'
 import { commonBadge, commonDocuments, type CommonDocumentRow } from '@/lib/common-documents'
-import { otherVersions, type UnitExpectation } from '@/lib/unit-documents'
+import { otherVersions, unitDocumentRows, type UnitExpectation } from '@/lib/unit-documents'
+import { compareUnitLabels } from '@/lib/unit-utils'
 import { batchFailureMessage, classifyBatchFailure, describeBatchFailureReasons, type BatchFailureReason } from '@/lib/batch-failures'
 import {
   INITIAL_FILE_STATE,
@@ -318,6 +320,12 @@ export function DocumentiClient({
   // Tab "Da rivedere" (E1b-8): senza unità e non ignorati, una riga per gruppo di
   // versioni dello stesso file (8e), regole in document-review.ts.
   const toReview = useMemo(() => reviewGroups(docs, units), [docs, units])
+  // Righe del quadro unità × documenti (E1b-12): calcolate UNA volta, per il
+  // quadro e per la testata dei contatori (mai due calcoli).
+  const unitRows = useMemo(
+    () => unitDocumentRows(docs, [...units].sort((a, b) => compareUnitLabels(a.label, b.label))),
+    [docs, units],
+  )
   const [docTypeFilter, setDocTypeFilter] = useState<DocType | 'all'>('all')
   // Filtri sui dati estratti (estrazione corrente soltanto): ambito e
   // "con scadenza" (data calcolata o formula dichiarata).
@@ -741,6 +749,8 @@ export function DocumentiClient({
     <div className={selectedDoc ? 'xl:grid xl:grid-cols-[minmax(0,1fr)_clamp(480px,40%,640px)] xl:gap-6 xl:items-start' : ''}>
     <div className="space-y-6 min-w-0">
 
+      <UnitMatrixSummary rows={unitRows} />
+
       {/* -------- Banner servizio classificazione -------- */}
       {/* Pagina intera, non per-documento: quando la causa è il servizio
           (chiave assente/vuota, 5xx, rate limit — route.ts) i documenti
@@ -1064,7 +1074,7 @@ export function DocumentiClient({
       {/* -------- Quadro unità × documenti attesi -------- */}
       <UnitDocumentMatrix
         docs={docs}
-        units={units}
+        rows={unitRows}
         selectedDocId={selectedId}
         onOpenDoc={setSelectedId}
         onUpload={openUploadFor}

@@ -8,9 +8,9 @@ import {
   UNIT_EXPECTATIONS,
   documentsMentioningUnitWithoutAssignment,
   formatCellKeyData,
-  unitDocumentRows,
   type UnitDocState,
   type UnitDocumentCell,
+  type UnitDocumentRow,
   type UnitExpectation,
 } from '@/lib/unit-documents'
 import {
@@ -21,7 +21,6 @@ import {
   matrixEmptyState,
   type MatrixEmptyKind,
 } from '@/lib/unit-matrix-view'
-import { compareUnitLabels } from '@/lib/unit-utils'
 
 // Quadro unità × documenti attesi (E1a D1-D2, E1b). Un solo componente per
 // admin e super_admin: nessun dato dipende dal ruolo. Il calcolo è in
@@ -137,25 +136,23 @@ function emptyMessage(kind: MatrixEmptyKind, query: string): string {
   }
 }
 
-export function UnitDocumentMatrix({ docs, units, selectedDocId, onOpenDoc, onUpload }: {
+// `rows` arriva da DocumentiClient (una riga per unità, già ordinata): stessa
+// fonte della testata dei contatori.
+export function UnitDocumentMatrix({ docs, rows, selectedDocId, onOpenDoc, onUpload }: {
   docs: DocRow[]
-  units: UnitRow[]
+  rows: UnitDocumentRow[]
   selectedDocId: string | null
   onOpenDoc: (docId: string) => void
   onUpload: (unitId: string, expectation: UnitExpectation) => void
 }) {
-  const rows = useMemo(
-    () => unitDocumentRows(docs, [...units].sort((a, b) => compareUnitLabels(a.label, b.label))),
-    [docs, units],
-  )
   const unassigned = useMemo(() => documentsMentioningUnitWithoutAssignment(docs).length, [docs])
 
   // Toggle: null = mai toccato, il valore effettivo si ricalcola dal numero di
   // unità (nessuno stato da sincronizzare). Sotto o pari alla soglia non filtra.
   const [incompleteOverride, setIncompleteOverride] = useState<boolean | null>(null)
   const [query, setQuery] = useState('')
-  const compact = isCompactMatrix(units.length)
-  const incompleteOnly = effectiveIncompleteOnly(incompleteOverride, units.length)
+  const compact = isCompactMatrix(rows.length)
+  const incompleteOnly = effectiveIncompleteOnly(incompleteOverride, rows.length)
   const activeQuery = compact ? query : ''
   const visibleRows = useMemo(
     () => filterMatrixRows(rows, { incompleteOnly, query: activeQuery }),
@@ -163,7 +160,7 @@ export function UnitDocumentMatrix({ docs, units, selectedDocId, onOpenDoc, onUp
   )
   const empty = matrixEmptyState(rows, { incompleteOnly, query: activeQuery })
 
-  if (units.length === 0) return null
+  if (rows.length === 0) return null
 
   return (
     <section className="bg-surface rounded-xl border border-border p-4 space-y-3">
