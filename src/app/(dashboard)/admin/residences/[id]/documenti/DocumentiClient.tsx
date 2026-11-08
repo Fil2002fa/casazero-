@@ -30,6 +30,7 @@ import {
   applyFileEvent,
   fileRejectionReason,
   fileStatusLabel,
+  screenSelection,
   summarizeUploadBatch,
   uploadProgress,
   uploadRetryIds,
@@ -266,6 +267,9 @@ export function DocumentiClient({
   // category null = tipo senza categoria mappata: nella modale NON si precarica.
   const [uploadPreset, setUploadPreset] = useState<UploadPreset | null>(null)
   const [tasks, setTasks]         = useState<FileTask[]>([])
+  // Cosa dire dopo una selezione: oltre il tetto (nessun file entra) o file
+  // esclusi per tipo/dimensione. Resta visibile fino alla selezione successiva.
+  const [selectionNotice, setSelectionNotice] = useState<{ text: string; overLimit: boolean } | null>(null)
   const [submitted, setSubmitted] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   // Valori del form dell'ultimo invio: "Riprova" li riusa tali e quali, senza
@@ -378,6 +382,7 @@ export function DocumentiClient({
     if (isUploading) return
     setShowModal(false)
     setTasks([])
+    setSelectionNotice(null)
     setSubmitted(false)
     setScope('residenza')
     setUploadPreset(null)
@@ -385,6 +390,7 @@ export function DocumentiClient({
 
   function openUploadFor(unitId: string, expectation: UnitExpectation) {
     setTasks([])
+    setSelectionNotice(null)
     setSubmitted(false)
     setUploadPreset({ unitId, expectation })
     setScope('unita')
@@ -395,6 +401,7 @@ export function DocumentiClient({
   // unità) e tipo della voce già scelto. Stessa strada dei documenti di residenza.
   function openUploadForCommon(row: CommonDocumentRow) {
     setTasks([])
+    setSelectionNotice(null)
     setSubmitted(false)
     setUploadPreset({ unitId: null, expectation: { docType: row.docType, label: row.label, category: row.category } })
     setScope('residenza')
@@ -413,9 +420,21 @@ export function DocumentiClient({
     setTasks(prev => prev.map(t => (t.documentId === documentId ? { ...t, state: applyFileEvent(t.state, event) } : t)))
   }
 
+  // La selezione sostituisce la precedente; tetto ed esclusi li decide
+  // screenSelection. `tasks` è l'unica fonte di verità: l'input nativo non
+  // tiene i file (vedi handleFilesSelected).
+  function applySelection(files: File[]) {
+    const { accepted, message, overLimit } = screenSelection(files)
+    setTasks(accepted.map(file => ({ id: makeTaskId(), file, state: INITIAL_FILE_STATE })))
+    setSelectionNotice(message ? { text: message, overLimit } : null)
+  }
+
   function handleFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? [])
-    setTasks(files.map(file => ({ id: makeTaskId(), file, state: INITIAL_FILE_STATE })))
+    // Svuota l'input: ripetere la stessa scelta rifà scattare l'evento, e il
+    // testo nativo non contraddice la lista (es. "21 file" dopo un tetto superato).
+    e.target.value = ''
+    applySelection(files)
   }
 
   async function handleUpload(e: React.FormEvent<HTMLFormElement>) {
@@ -834,19 +853,33 @@ export function DocumentiClient({
                 {/* File */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-text-secondary block">File *</label>
+                  {/* Senza `required`: l'input resta vuoto per costruzione, la
+                      lista vive in `tasks` e Carica è disabilitato a lista vuota. */}
                   <input
                     type="file"
-                    multiple
-                    required
+                    multiple={uploadPreset === null}
                     onChange={handleFilesSelected}
                     accept="image/jpeg,image/png,image/webp,application/pdf,.doc,.docx"
                     className="w-full text-sm text-text-secondary cursor-pointer file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-brand-light file:text-brand-dark"
                   />
+                  <p
+                    role="status"
+                    className={`text-xs leading-snug empty:hidden ${selectionNotice?.overLimit ? 'text-semantic-red' : 'text-status-inprogress'}`}
+                  >
+                    {selectionNotice?.text}
+                  </p>
                   <p className="text-xs text-text-secondary">
                     {tasks.length > 0
-                      ? `${tasks.length} file selezionat${tasks.length !== 1 ? 'i' : 'o'}`
+                      ? pluralize(tasks.length, 'file selezionato', 'file selezionati')
                       : 'PDF, immagini, Word · max 50 MB per file'}
                   </p>
+                  {tasks.length > 0 && (
+                    <ul className="max-h-40 overflow-y-auto space-y-0.5">
+                      {tasks.map(task => (
+                        <li key={task.id} className="text-xs text-text-primary break-words">{task.file.name}</li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
 
                 <div className="flex gap-2 pt-1">
