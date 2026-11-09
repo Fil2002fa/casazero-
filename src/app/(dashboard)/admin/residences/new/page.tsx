@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, FileText, PencilLine } from 'lucide-react'
 import { createResidence } from './actions'
 import { type FeatureKey } from '@/lib/residence-features'
 import { MAX_UNITS } from '@/lib/residence-input'
@@ -183,10 +183,39 @@ export default function NewResidencePage() {
           <h1 className="text-base font-medium text-text-primary">Nuova residenza</h1>
           <p className="text-xs text-text-secondary">{STEP_TITLES[step]}</p>
         </div>
-        <Link href="/admin/residences/new/da-documento" className="ml-auto text-sm text-brand-medium font-medium">
-          Da documento
-        </Link>
       </div>
+
+      {/* Due strade per creare la residenza. La seconda è questa pagina; la
+          prima è la route "da documento". Solo al passo 1: più avanti un clic
+          sbagliato perderebbe quanto già compilato. */}
+      {step === 1 && (
+        <nav aria-label="Come creare la residenza" className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+          <Link
+            href="/admin/residences/new/da-documento"
+            className="flex items-start gap-3 rounded-xl border border-border bg-surface p-4 hover:bg-background transition-colors"
+          >
+            <FileText className="w-5 h-5 mt-0.5 flex-shrink-0 text-brand-medium" strokeWidth={1.6} />
+            <span>
+              <span className="block text-sm font-medium text-text-primary">Parti da un documento</span>
+              <span className="block text-xs text-text-secondary mt-0.5">
+                Carica un PDF: la bozza si compila da sola e la rivedi prima di creare.
+              </span>
+            </span>
+          </Link>
+          <div
+            aria-current="page"
+            className="flex items-start gap-3 rounded-xl border border-brand-dark bg-brand-light p-4"
+          >
+            <PencilLine className="w-5 h-5 mt-0.5 flex-shrink-0 text-brand-dark" strokeWidth={1.6} />
+            <span>
+              <span className="block text-sm font-medium text-brand-dark">Compila a mano</span>
+              <span className="block text-xs text-text-secondary mt-0.5">
+                Inserisci dati, dotazioni e unità passo dopo passo.
+              </span>
+            </span>
+          </div>
+        </nav>
+      )}
 
       {resetNotice && (
         <div className="bg-brand-light rounded-xl p-3 mb-5">

@@ -11,7 +11,6 @@ import { WIZARD_CATEGORIES } from './shared'
 export type ResidenceDataDefaults = {
   name?: string
   address?: string
-  energy_class?: string
   delivery_date?: string
 }
 
@@ -48,7 +47,6 @@ export function ResidenceDataSection({
 
         <Field label="Nome *" name="name" placeholder="es. Residenza Cavaccio" required defaultValue={defaults?.name} note={notes?.name} />
         <Field label="Indirizzo *" name="address" placeholder="Via Roma 1, Padova" required defaultValue={defaults?.address} note={notes?.address} />
-        <Field label="Classe energetica" name="energy_class" placeholder="es. A4" defaultValue={defaults?.energy_class} note={notes?.energy_class} />
         <div>
           <Field label="Data consegna *" name="delivery_date" type="date" required defaultValue={defaults?.delivery_date} note={notes?.delivery_date} />
           <p className="text-xs text-text-secondary mt-1">

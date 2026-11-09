@@ -131,7 +131,6 @@ export function ResidenceReview({
   const notes = {
     name: <FieldProvenance field={draft.name} />,
     address: <FieldProvenance field={draft.address} />,
-    energy_class: <FieldProvenance field={draft.energyClass} />,
     delivery_date: (
       <p className="text-xs text-text-secondary mt-1">
         {suggestion.state === 'non_trovato'
@@ -229,7 +228,6 @@ export function ResidenceReview({
           defaults={{
             name: draft.name.value ?? undefined,
             address: draft.address.value ?? undefined,
-            energy_class: draft.energyClass.value ?? undefined,
           }}
           notes={notes}
           existingBuilding={existingBuilding}
