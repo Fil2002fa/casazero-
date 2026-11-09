@@ -10,8 +10,8 @@
 //   · da_verificare  valore presente ma confidenza non alta o citazione
 //                    assente: l'umano deve guardarlo
 //   · non_trovato    il documento non lo dice: NESSUN valore
-// Per le dotazioni un "non trovato" resta senza risposta finché l'umano non
-// risponde sì o no (resolveFeatures lo lascia in `unresolved`, e
+// Per le dotazioni un "non trovato", e un "no" da_verificare, restano senza
+// risposta finché l'umano non risponde sì o no (resolveFeatures lo lascia in `unresolved`, e
 // prepareDraftCreation rifiuta di creare). L'unica strada verso un "no" è un
 // gesto esplicito: markUnresolvedAsNo, il bottone "Segna le rimanenti come No".
 // Il silenzio del documento non vale mai "no": una dotazione assente dalla
@@ -218,15 +218,23 @@ export function normalizeDraftProposal(raw: unknown): { draft: ResidenceDraft } 
 // Risposte dell'umano, per dotazione. Assente = nessuna risposta.
 export type FeatureAnswers = Partial<Record<FeatureKey, boolean>>
 
-// La risposta effettiva: l'umano vince; altrimenti il valore proposto se il
-// documento ne ha uno (dal_documento o da_verificare); altrimenti NESSUNA.
+// La risposta effettiva: l'umano vince; altrimenti il valore proposto dal
+// documento; altrimenti NESSUNA. Due eccezioni, entrambe "nessuna risposta":
+//   · non_trovato: il documento non ne parla;
+//   · da_verificare con valore "no": un "no" non confermato toglie voci dal
+//     piano in modo permanente (le dotazioni non sono modificabili dopo la
+//     creazione), quindi se l'AI non è sicura serve la conferma dell'umano.
+// Un "sì" da_verificare invece precompila e non blocca: al peggio genera una
+// voce in più, che si archivia.
 export function effectiveFeatureAnswer(
   draft: ResidenceDraft, answers: FeatureAnswers, key: FeatureKey,
 ): boolean | undefined {
   const human = answers[key]
   if (typeof human === 'boolean') return human
   const field = draft.features[key]
-  return field.state === 'non_trovato' ? undefined : field.value
+  if (field.state === 'non_trovato') return undefined
+  if (field.state === 'da_verificare' && field.value === false) return undefined
+  return field.value
 }
 
 export function resolveFeatures(draft: ResidenceDraft, answers: FeatureAnswers): {
@@ -370,7 +378,7 @@ export function prepareDraftCreation(draft: ResidenceDraft, edits: DraftEdits): 
   const { features, unresolved } = resolveFeatures(draft, edits.featureAnswers ?? {})
   if (!features) {
     return {
-      error: `Rispondi sì o no per ${pluralize(unresolved.length, 'dotazione', 'dotazioni')}: il documento non ne parla`,
+      error: `Rispondi sì o no per ${pluralize(unresolved.length, 'dotazione', 'dotazioni')}: non trovate nel documento o da confermare`,
       unresolvedFeatures: unresolved,
     }
   }

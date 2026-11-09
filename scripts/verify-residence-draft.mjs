@@ -151,6 +151,38 @@ check('etichetta che contiene già la scala non si ripete', unitLabelWithStairca
   check('tutte risposte: ascensore umano no vince sul documento sì', done.features.ascensore, false)
 }
 
+// ---------- da_verificare: blocca solo se il valore proposto è "no" ----------
+{
+  const d = draftOf({ dotazioni: dotazioni({
+    ascensore: fld(true, 'media'),      // sì da_verificare
+    autoclave: fld(false, 'media'),     // no da_verificare
+    lucernari: fld(false, 'alta', null),// no senza citazione = da_verificare
+    porte_rei: fld(true, 'alta', null), // sì senza citazione = da_verificare
+    rete_idranti: fld(false),           // no dal documento
+  }) })
+  check('da_verificare: stati di partenza', [d.features.ascensore.state, d.features.autoclave.state, d.features.lucernari.state, d.features.porte_rei.state, d.features.rete_idranti.state],
+    ['da_verificare', 'da_verificare', 'da_verificare', 'da_verificare', 'dal_documento'])
+  check('sì da_verificare: precompila (risposta effettiva true)', effectiveFeatureAnswer(d, {}, 'ascensore'), true)
+  check('sì da_verificare senza citazione: precompila', effectiveFeatureAnswer(d, {}, 'porte_rei'), true)
+  check('no da_verificare: nessuna risposta finché l’umano non conferma', effectiveFeatureAnswer(d, {}, 'autoclave'), undefined)
+  check('no da_verificare senza citazione: nessuna risposta', effectiveFeatureAnswer(d, {}, 'lucernari'), undefined)
+  check('no dal_documento: resta no, non blocca', effectiveFeatureAnswer(d, {}, 'rete_idranti'), false)
+  check('l’umano conferma il no: false', effectiveFeatureAnswer(d, { autoclave: false }, 'autoclave'), false)
+  check('l’umano corregge il no in sì: true', effectiveFeatureAnswer(d, { autoclave: true }, 'autoclave'), true)
+  const r = resolveFeatures(d, {})
+  check('i no da_verificare sono tra le non risolte, i sì no', [r.unresolved.includes('autoclave'), r.unresolved.includes('lucernari'), r.unresolved.includes('ascensore'), r.unresolved.includes('porte_rei'), r.unresolved.includes('rete_idranti')],
+    [true, true, false, false, false])
+  const rest = Object.fromEntries(KEYS.filter(k => !['autoclave', 'lucernari', 'ascensore'].includes(k)).map(k => [k, false]))
+  const blocked = prepareDraftCreation(d, { deliveryDate: '2027-01-01', featureAnswers: rest })
+  check('creazione bloccata dai soli no da_verificare', [('input' in blocked), blocked.unresolvedFeatures], [false, ['lucernari', 'autoclave'].sort((a, b) => KEYS.indexOf(a) - KEYS.indexOf(b))])
+  const unblocked = prepareDraftCreation(d, { deliveryDate: '2027-01-01', featureAnswers: { ...rest, autoclave: false, lucernari: false } })
+  check('creazione dopo conferma dei no da_verificare', 'input' in unblocked, true)
+  check('il sì da_verificare non ha bisogno di conferma per creare', unblocked.input.features.ascensore, true)
+  check('il no da_verificare non conta come voce non generata finché non confermato',
+    skippedItems([{ condition_key: 'autoclave', scope: 'condominium', is_active: true }], Object.fromEntries(KEYS.map(k => [k, effectiveFeatureAnswer(d, {}, k)]).filter(([, v]) => v !== undefined)), 3).count, 0)
+  check('markUnresolvedAsNo copre anche i no da_verificare (gesto esplicito)', markUnresolvedAsNo(d, {}).autoclave, false)
+}
+
 // ---------- l'unico "no" implicito è esplicito ----------
 {
   const d = draftOf({ dotazioni: dotazioni({ ascensore: fld(true) }) })
@@ -228,10 +260,10 @@ check('etichetta che contiene già la scala non si ripete', unitLabelWithStairca
   const unres = prepareDraftCreation(d, { deliveryDate: '2027-01-01' })
   check('creazione con dotazioni non risolte: rifiutata', 'input' in unres, false)
   check('creazione rifiutata: messaggio e conteggio al plurale',
-    unres.error, 'Rispondi sì o no per 18 dotazioni: il documento non ne parla')
+    unres.error, 'Rispondi sì o no per 18 dotazioni: non trovate nel documento o da confermare')
   check('creazione rifiutata: elenco delle non risolte', unres.unresolvedFeatures.length, 18)
   const one = prepareDraftCreation(d, { deliveryDate: '2027-01-01', featureAnswers: Object.fromEntries(KEYS.filter(k => k !== 'lucernari' && k !== 'ascensore').map(k => [k, false])) })
-  check('creazione rifiutata: singolare', one.error, 'Rispondi sì o no per 1 dotazione: il documento non ne parla')
+  check('creazione rifiutata: singolare', one.error, 'Rispondi sì o no per 1 dotazione: non trovate nel documento o da confermare')
 
   const made = prepareDraftCreation(d, ok)
   check('creazione ok', 'input' in made, true)
