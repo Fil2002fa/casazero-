@@ -44,7 +44,8 @@
     "verify:maintdetail": "node --experimental-strip-types --no-warnings scripts/verify-maintenance-detail.mjs",
     "verify:resinput": "node --experimental-strip-types --no-warnings scripts/verify-residence-input.mjs",
     "verify:resdraft": "node --experimental-strip-types --no-warnings scripts/verify-residence-draft.mjs",
-    "verify:pdftext": "node --experimental-strip-types --no-warnings scripts/verify-pdf-text.mjs"
+    "verify:pdftext": "node --experimental-strip-types --no-warnings scripts/verify-pdf-text.mjs",
+    "verify:resdraftroute": "node --experimental-strip-types --no-warnings scripts/verify-residence-draft-route.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.4",
