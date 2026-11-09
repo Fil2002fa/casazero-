@@ -210,29 +210,7 @@ export function ResidenceReview({
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl">
-      {/* Barra fissa: quante dotazioni mancano e l'unico gesto che trasforma
-          "senza risposta" in "no", solo dopo conferma. "Crea residenza" resta
-          in fondo. */}
-      <div className="sticky top-0 z-10 -mx-1 mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface/95 px-4 py-2.5 backdrop-blur">
-        <span
-          className={`text-sm font-medium ${unresolved.length === 0 ? 'text-text-secondary' : 'text-semantic-amber'}`}
-          aria-live="polite"
-        >
-          {unresolved.length === 0
-            ? 'Tutte le dotazioni hanno una risposta'
-            : `${pluralize(unresolved.length, 'dotazione', 'dotazioni')} da rispondere`}
-        </span>
-        <Button
-          type="button"
-          variant="secondary"
-          disabled={unresolved.length === 0}
-          onClick={() => setConfirmNoOpen(true)}
-        >
-          Segna le rimanenti come No
-        </Button>
-      </div>
-
+    <div className="mx-auto w-full max-w-5xl">
       {partialReadNote && (
         <div className="bg-semantic-amber-bg rounded-xl p-3 mb-5">
           <p className="text-sm text-semantic-amber">{partialReadNote}</p>
@@ -274,6 +252,28 @@ export function ResidenceReview({
             fields: draft.features,
             answers: effective,
             onAnswer: (key, value) => setAnswers(prev => ({ ...prev, [key]: value })),
+            // Attaccata all'intestazione della card (sticky con essa). È l'unico
+            // gesto che trasforma "senza risposta" in "no", e solo dopo conferma.
+            toolbar: (
+              <div className="flex flex-wrap items-center gap-3">
+                <span
+                  className={`text-sm font-medium ${unresolved.length === 0 ? 'text-text-secondary' : 'text-semantic-amber'}`}
+                  aria-live="polite"
+                >
+                  {unresolved.length === 0
+                    ? 'Tutte le dotazioni hanno una risposta'
+                    : `${pluralize(unresolved.length, 'dotazione', 'dotazioni')} da rispondere`}
+                </span>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={unresolved.length === 0}
+                  onClick={() => setConfirmNoOpen(true)}
+                >
+                  Segna le rimanenti come No
+                </Button>
+              </div>
+            ),
           }}
         />
 

@@ -1,3 +1,4 @@
+import { FileSearch } from 'lucide-react'
 import { FIELD_STATE_LABEL, type DraftField, type FieldState } from '@/lib/residence-draft'
 import { PILL_BASE } from '@/components/ui/Badge'
 import { cn } from '@/lib/cn'
@@ -13,9 +14,16 @@ const STATE_STYLES: Record<FieldState, string> = {
 // che non sono un DraftField (es. la data di agibilità).
 export function CitationDetails({ citation }: { citation: string }) {
   return (
-    <details className="mt-0.5 text-xs text-text-secondary">
-      <summary className="cursor-pointer select-none text-brand-medium w-fit">Vedi nel documento</summary>
-      <p className="mt-1 italic">&ldquo;{citation}&rdquo;</p>
+    <details className="mt-2">
+      <summary className="inline-flex w-fit cursor-pointer select-none items-center gap-1.5 text-sm font-medium text-brand-medium hover:text-brand-dark">
+        <FileSearch className="w-4 h-4" strokeWidth={1.8} aria-hidden="true" />
+        Vedi nel documento
+      </summary>
+      {/* Riquadro bianco con filo a sinistra: una citazione, non un campo da compilare. */}
+      <div className="mt-2 mb-1 rounded-r-lg border border-border border-l-4 border-l-brand-medium bg-white px-3 py-2.5">
+        <p className="text-xs font-medium text-text-secondary">Dal documento</p>
+        <blockquote className="mt-1 text-sm leading-relaxed text-text-primary">{citation}</blockquote>
+      </div>
     </details>
   )
 }
@@ -34,7 +42,7 @@ export function FieldProvenance<T>({
   format?: (value: T) => string
 }) {
   return (
-    <div className="mt-1">
+    <div className="mt-2 mb-1">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-secondary">
         <span className={cn(PILL_BASE, 'h-5 px-2', STATE_STYLES[field.state])}>{FIELD_STATE_LABEL[field.state]}</span>
         {field.state !== 'non_trovato' && field.confidence && <span>confidenza {field.confidence}</span>}
