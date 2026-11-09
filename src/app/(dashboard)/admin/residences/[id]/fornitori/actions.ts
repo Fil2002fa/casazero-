@@ -9,8 +9,6 @@ import { SISTEMI, type Sistema } from '@/lib/document-classification'
 import { nextDueFrom } from '@/lib/maintenance-due'
 import { resolveCompletionMode, resolveFrequencyMonths, todayISO } from '@/lib/maintenance-status'
 import { unitNotDelivered } from '@/lib/unit-utils'
-import { ITEM_CONFIG_TEMP_ERROR } from '@/lib/itemConfigMessages'
-import { modeToPriority, priorityToMode } from '@/lib/completion-mode'
 
 // Crea il fornitore E la riga "ha realizzato" nella stessa azione: la select
 // del sistema sostituisce l'input categories, quindi ha già il dato per
@@ -102,95 +100,6 @@ export async function deleteSupplier(
 
   revalidatePath(`/admin/residences/${residenceId}/fornitori`)
   return {}
-}
-
-export async function updateMaintenanceItemConfig(
-  itemId: string,
-  residenceId: string,
-  data: {
-    frequency_months?: number | null
-    priority?: string | null
-    completion_mode?: CompletionMode | null
-    warranty_info?: string | null
-    supplier_id?: string | null
-  }
-): Promise<{ error?: string; success?: boolean }> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Non autenticato' }
-
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (profileError) {
-    console.error('updateMaintenanceItemConfig: errore lettura profilo', { itemId, profileError })
-    return { error: ITEM_CONFIG_TEMP_ERROR }
-  }
-  if (!['admin', 'super_admin'].includes(profile.role)) {
-    return { error: 'Permessi insufficienti per configurare questa voce.' }
-  }
-
-  const updatePayload: Record<string, unknown> = { ...data }
-
-  // Dual-write: completion_mode e priority restano sincronizzati durante la transizione.
-  // completion_mode ha precedenza (form nuovo); se arriva solo priority (form legacy)
-  // si deriva completion_mode. obligation_type non è nel payload: il tipo si eredita
-  // sempre dal template, mai scritto per voce.
-  if (data.completion_mode !== undefined) {
-    updatePayload.completion_mode = data.completion_mode
-    updatePayload.priority = modeToPriority(data.completion_mode)
-  } else if (data.priority !== undefined) {
-    updatePayload.priority = data.priority
-    updatePayload.completion_mode = priorityToMode(data.priority)
-  }
-
-  // Un item promemoria (priority=N1) non può mai risultare scaduto per design.
-  // Il guard legge la priority effettiva nel payload (già aggiornata dal dual-write),
-  // così scatta sia su "arriva completion_mode=promemoria" sia su "arriva priority=N1".
-  const effectivePriority = updatePayload.priority as string | null | undefined
-  if (effectivePriority === 'N1') {
-    let freq = data.frequency_months ?? null
-    if (!freq) {
-      const { data: itemRow, error: itemError } = await supabase
-        .from('maintenance_items')
-        .select('frequency_months, maintenance_templates(frequency_months)')
-        .eq('id', itemId)
-        .single()
-      if (itemError) {
-        console.error('updateMaintenanceItemConfig: errore lettura frequenza della voce', { itemId, itemError })
-        return { error: ITEM_CONFIG_TEMP_ERROR }
-      }
-      const tpl = itemRow?.maintenance_templates as unknown as { frequency_months: number } | null
-      freq = itemRow?.frequency_months ?? tpl?.frequency_months ?? null
-    }
-    updatePayload.status = 'in_attesa'
-    if (freq) {
-      updatePayload.next_due_date = nextDueFrom(todayISO(), freq)
-    }
-  }
-
-  // .select('id'): un UPDATE filtrato dalla RLS non da' errore, tocca 0 righe.
-  // Senza contarle, il form direbbe "Salvato" su una scrittura mai avvenuta.
-  const { data: updated, error } = await supabase
-    .from('maintenance_items')
-    .update(updatePayload)
-    .eq('id', itemId)
-    .select('id')
-
-  if (error) {
-    console.error('updateMaintenanceItemConfig: UPDATE maintenance_items', { itemId, error })
-    return { error: error.code === '42501' ? 'Permessi insufficienti per configurare questa voce.' : ITEM_CONFIG_TEMP_ERROR }
-  }
-  if (!updated || updated.length === 0) {
-    console.error('updateMaintenanceItemConfig: UPDATE senza righe toccate', { itemId, residenceId })
-    return { error: 'Voce non trovata o non modificabile con il tuo account.' }
-  }
-
-  revalidatePath(`/admin/residences/${residenceId}/manutenzioni`)
-  return { success: true }
 }
 
 // Fan-out a livello residenza: include o esclude dal piano attivo TUTTE le istanze di un
