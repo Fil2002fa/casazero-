@@ -9,7 +9,7 @@
 // shape, vuoto, tetto 200, nomi vuoti, duplicati senza distinzione di
 // maiuscole, piano intero >= 0), date per categoria (trim, vuote scartate),
 // 19 dotazioni sempre presenti e booleane (mai un "no" implicito), nomi dei
-// parametri della RPC.
+// parametri della RPC e il gate di chi crea (errore tecnico distinto da permessi).
 //
 // PERCHE' ESISTE: la stessa funzione serve il wizard manuale e la bozza da
 // documento. Una regola allentata qui allenta entrambe senza che il
@@ -29,7 +29,10 @@ try {
   console.error(`\n✗ Impossibile importare il modulo: ${err.message}`)
   process.exit(2)
 }
-const { prepareResidenceInput, residenceRpcParams, parseUnitsJson, validateUnits, MAX_UNITS } = R
+const {
+  prepareResidenceInput, residenceRpcParams, parseUnitsJson, validateUnits, MAX_UNITS,
+  residenceCreatorGate, CREATOR_TECHNICAL_ERROR,
+} = R
 const KEYS = F.RESIDENCE_FEATURES.map(f => f.key)
 
 let fallimenti = 0
@@ -162,6 +165,27 @@ check('parseUnitsJson e validateUnits esportati', [typeof parseUnitsJson, typeof
   check('RPC: valori', [p.p_builder_id, p.p_name, p.p_address, p.p_energy_class, p.p_delivery_date, p.p_units_delivery_date],
     ['b-1', 'Residenza X', 'Via Roma 1', 'B', '2027-01-01', '2020-02-01'])
   check('RPC: dotazioni sempre 19', Object.keys(p.p_features).length, KEYS.length)
+}
+
+// ---------- gate di chi crea: errore tecnico ≠ permessi ----------
+{
+  const SA = { role: 'super_admin', builder_id: 'b-1' }
+  const PERM = { error: 'Permessi insufficienti' }
+  check('gate: super_admin con builder', residenceCreatorGate(SA, null), { builderId: 'b-1' })
+  check('gate: errore di query con profilo assente = errore tecnico',
+    residenceCreatorGate(null, { code: '42501', message: 'permission denied' }), { error: CREATOR_TECHNICAL_ERROR })
+  check('gate: errore di query anche con profilo valido = errore tecnico (error vince)',
+    residenceCreatorGate(SA, new Error('rete')), { error: CREATOR_TECHNICAL_ERROR })
+  check('gate: il messaggio tecnico non dice "Permessi"', CREATOR_TECHNICAL_ERROR.includes('Permessi'), false)
+  check('gate: nessuna riga e nessun errore = permessi (esito di dominio)', residenceCreatorGate(null, null), PERM)
+  check('gate: undefined senza errore = permessi', residenceCreatorGate(undefined, null), PERM)
+  check('gate: admin = permessi', residenceCreatorGate({ role: 'admin', builder_id: 'b-1' }, null), PERM)
+  check('gate: residente = permessi', residenceCreatorGate({ role: 'residente', builder_id: 'b-1' }, null), PERM)
+  check('gate: ruolo nullo = permessi', residenceCreatorGate({ role: null, builder_id: 'b-1' }, null), PERM)
+  check('gate: super_admin senza builder',
+    residenceCreatorGate({ role: 'super_admin', builder_id: null }, null), { error: 'Nessun builder associato al tuo account' })
+  check('gate: esito tecnico e di dominio hanno messaggi diversi',
+    residenceCreatorGate(null, 'x').error !== residenceCreatorGate(null, null).error, true)
 }
 
 console.log(`\n${eseguiti - fallimenti}/${eseguiti} casi ok`)

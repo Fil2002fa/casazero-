@@ -5,21 +5,25 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/admin'
 import { RESIDENCE_FEATURES, featureFieldName, type FeatureKey } from '@/lib/residence-features'
-import { prepareResidenceInput, residenceRpcParams } from '@/lib/residence-input'
+import { prepareResidenceInput, residenceCreatorGate, residenceRpcParams } from '@/lib/residence-input'
 
 export async function createResidence(formData: FormData) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Non autenticato' }
 
-  const { data: profile } = await supabase
+  // maybeSingle: l'assenza di riga è un esito di dominio (data null, nessun
+  // error); qualunque error è un fallimento tecnico e non va mai mostrato
+  // come "Permessi insufficienti".
+  const { data: profile, error: profileErr } = await supabase
     .from('profiles')
     .select('role, builder_id')
     .eq('id', user.id)
-    .single()
+    .maybeSingle()
+  if (profileErr) console.error('[createResidence] lettura profilo fallita', profileErr)
 
-  if (profile?.role !== 'super_admin') return { error: 'Permessi insufficienti' }
-  if (!profile.builder_id) return { error: 'Nessun builder associato al tuo account' }
+  const gate = residenceCreatorGate(profile, profileErr)
+  if ('error' in gate) return { error: gate.error }
 
   // Adattatore: legge il FormData e passa valori grezzi al modulo condiviso,
   // che applica le regole (src/lib/residence-input.ts).
@@ -61,7 +65,7 @@ export async function createResidence(formData: FormData) {
   // qualsiasi errore → ROLLBACK totale, nessuna residenza parziale.
   const { data: residenceId, error: rpcErr } = await admin.rpc(
     'czero_create_residence_with_units',
-    residenceRpcParams(profile.builder_id, prepared.input),
+    residenceRpcParams(gate.builderId, prepared.input),
   )
 
   if (rpcErr || !residenceId) return { error: rpcErr?.message ?? 'Errore creazione residenza' }

@@ -164,3 +164,21 @@ export function validateUnits(parsed: unknown): ResidenceUnitsResult {
   }
   return { units }
 }
+
+// Esito della lettura del profilo di chi crea la residenza. Un errore della
+// query (permessi di DB, rete, credenziali d'ambiente) NON è "permessi
+// insufficienti": è un fallimento tecnico, e collassarlo in un messaggio di
+// dominio impedisce a chi guarda lo schermo di distinguere "non puoi" da "il
+// server ha un problema". Solo l'assenza vera di una riga (data null, nessun
+// error) o un ruolo diverso da super_admin sono esiti di dominio.
+export const CREATOR_TECHNICAL_ERROR = 'Errore tecnico nel leggere il tuo profilo, riprova'
+
+export function residenceCreatorGate(
+  profile: { role?: string | null; builder_id?: string | null } | null | undefined,
+  queryError: unknown,
+): { builderId: string } | { error: string } {
+  if (queryError) return { error: CREATOR_TECHNICAL_ERROR }
+  if (profile?.role !== 'super_admin') return { error: 'Permessi insufficienti' }
+  if (!profile.builder_id) return { error: 'Nessun builder associato al tuo account' }
+  return { builderId: profile.builder_id }
+}
