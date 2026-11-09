@@ -13,6 +13,13 @@ import {
   type LiveStatusItem,
 } from '@/lib/maintenance-status'
 import type { ObligationType } from '@/types/database'
+import { revalidatePath } from 'next/cache'
+import { authorizeResidenceActor } from '@/lib/document-access'
+import { ITEM_CONFIG_TEMP_ERROR } from '@/lib/itemConfigMessages'
+import {
+  planConfigWrite, validateConfigChanges,
+  type ConfigItem, type ConfigPlanSummary, type PlannedFields,
+} from '@/lib/maintenance-config'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
 
@@ -288,4 +295,120 @@ export async function sollecitaItem(itemId: string): Promise<SollecitoResult> {
   }
 
   return { status: 'ok', outcome }
+}
+
+// ---------------------------------------------------------------------------
+// Configura per voce (3a-3)
+// ---------------------------------------------------------------------------
+
+export type ConfigureVoceResult =
+  | { ok: true; touched: number; summary: ConfigPlanSummary }
+  | {
+      ok: false
+      kind: 'non_autenticato' | 'permessi' | 'non_trovata' | 'input_non_valido' | 'errore_tecnico'
+      message: string
+    }
+
+const CONFIGURE_ERR = (kind: Extract<ConfigureVoceResult, { ok: false }>['kind'], message: string): ConfigureVoceResult =>
+  ({ ok: false, kind, message })
+
+/**
+ * Applica a TUTTE le istanze di una voce i soli campi cambiati (modalità,
+ * fornitore, garanzia). Il client manda solo residenza, voce e i campi: le
+ * righe le legge il server (residence_id + template_id), mai una lista di id
+ * dal client. Solo super_admin del builder della residenza. Il piano (date,
+ * status, priority) lo calcola maintenance-config.ts; la scrittura è la RPC
+ * czero_configure_voce, atomica e SECURITY INVOKER: la RLS resta la seconda
+ * barriera. completions non è toccata.
+ */
+export async function configureVoce(
+  residenceId: string,
+  templateId: string,
+  changes: unknown,
+): Promise<ConfigureVoceResult> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return CONFIGURE_ERR('non_autenticato', 'Non autenticato')
+
+  const prefix = 'configureVoce:'
+  const gate = await authorizeResidenceActor(createServiceClient(), user.id, residenceId, prefix)
+  if (!gate.ok) {
+    if (gate.status === 500) return CONFIGURE_ERR('errore_tecnico', ITEM_CONFIG_TEMP_ERROR)
+    if (gate.status === 404) return CONFIGURE_ERR('non_trovata', 'Residenza non trovata.')
+    return CONFIGURE_ERR('permessi', 'Permessi insufficienti per configurare questa voce.')
+  }
+  if (gate.role !== 'super_admin') {
+    return CONFIGURE_ERR('permessi', 'Permessi insufficienti per configurare questa voce.')
+  }
+
+  // Le righe della voce, lette dal server con la sessione (RLS). completions(count):
+  // un conteggio, non la lista, per non incontrare il limite di righe di PostgREST.
+  const [itemsRes, suppliersRes] = await Promise.all([
+    supabase
+      .from('maintenance_items')
+      .select(`id, template_id, unit_id, status, next_due_date, completion_mode, obligation_type, activation_status, frequency_months, warranty_info, supplier_id, due_basis_override, maintenance_templates(title, category, completion_mode, obligation_type, frequency_months, is_active), units(delivery_date), completions(count)`)
+      .eq('residence_id', residenceId)
+      .eq('template_id', templateId),
+    supabase
+      .from('suppliers')
+      .select('id')
+      .eq('builder_id', gate.residence.builder_id),
+  ])
+  if (itemsRes.error) {
+    console.error(`${prefix} errore lettura righe della voce`, { residenceId, templateId, error: itemsRes.error })
+    return CONFIGURE_ERR('errore_tecnico', ITEM_CONFIG_TEMP_ERROR)
+  }
+  if (suppliersRes.error) {
+    console.error(`${prefix} errore lettura fornitori`, { residenceId, error: suppliersRes.error })
+    return CONFIGURE_ERR('errore_tecnico', ITEM_CONFIG_TEMP_ERROR)
+  }
+  const rawItems = itemsRes.data ?? []
+  if (rawItems.length === 0) return CONFIGURE_ERR('non_trovata', 'Voce non trovata in questa residenza.')
+
+  const items: ConfigItem[] = rawItems.map(r => {
+    const comp = r.completions as unknown as { count: number }[] | null
+    return {
+      id: r.id,
+      template_id: r.template_id,
+      unit_id: r.unit_id,
+      status: r.status,
+      next_due_date: r.next_due_date,
+      completion_mode: r.completion_mode,
+      obligation_type: r.obligation_type,
+      activation_status: r.activation_status,
+      frequency_months: r.frequency_months,
+      warranty_info: r.warranty_info,
+      supplier_id: r.supplier_id,
+      due_basis_override: r.due_basis_override as string | null,
+      has_completions: (comp?.[0]?.count ?? 0) > 0,
+      maintenance_templates: r.maintenance_templates as unknown as ConfigItem['maintenance_templates'],
+      units: r.units as unknown as ConfigItem['units'],
+    }
+  })
+
+  const validation = validateConfigChanges(changes, {
+    hasCommonAreaRows: items.some(i => i.unit_id === null),
+    allowedSupplierIds: new Set((suppliersRes.data ?? []).map(s => s.id as string)),
+  })
+  if (!validation.ok) return CONFIGURE_ERR('input_non_valido', validation.message)
+
+  const plan = planConfigWrite(items, validation.changes, todayISO())
+  if (plan.rows.length === 0) return { ok: true, touched: 0, summary: plan.summary }
+
+  const payload = plan.rows.map(r => ({ id: r.id, ...(r.fields satisfies PlannedFields) }))
+  const { data, error } = await supabase.rpc('czero_configure_voce', {
+    p_residence_id: residenceId,
+    p_template_id: templateId,
+    p_rows: payload,
+  })
+  if (error) {
+    console.error(`${prefix} RPC czero_configure_voce`, { residenceId, templateId, error })
+    if (error.code === '42501') return CONFIGURE_ERR('permessi', 'Permessi insufficienti per configurare questa voce.')
+    if (error.code === 'P0002') return CONFIGURE_ERR('non_trovata', 'Voce non trovata in questa residenza.')
+    if (error.code === '22023') return CONFIGURE_ERR('input_non_valido', 'Configurazione non valida.')
+    return CONFIGURE_ERR('errore_tecnico', ITEM_CONFIG_TEMP_ERROR)
+  }
+
+  revalidatePath(`/admin/residences/${residenceId}/manutenzioni`)
+  return { ok: true, touched: Array.isArray(data) ? data.length : plan.rows.length, summary: plan.summary }
 }
