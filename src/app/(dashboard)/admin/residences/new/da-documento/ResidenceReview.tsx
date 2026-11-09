@@ -22,7 +22,7 @@ import {
 } from '@/lib/residence-draft'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
-import { FieldProvenance } from '@/components/residence-wizard/FieldProvenance'
+import { CitationDetails, FieldProvenance } from '@/components/residence-wizard/FieldProvenance'
 import { FeaturesSection } from '@/components/residence-wizard/FeaturesSection'
 import { ResidenceDataSection } from '@/components/residence-wizard/ResidenceDataSection'
 import { UnitListSection } from '@/components/residence-wizard/UnitListSection'
@@ -132,11 +132,16 @@ export function ResidenceReview({
     name: <FieldProvenance field={draft.name} />,
     address: <FieldProvenance field={draft.address} />,
     delivery_date: (
-      <p className="text-xs text-text-secondary mt-1">
-        {suggestion.state === 'non_trovato'
-          ? 'La data di consegna non si ricava dal documento: inseriscila tu.'
-          : `Nel documento c'è una data di agibilità: ${formatDateIT(suggestion.value)}${suggestion.citation ? ` (“${suggestion.citation}”)` : ''}. Non è la data di consegna e non viene usata: inseriscila tu.`}
-      </p>
+      <div className="mt-1">
+        <p className="text-xs text-text-secondary">
+          {suggestion.state === 'non_trovato'
+            ? 'Non si ricava dal documento: inseriscila tu.'
+            : `Agibilità nel documento: ${formatDateIT(suggestion.value)}. Non è la consegna e non viene usata.`}
+        </p>
+        {suggestion.state !== 'non_trovato' && suggestion.citation && (
+          <CitationDetails citation={suggestion.citation} />
+        )}
+      </div>
     ),
   }
 
@@ -205,7 +210,29 @@ export function ResidenceReview({
   }
 
   return (
-    <>
+    <div className="mx-auto w-full max-w-3xl">
+      {/* Barra fissa: quante dotazioni mancano e l'unico gesto che trasforma
+          "senza risposta" in "no", solo dopo conferma. "Crea residenza" resta
+          in fondo. */}
+      <div className="sticky top-0 z-10 -mx-1 mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface/95 px-4 py-2.5 backdrop-blur">
+        <span
+          className={`text-sm font-medium ${unresolved.length === 0 ? 'text-text-secondary' : 'text-semantic-amber'}`}
+          aria-live="polite"
+        >
+          {unresolved.length === 0
+            ? 'Tutte le dotazioni hanno una risposta'
+            : `${pluralize(unresolved.length, 'dotazione', 'dotazioni')} da rispondere`}
+        </span>
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={unresolved.length === 0}
+          onClick={() => setConfirmNoOpen(true)}
+        >
+          Segna le rimanenti come No
+        </Button>
+      </div>
+
       {partialReadNote && (
         <div className="bg-semantic-amber-bg rounded-xl p-3 mb-5">
           <p className="text-sm text-semantic-amber">{partialReadNote}</p>
@@ -249,24 +276,6 @@ export function ResidenceReview({
             onAnswer: (key, value) => setAnswers(prev => ({ ...prev, [key]: value })),
           }}
         />
-
-        {/* Segna le rimanenti come No: l'unico gesto che trasforma "senza
-            risposta" in "no", e solo dopo conferma. */}
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={unresolved.length === 0}
-            onClick={() => setConfirmNoOpen(true)}
-          >
-            Segna le rimanenti come No
-          </Button>
-          <span className="text-xs text-text-secondary">
-            {unresolved.length === 0
-              ? 'Tutte le dotazioni hanno una risposta'
-              : pluralize(unresolved.length, 'dotazione senza risposta', 'dotazioni senza risposta')}
-          </span>
-        </div>
 
         {draft.declaredUnitCount.state !== 'non_trovato' && (
           <section className="bg-surface rounded-xl border border-border p-4">
@@ -379,6 +388,6 @@ export function ResidenceReview({
           </p>
         </div>
       </Modal>
-    </>
+    </div>
   )
 }
