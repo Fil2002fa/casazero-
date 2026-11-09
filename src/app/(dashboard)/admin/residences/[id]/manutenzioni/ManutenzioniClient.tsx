@@ -1,26 +1,14 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
-import { ChevronDown, ChevronUp, Bell } from 'lucide-react'
-import { MaintenanceBadge } from '@/components/MaintenanceBadge'
-import { AwaitingDeliveryLine, AwaitingDeliveryChip } from '@/components/AwaitingDelivery'
-import { FilterCounters } from '@/components/FilterCounters'
-import { Select } from '@/components/ui/Input'
-import { ItemConfigForm } from './ItemConfigForm'
+import { useCallback, useMemo, useState, useTransition } from 'react'
 import { MaintenanceList } from './MaintenanceList'
 import { MaintenanceDetailPanel } from './MaintenanceDetailPanel'
 import { buildVoceDetail } from '@/lib/maintenance-detail'
 import { setTemplateActivationForResidence } from '../fornitori/actions'
-import { sollecitaItem, type SollecitoResult } from './actions'
-import { isOverdueLive, isInCorso, isAwaitingDelivery, resolveCompletionMode } from '@/lib/maintenance-status'
+import { resolveCompletionMode } from '@/lib/maintenance-status'
 import { unitNotDelivered } from '@/lib/unit-utils'
 import type { MaintenancePriority, MaintenanceStatus, CompletionMode, ObligationType, ItemActivation } from '@/types/database'
-import { formatUnitLabel } from '@/lib/formatUnitLabel'
-import { formatFrequency } from '@/lib/formatFrequency'
 import { pluralize } from '@/lib/pluralize'
-import { Button } from '@/components/ui/Button'
-import { Modal } from '@/components/ui/Modal'
-import { useToast } from '@/components/ui/Toast'
 
 export type ItemRow = {
   id: string
@@ -58,30 +46,6 @@ export type CompletionRow = {
   attachments: { id: string; file_name: string; storage_path: string }[]
 }
 
-export type FilterState = 'scaduta' | 'in_corso' | 'completate' | null
-export type AttentionModeFilter = 'amministratore' | 'residente' | null
-
-// Risoluzione assi: item override → template fallback. Unico call-site per testa e corpo,
-// così non nascono calcoli paralleli divergenti. Refactor puro dei calcoli inline preesistenti.
-function resolveAxes(item: ItemRow) {
-  const tpl = item.maintenance_templates
-  return {
-    mode:       (item.completion_mode ?? tpl?.completion_mode) as CompletionMode,
-    obligation: (item.obligation_type ?? tpl?.obligation_type) as ObligationType,
-    priority:   (item.priority ?? tpl?.priority ?? 'N2') as MaintenancePriority,
-  }
-}
-
-// Chiave del blocco-voce espanso nella vista per unità (categoria → titolo).
-function templateKey(category: string, title: string) {
-  return `${category}__${title}`
-}
-
-function daysOverdue(dateStr: string | null, today: Date): number {
-  if (!dateStr) return 0
-  return Math.floor((today.getTime() - new Date(dateStr).getTime()) / 86400000)
-}
-
 // Natural sort delle label unità: le label senza numero (nomi custom, es. "Appartamento
 // Rossi") vanno prima in ordine alfabetico; le "Unità N" numerate seguono in ordine crescente.
 function compareUnitLabels(a: string, b: string): number {
@@ -102,9 +66,6 @@ interface Props {
   items: ItemRow[]
   completions: CompletionRow[]
   suppliers: { id: string; name: string }[]
-  unitPrimaryNames: Record<string, string>
-  initialFilter?: FilterState
-  initialModeFilter?: AttentionModeFilter
   // Composizione del piano (Escludi/Includi) riservata al costruttore: obbligatoria,
   // senza default, così un chiamante che dimentica di passarla fallisce in build
   // invece di nascondere in silenzio i bottoni al super_admin.
@@ -126,121 +87,17 @@ type PendingAction = {
   hasUndeliveredUnitItems: boolean
 }
 
-// Sollecito in transito verso il modale di conferma — unico per superficie
-// (zona attenzione: un item alla volta; UnitRow: un solo item per istanza).
-type SollecitaConfirmState = {
-  itemId: string
-  title: string
-  mode: CompletionMode
-  unitLabel: string
-  days: number
-}
-
-// Gate di visibilità del pulsante Sollecita, unica fonte per zona attenzione e
-// UnitRow. isOverdueLive resta il gate di ritardo (commit 1, non si tocca):
-// qui si aggiunge solo il gating di ruolo. Sugli item completion_mode
-// 'amministratore' la action rifiuta con forbidden per il ruolo admin (il
-// destinatario sarebbe l'admin stesso) — corretto lato server, ma in UI
-// sarebbe un pulsante che fallisce sempre: va nascosto. canManagePlan
-// (page.tsx:103) è esattamente `profile.role === 'super_admin'`: qui è il
-// ruolo per cui la action non pone quel vincolo.
-function sollecitaVisible(mode: CompletionMode, overdue: boolean, canManagePlan: boolean) {
-  return overdue && mode !== 'promemoria' && (mode !== 'amministratore' || canManagePlan)
-}
-
-// Traduce l'esito di sollecitaItem in un messaggio toast. Unica fonte per zona
-// attenzione e UnitRow: mai un assunto ottimistico, ogni esito il suo
-// messaggio. Toast.tsx:8 ha solo kind 'success'/'error' — qui il colore segna
-// se l'operazione ha raggiunto lo scopo, il testo distingue simulato da reale
-// da già-sollecitato. Un esito parziale (alcuni destinatari raggiunti, altri
-// no) resta 'success': non è un fallimento.
-function sollecitoToast(result: SollecitoResult): { kind: 'success' | 'error'; message: string } {
-  switch (result.status) {
-    case 'ok': {
-      const { sent, simulated, failed, withoutEmail, skipped } = result.outcome
-      if (sent > 0) {
-        return {
-          kind: 'success',
-          message: (failed > 0 || withoutEmail > 0)
-            ? 'Sollecito inviato ad alcuni destinatari (altri non raggiunti).'
-            : 'Sollecito inviato.',
-        }
-      }
-      if (simulated > 0) {
-        return {
-          kind: 'success',
-          message: 'Sollecito simulato: nessuna email è partita davvero (ambiente locale senza RESEND_API_KEY).',
-        }
-      }
-      if (skipped > 0) {
-        return { kind: 'success', message: 'Già sollecitato nelle ultime 24 ore.' }
-      }
-      // sent=simulated=skipped=0: destinatari c'erano, ma nessun invio è arrivato
-      // (tutti falliti e/o senza email registrata).
-      return { kind: 'error', message: 'Sollecito non riuscito: nessun destinatario raggiunto.' }
-    }
-    case 'no_recipients':
-      return { kind: 'success', message: 'Nessun destinatario configurato per questa voce.' }
-    case 'not_solicitable':
-    case 'not_overdue':
-      // Il gate sollecitaVisible tiene il pulsante nascosto in condizioni normali:
-      // qui solo se lo stato è cambiato tra render e click (race).
-      return { kind: 'error', message: 'Non è più possibile sollecitare questa voce: aggiorna la pagina.' }
-    case 'forbidden':
-      return { kind: 'error', message: 'Non hai i permessi per sollecitare questa voce.' }
-    case 'error':
-      // result.message è il testo grezzo del provider: resta in console, mai nel toast.
-      console.error('[sollecitaItem]', result.message)
-      return { kind: 'error', message: 'Si è verificato un errore. Riprova più tardi.' }
-  }
-}
-
-// Testo del modale di conferma Sollecita: unica fonte per zona attenzione e
-// UnitRow. Il destinatario si deduce solo dal completion_mode (mai risolto ad
-// account/nome — quello resta nel toast a invio concluso). mode qui non è mai
-// 'promemoria': il gate sollecitaVisible lo esclude a monte.
-function sollecitaConfirmCopy(mode: CompletionMode, unitLabel: string, title: string, days: number): { title: string; body: string } {
-  const recipient = mode === 'residente' ? `il residente di ${unitLabel}` : "l'amministratore della residenza"
-  return {
-    title: 'Invia sollecito',
-    body: `Stai per inviare un sollecito a ${recipient} per "${title}", in ritardo da ${pluralize(days, 'giorno', 'giorni')}.`,
-  }
-}
-
-export function ManutenzioniClient({ residenceId, residenceName, items, completions, suppliers, unitPrimaryNames, initialFilter = null, initialModeFilter = null, canManagePlan, today: todayServer }: Props) {
-  const { showToast } = useToast()
-  // Un item per volta: Set di id in corso, cosi' il disabled riguarda solo il
-  // pulsante cliccato e non l'intera zona attenzione.
-  const [pendingSollecitoIds, setPendingSollecitoIds] = useState<Set<string>>(new Set())
-  const [activeFilter, setActiveFilter] = useState<FilterState>(initialFilter)
-  const modeFilter = initialModeFilter
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+export function ManutenzioniClient({ residenceId, residenceName, items, completions, canManagePlan, today: todayServer }: Props) {
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null)
-  const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null)
-  // Voce aperta nel pannello di dettaglio (lista per voce, commit 2a).
+  // Voce aperta nel pannello di dettaglio (lista per voce).
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
-  // Voce da portare in vista nella vista per_unita (ref: non è stato da
-  // rendere, serve solo all'effetto di scorrimento qui sotto). Oggi nessuno la
-  // imposta: la vista non ha ingressi.
-  const scrollTargetRef = useRef<string | null>(null)
-  const [expandedCompletion, setExpandedCompletion] = useState<string | null>(null)
   const [planView, setPlanView] = useState<'attive' | 'escluse'>('attive')
-  // Scheda Attive: la lista per voce è l'unica vista raggiungibile. "per unità"
-  // (zona attenzione, drill-down, Completate) è la vista precedente: resta nel
-  // codice, ma nessun bottone e nessun parametro URL la apre più — ?filtro= e
-  // ?modalita= atterrano sulla lista e vengono ignorati. Verrà tolta con il
-  // commit 3a (Configura per voce).
-  const [attiveView, setAttiveView] = useState<'lista' | 'per_unita'>('lista')
   // La vista Escluse è composizione del piano, riservata al costruttore: se lo stato
-  // finisse su 'escluse' per qualunque via (oggi nessuna, ma niente lo garantisce in
-  // futuro — es. un parametro URL), l'admin va forzato su 'attive' invece di atterrare
-  // su una schermata senza selettore per uscirne.
+  // finisse su 'escluse' per qualunque via, l'admin va forzato su 'attive' invece di
+  // atterrare su una schermata senza selettore per uscirne.
   const effectivePlanView = canManagePlan ? planView : 'attive'
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
   const [isPending, startTransition] = useTransition()
-  const [sollecitaConfirm, setSollecitaConfirm] = useState<SollecitaConfirmState | null>(null)
-
-  const today = new Date()
 
   // Pannello di dettaglio: la voce intera (mai filtrata dal filtro-unità, che ne
   // evidenzia solo la riga). I fornitori li vede solo chi compone il piano.
@@ -255,19 +112,6 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
   )
   // Identità stabile: useDialogFocus la mette nelle dipendenze dell'effetto.
   const closeDetail = useCallback(() => setSelectedTemplateId(null), [])
-  // Nessun ingresso alla vista per_unita dalla UI (consegna 10/11): il codice
-  // resta morto fino al commit 3a, che lo sostituisce e lo toglie.
-  useEffect(() => {
-    const id = scrollTargetRef.current
-    if (id === null || attiveView !== 'per_unita') return
-    scrollTargetRef.current = null
-    document.getElementById(`voce-${id}`)?.scrollIntoView({ block: 'start' })
-  }, [attiveView, expandedTemplate])
-
-  const sollecitaCopy = sollecitaConfirm
-    ? sollecitaConfirmCopy(sollecitaConfirm.mode, sollecitaConfirm.unitLabel, sollecitaConfirm.title, sollecitaConfirm.days)
-    : null
-  const sollecitaBusy = sollecitaConfirm ? pendingSollecitoIds.has(sollecitaConfirm.itemId) : false
 
   function handleConfirm() {
     if (!pendingAction) return
@@ -278,38 +122,11 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
     })
   }
 
-  async function handleSollecita(itemId: string) {
-    if (pendingSollecitoIds.has(itemId)) return
-    setPendingSollecitoIds(prev => new Set(prev).add(itemId))
-    try {
-      const result = await sollecitaItem(itemId)
-      const { kind, message } = sollecitoToast(result)
-      showToast(kind, message)
-    } finally {
-      setPendingSollecitoIds(prev => {
-        const next = new Set(prev)
-        next.delete(itemId)
-        return next
-      })
-    }
-  }
-
   // Gli item archiviati spariscono dal piano attivo; le loro completion restano nel fascicolo
   const liveItems = items.filter(i => i.activation_status !== 'archiviata')
 
-  // Contatori dalle sorgenti canoniche (invariati: liveItems e yearCompletions)
-  const scaduteCount = liveItems.filter(i => isOverdueLive(i)).length
-  const inCorsoCount = liveItems.filter(i => isInCorso(i)).length
-  const years = [...new Set(completions.map(c => Number(c.completed_at.slice(0, 4))))].sort((a, b) => b - a)
-  const yearCompletions = completions.filter(c => Number(c.completed_at.slice(0, 4)) === selectedYear)
-  const completedCount = yearCompletions.length
-
-  function toggleFilter(f: FilterState) {
-    setActiveFilter(prev => (prev === f ? null : f))
-  }
-
-  // Opzioni del select-unità: derivate una volta da liveItems (mai da filteredItems),
-  // così restano tutte le unità anche quando il piano è filtrato.
+  // Opzioni del select-unità: derivate una volta da liveItems, così restano tutte
+  // le unità anche quando il piano è filtrato.
   const unitOptions = (() => {
     const seen = new Map<string, string>()
     for (const i of liveItems) {
@@ -319,59 +136,6 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
       .map(([id, label]) => ({ id, label }))
       .sort((a, b) => compareUnitLabels(a.label, b.label))
   })()
-
-  // Filtro-unità come drill-down: gli item scope=condominio (unit_id null) restano sempre visibili.
-  const filteredItems = selectedUnitId
-    ? liveItems.filter(i => i.unit_id === selectedUnitId || i.unit_id === null)
-    : liveItems
-
-  // TESTA — zona attenzione (per-istanza). Guardia promemoria strutturale: N1 non scade mai.
-  const allAttentionItems = filteredItems
-    .filter(i => {
-      const mode = resolveAxes(i).mode
-      return (isOverdueLive(i) || isInCorso(i)) && mode !== 'promemoria' && (modeFilter === null || mode === modeFilter)
-    })
-    .sort((a, b) => {
-      const aOverdue = isOverdueLive(a)
-      const bOverdue = isOverdueLive(b)
-      if (aOverdue !== bOverdue) return aOverdue ? -1 : 1
-      if (aOverdue) {
-        const da = a.next_due_date ? new Date(a.next_due_date).getTime() : Infinity
-        const db = b.next_due_date ? new Date(b.next_due_date).getTime() : Infinity
-        return da - db // più in ritardo (data più vecchia) prima
-      }
-      return 0
-    })
-
-  // CORPO — piano per tipo, raggruppato per categoria (esterno) → titolo template (interno).
-  const byTemplate = new Map<string, Map<string, ItemRow[]>>()
-  for (const item of filteredItems) {
-    const cat = item.maintenance_templates?.category ?? 'Altro'
-    const title = item.maintenance_templates?.title ?? 'Senza titolo'
-    if (!byTemplate.has(cat)) byTemplate.set(cat, new Map())
-    const inner = byTemplate.get(cat)!
-    if (!inner.has(title)) inner.set(title, [])
-    inner.get(title)!.push(item)
-  }
-
-  // Filtro Scadute/In corso: mostra solo i tipi con almeno un'istanza in quello stato
-  // (guardia promemoria). Il drill-down mostra comunque TUTTE le istanze del tipo.
-  let displayTemplate: Map<string, Map<string, ItemRow[]>>
-  if (activeFilter === null || activeFilter === 'completate') {
-    displayTemplate = activeFilter === 'completate' ? new Map() : byTemplate
-  } else {
-    const status = activeFilter
-    const matchesFilter = status === 'scaduta' ? isOverdueLive : isInCorso
-    displayTemplate = new Map()
-    for (const [cat, inner] of byTemplate) {
-      const keptInner = new Map<string, ItemRow[]>()
-      for (const [title, typeItems] of inner) {
-        const hasMatch = typeItems.some(i => matchesFilter(i) && resolveAxes(i).mode !== 'promemoria')
-        if (hasMatch) keptInner.set(title, typeItems)
-      }
-      if (keptInner.size > 0) displayTemplate.set(cat, keptInner)
-    }
-  }
 
   // Tipi interamente esclusi dal piano: costruiti da `items` RAW (liveItems li nasconde).
   // Un tipo entra qui solo se OGNI sua istanza è archiviata; i tipi misti restano nel piano.
@@ -406,18 +170,6 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
       a.category.localeCompare(b.category, 'it') || a.title.localeCompare(b.title, 'it'))
   })()
 
-  // Mappa completamenti per categoria (fascicolo, invariata — lookup su items RAW)
-  const completionsByCategory = new Map<string, { completion: CompletionRow; item: ItemRow }[]>()
-  if (activeFilter === 'completate') {
-    for (const c of yearCompletions) {
-      const item = items.find(i => i.id === c.item_id)
-      if (!item) continue
-      const cat = item.maintenance_templates?.category ?? 'Altro'
-      if (!completionsByCategory.has(cat)) completionsByCategory.set(cat, [])
-      completionsByCategory.get(cat)!.push({ completion: c, item })
-    }
-  }
-
   return (
     <div className="space-y-6">
       {/* Segmented control: piano attivo vs tipi esclusi — solo per chi può comporre il piano */}
@@ -444,330 +196,16 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
         </div>
       )}
 
-      {effectivePlanView === 'attive' && attiveView === 'lista' && (
+      {effectivePlanView === 'attive' && (
         <MaintenanceList
           items={items}
           completions={completions}
           today={todayServer}
           unitOptions={unitOptions}
           selectedUnitId={selectedUnitId}
-          onSelectUnit={id => { setSelectedUnitId(id); setExpandedTemplate(null) }}
+          onSelectUnit={setSelectedUnitId}
           onOpen={setSelectedTemplateId}
         />
-      )}
-
-      {effectivePlanView === 'attive' && attiveView === 'per_unita' && (
-      <>
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={() => setAttiveView('lista')}
-          className="rounded-lg border border-border bg-surface px-3 h-11 md:h-9 text-sm font-medium text-brand-dark hover:bg-background cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium"
-        >
-          Torna alla lista
-        </button>
-      </div>
-      {/* Contatori-filtro: stessa partizione della lista, toggle se già attivi */}
-      <FilterCounters
-        label="Filtra il piano per stato"
-        items={[
-          { key: 'scaduta',    label: 'Scadute',    value: scaduteCount,   tone: 'overdue',    active: activeFilter === 'scaduta',    onClick: () => toggleFilter('scaduta') },
-          { key: 'in_corso',   label: 'In corso',   value: inCorsoCount,   tone: 'inprogress', active: activeFilter === 'in_corso',   onClick: () => toggleFilter('in_corso') },
-          { key: 'completate', label: 'Completate', value: completedCount, tone: 'neutral',    active: activeFilter === 'completate', onClick: () => toggleFilter('completate') },
-        ]}
-      />
-
-      {/* Selettore anni — visibile solo con filtro Completate */}
-      {activeFilter === 'completate' && years.length > 0 && (
-        <div className="flex gap-2 flex-wrap">
-          {years.map(year => (
-            <button
-              key={year}
-              onClick={() => setSelectedYear(year)}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                selectedYear === year
-                  ? 'bg-brand-dark text-white'
-                  : 'bg-surface border border-border text-text-secondary'
-              }`}
-            >
-              {year}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Lista completamenti (filtro Completate) — fascicolo invariato */}
-      {activeFilter === 'completate' && (
-        completionsByCategory.size === 0 ? (
-          <div className="bg-surface rounded-xl border border-border p-6 text-center">
-            <p className="text-sm text-text-secondary">
-              Nessun intervento completato nel {selectedYear}.
-            </p>
-          </div>
-        ) : (
-          Array.from(completionsByCategory.entries()).map(([cat, entries]) => (
-            <section key={cat} className="space-y-2">
-              <h2 className="text-sm font-medium text-text-primary">{cat}</h2>
-              <div className="space-y-2">
-                {entries.map(({ completion, item }) => {
-                  const tpl = item.maintenance_templates
-                  const { mode: effMode, obligation: effObl } = resolveAxes(item)
-                  const dateStr = new Date(completion.completed_at).toLocaleDateString('it-IT', {
-                    day: 'numeric', month: 'short', year: 'numeric',
-                  })
-                  const hasDetail = !!completion.notes || completion.attachments?.length > 0
-                  const isExpanded = expandedCompletion === completion.id
-
-                  const header = (
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-sm font-medium text-text-primary truncate">{tpl?.title}</p>
-                        <MaintenanceBadge mode={effMode} obligation={effObl} status="completata" />
-                      </div>
-                      <div className="flex gap-3 mt-1 flex-wrap">
-                        {item.units && (
-                          <span className="text-xs text-text-secondary">{formatUnitLabel(item.units.label)}</span>
-                        )}
-                        <span className="text-xs text-brand-medium font-medium">
-                          Completata il {dateStr}
-                        </span>
-                        {completion.performed_by_name && (
-                          <span className="text-xs text-text-secondary">· {completion.performed_by_name}</span>
-                        )}
-                      </div>
-                    </div>
-                  )
-
-                  if (!hasDetail) {
-                    return (
-                      <div key={completion.id} className="bg-surface rounded-xl border border-border p-3">
-                        {header}
-                      </div>
-                    )
-                  }
-
-                  return (
-                    <div key={completion.id} className="bg-surface rounded-xl border border-border overflow-hidden">
-                      <button
-                        onClick={() => setExpandedCompletion(isExpanded ? null : completion.id)}
-                        className="w-full p-3 flex items-center gap-3 text-left"
-                      >
-                        {header}
-                        {isExpanded
-                          ? <ChevronUp className="w-4 h-4 text-text-secondary flex-shrink-0" strokeWidth={1.6} />
-                          : <ChevronDown className="w-4 h-4 text-text-secondary flex-shrink-0" strokeWidth={1.6} />}
-                      </button>
-
-                      {isExpanded && (
-                        <div className="border-t border-border p-3 space-y-2">
-                          {completion.notes && (
-                            <p className="text-sm text-text-secondary leading-relaxed">{completion.notes}</p>
-                          )}
-                          {completion.attachments?.length > 0 && (
-                            <div className="flex flex-col gap-1">
-                              {completion.attachments.map(att => (
-                                <a
-                                  key={att.id}
-                                  href={`/api/download?bucket=attachments&path=${encodeURIComponent(att.storage_path)}`}
-                                  className="text-xs text-brand-medium underline"
-                                >
-                                  {att.file_name}
-                                </a>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            </section>
-          ))
-        )
-      )}
-
-      {/* Select filtro-unità (drill-down secondario) */}
-      {activeFilter !== 'completate' && unitOptions.length > 0 && (
-        <Select
-          value={selectedUnitId ?? ''}
-          onChange={e => { setSelectedUnitId(e.target.value || null); setExpandedTemplate(null) }}
-        >
-          <option value="">Tutte le unità</option>
-          {unitOptions.map(u => (
-            <option key={u.id} value={u.id}>{formatUnitLabel(u.label)}</option>
-          ))}
-        </Select>
-      )}
-
-      {/* TESTA — zona attenzione (per-istanza) */}
-      {activeFilter !== 'completate' && (
-        <section className="space-y-2">
-          <h2 className="text-sm font-medium text-text-primary">
-            {allAttentionItems.length === 0
-              ? 'Tutto in regola'
-              : `${allAttentionItems.length} ${allAttentionItems.length === 1 ? 'intervento richiede' : 'interventi richiedono'} attenzione`}
-          </h2>
-          {allAttentionItems.length === 0 ? (
-            <div className="bg-brand-light rounded-xl p-4 flex items-center gap-3">
-              <span className="w-2.5 h-2.5 rounded-full bg-brand-medium flex-shrink-0" />
-              <p className="text-sm text-brand-dark">Nessun intervento in ritardo.</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {allAttentionItems.map(item => {
-                const tpl = item.maintenance_templates
-                const { mode: effMode, obligation: effObl } = resolveAxes(item)
-                const unitLabel = item.unit_id === null
-                  ? 'Condominio'
-                  : (item.units ? formatUnitLabel(item.units.label) : '—')
-                const overdueNow = isOverdueLive(item)
-                const badgeStatus = overdueNow ? 'scaduta' : item.status
-                const n = daysOverdue(item.next_due_date, today)
-                return (
-                  <div key={item.id} className="bg-surface rounded-xl border border-border p-3">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm font-medium text-text-primary truncate">{tpl?.title}</p>
-                      <MaintenanceBadge mode={effMode} obligation={effObl} status={badgeStatus} />
-                    </div>
-                    <div className="flex items-center gap-3 mt-1 flex-wrap">
-                      <span className="text-xs text-text-secondary">{unitLabel}</span>
-                      {overdueNow ? (
-                        <span className="text-xs text-semantic-red">
-                          in ritardo da {n} {n === 1 ? 'giorno' : 'giorni'}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-semantic-amber">in corso</span>
-                      )}
-                      {sollecitaVisible(effMode, overdueNow, canManagePlan) && (
-                        <Button
-                          variant="secondary"
-                          size="table"
-                          className="ml-auto gap-1.5 px-2.5 text-xs"
-                          onClick={() => setSollecitaConfirm({ itemId: item.id, title: tpl?.title ?? '', mode: effMode, unitLabel, days: n })}
-                        >
-                          <Bell className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={1.6} />
-                          Sollecita
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* CORPO — piano per tipo (categoria → righe-tipo → drill-down unità) */}
-      {activeFilter !== 'completate' && (
-        displayTemplate.size === 0 && activeFilter !== null ? (
-          <div className="bg-surface rounded-xl border border-border p-6 text-center">
-            <p className="text-sm text-text-secondary">
-              Nessuna voce {activeFilter === 'scaduta' ? 'scaduta' : 'in corso'}.
-            </p>
-          </div>
-        ) : (
-          Array.from(displayTemplate.entries()).map(([cat, inner]) => (
-            <section key={cat} className="space-y-2">
-              <h2 className="text-sm font-medium text-text-primary">{cat}</h2>
-              <div className="space-y-2">
-                {Array.from(inner.entries()).map(([title, typeItems]) => {
-                  const rep = typeItems[0]
-                  const { mode, obligation } = resolveAxes(rep)
-                  const isCondominio = typeItems.every(i => i.unit_id === null)
-                  const inRitardo = typeItems.filter(
-                    i => (isOverdueLive(i) || isInCorso(i)) && resolveAxes(i).mode !== 'promemoria'
-                  ).length
-                  // Le promemoria non ci entrano: isAwaitingDelivery le esclude
-                  // già, quindi un gruppo di promemoria non mostra mai il chip.
-                  const inAttesa = typeItems.filter(isAwaitingDelivery).length
-                  const freq = rep.frequency_months ?? rep.maintenance_templates?.frequency_months
-                  const key = templateKey(cat, title)
-                  const isExpanded = expandedTemplate === key
-
-                  return (
-                    <div key={title} id={`voce-${rep.template_id}`} className="bg-surface rounded-xl border border-border overflow-hidden">
-                      <button
-                        onClick={() => setExpandedTemplate(isExpanded ? null : key)}
-                        className="w-full p-3 flex items-center gap-3 text-left"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-sm font-medium text-text-primary truncate">{title}</p>
-                            <MaintenanceBadge mode={mode} obligation={obligation} status="in_attesa" />
-                          </div>
-                          <div className="flex gap-3 mt-1 flex-wrap">
-                            <span className="text-xs text-text-secondary">
-                              {isCondominio ? 'Condominio' : `${typeItems.length} unità`}
-                            </span>
-                            <span className="text-xs text-text-secondary">{formatFrequency(freq)}</span>
-                            {inRitardo > 0 && (
-                              <span className="text-xs text-semantic-red font-medium">{inRitardo} in ritardo</span>
-                            )}
-                            {inAttesa > 0 && (
-                              <AwaitingDeliveryChip count={inAttesa} total={typeItems.length} />
-                            )}
-                          </div>
-                        </div>
-                        {isExpanded
-                          ? <ChevronUp className="w-4 h-4 text-text-secondary flex-shrink-0" strokeWidth={1.6} />
-                          : <ChevronDown className="w-4 h-4 text-text-secondary flex-shrink-0" strokeWidth={1.6} />}
-                      </button>
-
-                      {isExpanded && (
-                        <div className="border-t border-border">
-                          {canManagePlan && (
-                            <div className="px-3 py-2 bg-background flex justify-end">
-                              <button
-                                onClick={() => setPendingAction({
-                                  templateId: rep.template_id,
-                                  title,
-                                  targetStatus: 'archiviata',
-                                  count: typeItems.length,
-                                  freqMonths: freq ?? null,
-                                  hasUndeliveredUnitItems: false,
-                                })}
-                                className="text-xs text-semantic-red font-medium px-2 py-1 rounded-md hover:bg-semantic-red-bg transition-colors"
-                              >
-                                Escludi dal piano
-                              </button>
-                            </div>
-                          )}
-                          {isCondominio ? (
-                            <UnitRow
-                              item={rep}
-                              label="Condominio"
-                              residenceId={residenceId}
-                              suppliers={suppliers}
-                              primaryName={null}
-                              canManagePlan={canManagePlan}
-                            />
-                          ) : (
-                            typeItems.map(item => (
-                              <UnitRow
-                                key={item.id}
-                                item={item}
-                                label={item.units ? formatUnitLabel(item.units.label) : '—'}
-                                residenceId={residenceId}
-                                suppliers={suppliers}
-                                primaryName={item.unit_id ? unitPrimaryNames[item.unit_id] ?? null : null}
-                                canManagePlan={canManagePlan}
-                              />
-                            ))
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            </section>
-          ))
-        )
-      )}
-
-      </>
       )}
 
       {/* Vista Escluse — tipi interamente archiviati, sorgente per la reinclusione */}
@@ -877,162 +315,6 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
             </div>
           </div>
         </div>
-      )}
-
-      {/* Modale di conferma Sollecita: il testo dichiara CHI riceve, non "sei sicuro?" */}
-      {sollecitaConfirm && sollecitaCopy && (
-        <Modal
-          open
-          onClose={() => { if (!sollecitaBusy) setSollecitaConfirm(null) }}
-          title={sollecitaCopy.title}
-          footer={
-            <>
-              <Button
-                variant="secondary"
-                disabled={sollecitaBusy}
-                onClick={() => setSollecitaConfirm(null)}
-              >
-                Annulla
-              </Button>
-              <Button
-                variant="primary"
-                disabled={sollecitaBusy}
-                onClick={async () => {
-                  await handleSollecita(sollecitaConfirm.itemId)
-                  setSollecitaConfirm(null)
-                }}
-              >
-                {sollecitaBusy ? 'Invio…' : 'Invia sollecito'}
-              </Button>
-            </>
-          }
-        >
-          <p className="text-sm text-text-primary">{sollecitaCopy.body}</p>
-        </Modal>
-      )}
-    </div>
-  )
-}
-
-// Riga-unità nel drill-down: dettaglio per-istanza + Configura (ItemConfigForm) invariata.
-function UnitRow({ item, label, residenceId, suppliers, primaryName, canManagePlan }: {
-  item: ItemRow
-  label: string
-  residenceId: string
-  suppliers: { id: string; name: string }[]
-  primaryName: string | null
-  canManagePlan: boolean
-}) {
-  const { showToast } = useToast()
-  const tpl = item.maintenance_templates
-  const { mode: effMode, obligation: effObl } = resolveAxes(item)
-  const formattedDue = item.next_due_date
-    ? new Date(item.next_due_date).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })
-    : null
-  const [isPending, setIsPending] = useState(false)
-  // Stato live, mai il campo status salvato: il cron non gira in locale e in
-  // produzione lascia buchi tra un run e l'altro. isOverdueLive esclude gia'
-  // item archiviati (isCountable), promemoria e presa in carico ('in_corso'):
-  // il sollecito vale solo sul ritardo effettivo.
-  const overdue = isOverdueLive(item)
-  const canSollecitare = sollecitaVisible(effMode, overdue, canManagePlan)
-  // Stesso predicato del badge in zona attenzione (riga 475): la label sotto
-  // e il badge qui devono concordare, mai uno "Scaduta" rosso accanto a un
-  // badge ancora "Pianificata".
-  const badgeStatus = overdue ? 'scaduta' : item.status
-  const [sollecitaConfirmOpen, setSollecitaConfirmOpen] = useState(false)
-  const sollecitaCopy = sollecitaConfirmOpen
-    ? sollecitaConfirmCopy(effMode, label, tpl?.title ?? '', daysOverdue(item.next_due_date, new Date()))
-    : null
-
-  async function handleSollecita() {
-    if (isPending) return
-    setIsPending(true)
-    try {
-      const result = await sollecitaItem(item.id)
-      const { kind, message } = sollecitoToast(result)
-      showToast(kind, message)
-    } finally {
-      setIsPending(false)
-    }
-  }
-
-  return (
-    <div className="border-b border-border last:border-b-0">
-      <div className="px-3 py-2.5">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm text-text-primary">
-            {label}{primaryName ? ` · ${primaryName}` : ''}
-          </span>
-          <MaintenanceBadge mode={effMode} obligation={effObl} status={badgeStatus} size="xs" />
-        </div>
-        <div className="flex gap-3 mt-1 flex-wrap">
-          {effMode === 'promemoria' ? (
-            <span className="text-xs text-semantic-blue">
-              Promemoria · {formatFrequency(item.frequency_months ?? tpl?.frequency_months)}
-            </span>
-          ) : formattedDue ? (
-            <span className={`text-xs ${overdue ? 'text-semantic-red' : 'text-text-secondary'}`}>
-              {overdue ? 'Scaduta ' : 'Scade '}{formattedDue}
-            </span>
-          ) : (
-            <AwaitingDeliveryLine />
-          )}
-          {item.suppliers && (
-            <span className="text-xs text-brand-medium">{item.suppliers.name}</span>
-          )}
-          {canSollecitare && (
-            <button
-              onClick={() => setSollecitaConfirmOpen(true)}
-              className="flex items-center gap-1 text-xs text-brand-dark font-medium px-2 py-1 rounded-md hover:bg-brand-light transition-colors"
-            >
-              <Bell className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={1.6} />
-              Sollecita
-            </button>
-          )}
-        </div>
-      </div>
-      <ItemConfigForm
-        itemId={item.id}
-        residenceId={residenceId}
-        currentMode={effMode}
-        currentObligation={effObl}
-        currentFrequency={item.frequency_months ?? tpl?.frequency_months ?? null}
-        currentWarranty={item.warranty_info}
-        currentSupplierId={item.supplier_id}
-        suppliers={suppliers}
-      />
-
-      {/* Modale di conferma Sollecita: il testo dichiara CHI riceve, non "sei sicuro?" */}
-      {sollecitaConfirmOpen && sollecitaCopy && (
-        <Modal
-          open
-          onClose={() => { if (!isPending) setSollecitaConfirmOpen(false) }}
-          title={sollecitaCopy.title}
-          footer={
-            <>
-              <Button
-                variant="secondary"
-                disabled={isPending}
-                onClick={() => setSollecitaConfirmOpen(false)}
-              >
-                Annulla
-              </Button>
-              <Button
-                variant="primary"
-                disabled={isPending}
-                onClick={async () => {
-                  await handleSollecita()
-                  setSollecitaConfirmOpen(false)
-                }}
-              >
-                {isPending ? 'Invio…' : 'Invia sollecito'}
-              </Button>
-            </>
-          }
-        >
-          <p className="text-sm text-text-primary">{sollecitaCopy.body}</p>
-        </Modal>
       )}
     </div>
   )

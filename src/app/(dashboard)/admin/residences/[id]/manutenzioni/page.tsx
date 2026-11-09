@@ -4,27 +4,16 @@ import { PageHeader } from '@/components/PageHeader'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import { ManutenzioniClient } from './ManutenzioniClient'
-import type { ItemRow, CompletionRow, FilterState, AttentionModeFilter } from './ManutenzioniClient'
+import type { ItemRow, CompletionRow } from './ManutenzioniClient'
 import { normalizeEmbed } from '@/lib/postgrest-embed'
 import { todayISO } from '@/lib/maintenance-status'
 
 export const metadata: Metadata = { title: 'Panoramica manutenzioni' }
 
 type Params = Promise<{ id: string }>
-type SearchParams = Promise<{ filtro?: string; modalita?: string }>
 
-const VALID_FILTERS = ['scaduta', 'in_corso', 'completate'] as const
-const VALID_MODE_FILTERS = ['amministratore', 'residente'] as const
-
-export default async function ResidenceManutenzioniPage({ params, searchParams }: { params: Params; searchParams: SearchParams }) {
+export default async function ResidenceManutenzioniPage({ params }: { params: Params }) {
   const { id: residenceId } = await params
-  const { filtro, modalita } = await searchParams
-  const initialFilter: FilterState = VALID_FILTERS.includes(filtro as typeof VALID_FILTERS[number])
-    ? (filtro as FilterState)
-    : null
-  const initialModeFilter: AttentionModeFilter = VALID_MODE_FILTERS.includes(modalita as typeof VALID_MODE_FILTERS[number])
-    ? (modalita as AttentionModeFilter)
-    : null
   const profile = await requireRole(['admin', 'super_admin'], '/admin/manutenzioni')
   const supabase = await createClient()
 
@@ -84,26 +73,6 @@ export default async function ResidenceManutenzioniPage({ params, searchParams }
     : (rawItems ?? []).map(i => ({ ...i, suppliers: null }))
   const visibleSuppliers = isSuperAdmin ? suppliers : []
 
-  // Mappa unit_id → nome residente primary attivo (per colpo d'occhio nelle card)
-  const unitIds = [...new Set(
-    (rawItems ?? []).filter(i => i.unit_id != null).map(i => i.unit_id as string)
-  )]
-  const unitPrimaryNames: Record<string, string> = {}
-  if (unitIds.length > 0) {
-    const { data: membersData } = await supabase
-      .from('unit_members')
-      .select('unit_id, is_primary, profiles(full_name)')
-      .in('unit_id', unitIds)
-      .is('ended_at', null)
-      .order('is_primary', { ascending: false })
-    for (const m of (membersData ?? []) as unknown as { unit_id: string; is_primary: boolean; profiles: { full_name: string | null } | null }[]) {
-      if (!unitPrimaryNames[m.unit_id]) {
-        const name = m.profiles?.full_name
-        if (name) unitPrimaryNames[m.unit_id] = name
-      }
-    }
-  }
-
   return (
     <>
       <PageHeader
@@ -118,9 +87,6 @@ export default async function ResidenceManutenzioniPage({ params, searchParams }
         items={visibleItems as unknown as ItemRow[]}
         completions={(rawCompletions ?? []) as unknown as CompletionRow[]}
         suppliers={visibleSuppliers as { id: string; name: string }[]}
-        unitPrimaryNames={unitPrimaryNames}
-        initialFilter={initialFilter}
-        initialModeFilter={initialModeFilter}
         canManagePlan={profile.role === 'super_admin'}
         today={todayISO()}
       />
