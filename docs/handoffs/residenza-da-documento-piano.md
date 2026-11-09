@@ -286,3 +286,15 @@ diviso in 5a (estrazione senza cambiare comportamento, wizard manuale riprovato)
 
 Esecuzione: commit a, b, c (residence-input, fix `new/actions.ts:14`, residence-draft) uno alla
 volta, con stop e ok di Filippo prima di ogni commit. d-f non iniziano senza ok.
+
+## Stato al 9/11
+
+- Fatti e su origin/main (push 7c24a17, CI verde): a `residence-input`, b fix `new/actions.ts:14`, c `residence-draft`, c2 blocco sul "no" da_verificare, c3 schema AI riscritto per l'API reale (nessun nullable, dotazioni come array di voci), d `pdfjs-dist` 6.5.438 + `extractPdfText`, config runtime (`engines ^22.13.0`, `.nvmrc` 22.13.1, CI da `.nvmrc`), e route `/api/residence-draft`.
+- Prove: 34 `verify:*` verdi, build pulita, `npm audit` invariato a 13. Test senza login: il middleware risponde 307 al login prima della route (il 401 interno è una seconda difesa).
+- Da fare, f in due parti: f1 estrazione dei componenti condivisi del wizard (nessun cambio di comportamento, wizard manuale riprovato); f2 pagina di revisione con ingresso "Da documento", dotazioni a tre stati, riga "N voci non verranno generate", `beforeunload`, "Crea residenza" su `createResidence`.
+- Prima di f2: prova dal vivo con `casazero.prova@gmail.com` e un PDF vero; leggere `[ai-usage]` e la console del browser (warning pdfjs sui font).
+- FASE 0 da fare, read-only: dotazioni modificabili dopo la creazione (decisione 9/11 n. 3), concern a parte.
+- FASE 0 manutenzioni fatta: restano "Configura per unità" (`ManutenzioniClient.tsx:468`, `MaintenanceDetailPanel.tsx:136`), tab Escluse (`:430-451`, vista `:788`) e la vista `per_unita`, unica sede di configura per istanza, escludi/includi e sollecito.
+- Opzione A, nasconderle: 1 commit, circa 20-30 righe, perde configura/escludi/sollecito a schermo; da decidere il link `?filtro=scaduta` di `residences/[id]/page.tsx:188`.
+- Opzione B, allinearle senza migrazione né action: 3 commit, circa 300-400 righe, nessuna funzione persa, parte rifatta da 3a.
+- Debiti aperti: terza copia di `isServiceUnavailableError` (route residence-draft); commento con la sigla abolita a `ManutenzioniClient.tsx:334`.
