@@ -40,7 +40,8 @@
     "verify:maintlist": "node --experimental-strip-types --no-warnings scripts/verify-maintenance-list.mjs",
     "verify:maintdetail": "node --experimental-strip-types --no-warnings scripts/verify-maintenance-detail.mjs",
     "verify:resinput": "node --experimental-strip-types --no-warnings scripts/verify-residence-input.mjs",
-    "verify:resdraft": "node --experimental-strip-types --no-warnings scripts/verify-residence-draft.mjs"
+    "verify:resdraft": "node --experimental-strip-types --no-warnings scripts/verify-residence-draft.mjs",
+    "verify:pdftext": "node --experimental-strip-types --no-warnings scripts/verify-pdf-text.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.4",
@@ -50,6 +51,7 @@
     "fflate": "^0.8.3",
     "lucide-react": "^0.511.0",
     "next": "^15.3.3",
+    "pdfjs-dist": "6.5.438",
     "qrcode": "^1.5.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
