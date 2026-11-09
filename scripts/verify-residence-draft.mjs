@@ -312,11 +312,74 @@ check('proposta senza dotazioni', normalizeDraftProposal({ ...proposal(), dotazi
 check('proposta array', normalizeDraftProposal([]), { error: 'Proposta non valida' })
 
 // ---------- schema AI ----------
-check('schema: una chiave per dotazione, tutte obbligatorie', DRAFT_JSON_SCHEMA.properties.dotazioni.required, KEYS)
-check('schema: proprietà dotazioni = le 19 chiavi', Object.keys(DRAFT_JSON_SCHEMA.properties.dotazioni.properties), KEYS)
+check('schema: dotazioni = array di voci con chiave', [DRAFT_JSON_SCHEMA.properties.dotazioni.type, DRAFT_JSON_SCHEMA.properties.dotazioni.items.required], ['array', ['chiave', 'valore', 'confidenza', 'citazione']])
+check('schema: chiave ammessa = le 19 dotazioni', DRAFT_JSON_SCHEMA.properties.dotazioni.items.properties.chiave.enum, KEYS)
 check('schema: nessuna proprietà extra', DRAFT_JSON_SCHEMA.additionalProperties, false)
 check('schema: campi radice obbligatori', DRAFT_JSON_SCHEMA.required,
   ['nome', 'indirizzo', 'classe_energetica', 'unita_dichiarate', 'data_agibilita', 'unita', 'dotazioni'])
+
+// ---------- limiti dello schema dell'API (provati con chiamata reale il 9/11) ----------
+{
+  let unions = 0
+  const arrayTypeWithEnum = []
+  const walk = (n, path) => {
+    if (Array.isArray(n)) return n.forEach((x, i) => walk(x, `${path}[${i}]`))
+    if (n === null || typeof n !== 'object') return
+    if (Array.isArray(n.type) || n.anyOf) unions++
+    if (Array.isArray(n.type) && n.enum) arrayTypeWithEnum.push(path)
+    for (const [k, v] of Object.entries(n)) walk(v, `${path}.${k}`)
+  }
+  walk(DRAFT_JSON_SCHEMA, '$')
+  check('schema: al massimo 16 unioni (limite API)', unions <= 16, true)
+  check('schema: nessun type-array con enum (rifiutato dall\'API)', arrayTypeWithEnum, [])
+  check('schema: dotazioni sul filo si/no/non_trovato', DRAFT_JSON_SCHEMA.properties.dotazioni.items.properties.valore.enum, ['si', 'no', 'non_trovato'])
+  check('schema: confidenza ammette "nessuna"', DRAFT_JSON_SCHEMA.properties.nome.properties.confidenza.enum, ['alta', 'media', 'bassa', 'nessuna'])
+}
+
+// ---------- dotazioni come array di voci ----------
+{
+  const w = (chiave, valore, confidenza = 'alta', citazione = 'p. 3') => ({ chiave, valore, confidenza, citazione })
+  const arr = (voci) => draftOf({ dotazioni: voci })
+  const d = arr([w('ascensore', 'si'), w('autoclave', 'no'), w('centrale_termica', 'non_trovato', 'nessuna', '')])
+  check('array: "si" e "no" letti per chiave', [d.features.ascensore.value, d.features.autoclave.value], [true, false])
+  check('array: dotazione assente = non_trovato, mai "no"', [d.features.lucernari.state, d.features.lucernari.value], ['non_trovato', null])
+  check('array: tutte e 19 le chiavi presenti nella bozza', Object.keys(d.features), KEYS)
+  const dup = arr([w('ascensore', 'si'), w('ascensore', 'no')])
+  check('array: chiave duplicata con risposte diverse = non_trovato', [dup.features.ascensore.state, dup.features.ascensore.value], ['non_trovato', null])
+  const dup2 = arr([w('ascensore', 'si'), w('ascensore', 'si'), w('autoclave', 'no')])
+  check('array: la duplicazione non contagia le altre chiavi', dup2.features.autoclave.value, false)
+  const unk = arr([w('piscina', 'si'), w('ascensore', 'si')])
+  check('array: chiave sconosciuta ignorata, nessuna dotazione inventata', [Object.keys(unk.features).length, unk.features.ascensore.value], [19, true])
+  check('array: voce non oggetto ignorata', arr([null, 5, 'x', w('ascensore', 'si')]).features.ascensore.value, true)
+  check('array vuoto: tutte non trovate', Object.values(arr([]).features).every(f => f.state === 'non_trovato'), true)
+  check('dotazioni nè oggetto né array: proposta non valida', normalizeDraftProposal({ ...proposal(), dotazioni: 'x' }), { error: 'Proposta non valida: dotazioni mancanti' })
+  check('forma a oggetto ancora accettata', normalizeDraftProposal(proposal()).draft !== undefined, true)
+}
+
+// ---------- forma sul filo ----------
+{
+  const wire = (valore, confidenza = 'alta', citazione = 'p. 3') => ({ valore, confidenza, citazione })
+  const d = draftOf({
+    dotazioni: dotazioni({
+      ascensore: wire('si'),
+      autoclave: wire('no'),
+      centrale_termica: wire('non_trovato', 'nessuna', ''),
+      impianto_fotovoltaico: wire('boh'),
+    }),
+    classe_energetica: wire('', 'nessuna', ''),
+    unita: [{ etichetta: 'Int. 1', scala: '', piano: null, confidenza: 'nessuna', citazione: '' }],
+  })
+  check('"si" sul filo = vero dal documento', [d.features.ascensore.state, d.features.ascensore.value], ['dal_documento', true])
+  check('"no" sul filo con citazione = falso dal documento', [d.features.autoclave.state, d.features.autoclave.value], ['dal_documento', false])
+  check('"non_trovato" sul filo: nessun valore, mai "no"', [d.features.centrale_termica.state, d.features.centrale_termica.value], ['non_trovato', null])
+  check('valore sconosciuto sul filo: non_trovato, mai "no"', [d.features.impianto_fotovoltaico.state, d.features.impianto_fotovoltaico.value], ['non_trovato', null])
+  check('testo vuoto + confidenza "nessuna": non_trovato', [d.energyClass.state, d.energyClass.value], ['non_trovato', null])
+  check('scala vuota: etichetta senza prefisso', d.units[0].value.label, 'Int. 1')
+  check('unità senza piano né confidenza: da_verificare', d.units[0].state, 'da_verificare')
+  const noSenzaCit = draftOf({ dotazioni: dotazioni({ ascensore: wire('no', 'alta', '') }) })
+  check('"no" sul filo senza citazione: da_verificare', noSenzaCit.features.ascensore.state, 'da_verificare')
+  check('"no" sul filo da_verificare non conta come risposta', effectiveFeatureAnswer(noSenzaCit, {}, 'ascensore') === undefined, true)
+}
 
 console.log(`\n${eseguiti - fallimenti}/${eseguiti} casi ok`)
 if (fallimenti > 0) {

@@ -65,26 +65,36 @@ export type ResidenceDraft = {
 }
 
 // ── Schema AI (consumato dalla route) ─────────────────────────────────────
-// Forma grezza prodotta dal modello: { valore, confidenza, citazione } per
-// campo. `valore: null` significa "il documento non lo dice".
+// Forma sul filo: { valore, confidenza, citazione } per campo. Provato con
+// chiamate reali il 9/11: l'API rifiuta (400) type con array ["string","null"]
+// insieme a enum, e rifiuta più di 16 parametri nullable/anyOf nello schema
+// (76 con le 19 dotazioni) e una grammatica compilata troppo grande. Quindi NESSUN nullable sul filo, salvo due numeri:
+//   · testo non trovato   → valore "" · confidenza "nessuna" · citazione ""
+//   · dotazione           → valore "si" | "no" | "non_trovato"
+// normalizeDraftProposal traduce tutto nello stato del campo: il vuoto, la
+// confidenza "nessuna" e "non_trovato" diventano non_trovato e restano
+// senza valore, mai "no".
+
+const CONFIDENCE_SCHEMA = { type: 'string', enum: ['alta', 'media', 'bassa', 'nessuna'] } as const
+const NULLABLE_NUMBER = { anyOf: [{ type: 'number' }, { type: 'null' }] } as const
 
 const FIELD_STRING = {
   type: 'object',
   additionalProperties: false,
   required: ['valore', 'confidenza', 'citazione'],
   properties: {
-    valore: { type: ['string', 'null'] },
-    confidenza: { type: ['string', 'null'], enum: ['alta', 'media', 'bassa', null] },
-    citazione: { type: ['string', 'null'] },
+    valore: { type: 'string' },
+    confidenza: CONFIDENCE_SCHEMA,
+    citazione: { type: 'string' },
   },
 } as const
 const FIELD_NUMBER = {
   ...FIELD_STRING,
-  properties: { ...FIELD_STRING.properties, valore: { type: ['number', 'null'] } },
+  properties: { ...FIELD_STRING.properties, valore: NULLABLE_NUMBER },
 } as const
 const FIELD_BOOLEAN = {
   ...FIELD_STRING,
-  properties: { ...FIELD_STRING.properties, valore: { type: ['boolean', 'null'] } },
+  properties: { ...FIELD_STRING.properties, valore: { type: 'string', enum: ['si', 'no', 'non_trovato'] } },
 } as const
 
 export const DRAFT_JSON_SCHEMA = {
@@ -105,20 +115,32 @@ export const DRAFT_JSON_SCHEMA = {
         required: ['etichetta', 'scala', 'piano', 'confidenza', 'citazione'],
         properties: {
           etichetta: { type: 'string' },
-          scala: { type: ['string', 'null'] },
-          piano: { type: ['number', 'null'] },
-          confidenza: { type: ['string', 'null'], enum: ['alta', 'media', 'bassa', null] },
-          citazione: { type: ['string', 'null'] },
+          scala: { type: 'string' },
+          piano: NULLABLE_NUMBER,
+          confidenza: CONFIDENCE_SCHEMA,
+          citazione: { type: 'string' },
         },
       },
     },
-    // Una chiave per dotazione, tutte obbligatorie: l'AI deve rispondere per
-    // ognuna, con valore null quando il documento non ne parla.
+    // Un array di voci { chiave, valore, confidenza, citazione }, non un oggetto
+    // con 19 proprietà: 19 sottoschemi con enum facevano superare all'API il
+    // limite di grammatica compilata (400 "compiled grammar is too large",
+    // provato il 9/11). Il modello deve rispondere per tutte e 19, ma lo schema
+    // non lo impone: una chiave assente o duplicata è NON TROVATA in
+    // normalizeDraftProposal, mai "no".
     dotazioni: {
-      type: 'object',
-      additionalProperties: false,
-      required: RESIDENCE_FEATURES.map(f => f.key),
-      properties: Object.fromEntries(RESIDENCE_FEATURES.map(f => [f.key, FIELD_BOOLEAN])),
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['chiave', 'valore', 'confidenza', 'citazione'],
+        properties: {
+          chiave: { type: 'string', enum: RESIDENCE_FEATURES.map(f => f.key) },
+          valore: FIELD_BOOLEAN.properties.valore,
+          confidenza: CONFIDENCE_SCHEMA,
+          citazione: { type: 'string' },
+        },
+      },
     },
   },
 } as const
@@ -162,7 +184,11 @@ function numberField(raw: unknown): DraftField<number> {
 }
 function booleanField(raw: unknown): DraftField<boolean> {
   if (!isRecord(raw)) return NOT_FOUND
-  const v = typeof raw.valore === 'boolean' ? raw.valore : null
+  // Sul filo "si"/"no"/"non_trovato"; i booleani veri restano accettati.
+  // Qualunque altro valore (compreso "non_trovato") è senza risposta.
+  const v = raw.valore === 'si' || raw.valore === true ? true
+    : raw.valore === 'no' || raw.valore === false ? false
+    : null
   return makeField(v, raw.confidenza, raw.citazione)
 }
 
@@ -177,10 +203,29 @@ export function unitLabelWithStaircase(label: string, staircase: string | null):
   return `${prefix} – ${l}`
 }
 
+// Le dotazioni arrivano come array di voci { chiave, ... } (forma sul filo) o come
+// oggetto indicizzato per chiave. Una chiave che compare più volte è ambigua:
+// non si sceglie una delle due risposte, la dotazione resta non trovata.
+function featureEntriesByKey(raw: unknown): Record<string, unknown> {
+  if (!Array.isArray(raw)) return isRecord(raw) ? raw : {}
+  const out: Record<string, unknown> = {}
+  const seen = new Set<string>()
+  for (const e of raw) {
+    if (!isRecord(e) || typeof e.chiave !== 'string') continue
+    if (seen.has(e.chiave)) {
+      out[e.chiave] = undefined
+      continue
+    }
+    seen.add(e.chiave)
+    out[e.chiave] = e
+  }
+  return out
+}
+
 export function normalizeDraftProposal(raw: unknown): { draft: ResidenceDraft } | { error: string } {
   if (!isRecord(raw)) return { error: 'Proposta non valida' }
   if (!Array.isArray(raw.unita)) return { error: 'Proposta non valida: elenco unità mancante' }
-  if (!isRecord(raw.dotazioni)) return { error: 'Proposta non valida: dotazioni mancanti' }
+  if (!isRecord(raw.dotazioni) && !Array.isArray(raw.dotazioni)) return { error: 'Proposta non valida: dotazioni mancanti' }
 
   const units: DraftField<DraftUnit>[] = []
   for (const u of raw.unita) {
@@ -198,7 +243,8 @@ export function normalizeDraftProposal(raw: unknown): { draft: ResidenceDraft } 
   // Si itera la COSTANTE: una dotazione assente dalla proposta è non_trovato,
   // mai "no" e mai ignorata.
   const features = {} as Record<FeatureKey, DraftField<boolean>>
-  for (const f of RESIDENCE_FEATURES) features[f.key] = booleanField(raw.dotazioni[f.key])
+  const byKey = featureEntriesByKey(raw.dotazioni)
+  for (const f of RESIDENCE_FEATURES) features[f.key] = booleanField(byKey[f.key])
 
   return {
     draft: {
