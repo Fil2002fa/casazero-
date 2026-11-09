@@ -36,7 +36,7 @@ try {
 }
 const {
   normalizeDraftProposal, resolveFeatures, effectiveFeatureAnswer, markUnresolvedAsNo,
-  skippedItems, skippedItemsLine, draftWarnings, prepareDraftCreation,
+  skippedItems, skippedItemsLine, draftWarnings, prepareDraftCreation, effectiveAnswers,
   unitLabelWithStaircase, normalizeAddress, DRAFT_JSON_SCHEMA, FIELD_STATE_LABEL,
 } = D
 const KEYS = F.RESIDENCE_FEATURES.map(f => f.key)
@@ -379,6 +379,30 @@ check('schema: campi radice obbligatori', DRAFT_JSON_SCHEMA.required,
   const noSenzaCit = draftOf({ dotazioni: dotazioni({ ascensore: wire('no', 'alta', '') }) })
   check('"no" sul filo senza citazione: da_verificare', noSenzaCit.features.ascensore.state, 'da_verificare')
   check('"no" sul filo da_verificare non conta come risposta', effectiveFeatureAnswer(noSenzaCit, {}, 'ascensore') === undefined, true)
+}
+
+// ---------- risposte effettive ----------
+{
+  const wire = (valore, confidenza = 'alta', citazione = 'p. 3') => ({ valore, confidenza, citazione })
+  const d = draftOf({
+    dotazioni: dotazioni({
+      ascensore: wire('si'),
+      autoclave: wire('no'),
+      centrale_termica: wire('no', 'alta', ''),
+      impianto_fotovoltaico: wire('non_trovato', 'nessuna', ''),
+    }),
+  })
+  const eff = effectiveAnswers(d, {})
+  check('effettive: sì dal documento', eff.ascensore, true)
+  check('effettive: no dal documento con citazione', eff.autoclave, false)
+  check('effettive: no da_verificare senza risposta, chiave assente', 'centrale_termica' in eff, false)
+  check('effettive: non_trovato senza risposta, chiave assente', 'impianto_fotovoltaico' in eff, false)
+  check('effettive: la risposta umana vince', effectiveAnswers(d, { autoclave: true, centrale_termica: false }).autoclave, true)
+  check('effettive: l’umano risolve il no da_verificare', effectiveAnswers(d, { centrale_termica: false }).centrale_termica, false)
+  check('effettive: nessuna chiave a false per le non risolte',
+    Object.keys(eff).every(k => eff[k] !== undefined), true)
+  check('effettive + markUnresolvedAsNo coprono tutte le 19',
+    Object.keys(effectiveAnswers(d, markUnresolvedAsNo(d, {}))).length, KEYS.length)
 }
 
 console.log(`\n${eseguiti - fallimenti}/${eseguiti} casi ok`)

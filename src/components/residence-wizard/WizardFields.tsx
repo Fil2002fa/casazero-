@@ -1,11 +1,13 @@
-import { forwardRef } from 'react'
+import { forwardRef, type ReactNode } from 'react'
 import { DateField } from '@/components/DateField'
 
 export function Field({
-  label, name, placeholder, required, type = 'text', defaultValue,
+  label, name, placeholder, required, type = 'text', defaultValue, note,
 }: {
   label: string; name: string; placeholder?: string; required?: boolean; type?: string
   defaultValue?: string
+  // Sotto il campo: nella revisione da documento, stato/confidenza/citazione.
+  note?: ReactNode
 }) {
   return (
     <div>
@@ -22,6 +24,7 @@ export function Field({
           className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
         />
       )}
+      {note}
     </div>
   )
 }

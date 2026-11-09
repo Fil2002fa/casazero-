@@ -283,6 +283,19 @@ export function effectiveFeatureAnswer(
   return field.value
 }
 
+// Le risposte effettive di tutte le dotazioni, SENZA quelle senza risposta
+// (chiave assente, mai false). Fonte unica per chi deve ragionare sui "no"
+// già decisi — conteggio delle voci non generate, bottone "Segna le rimanenti
+// come No", avvisi di coerenza — senza ricalcolare effectiveFeatureAnswer inline.
+export function effectiveAnswers(draft: ResidenceDraft, answers: FeatureAnswers): FeatureAnswers {
+  const out: FeatureAnswers = {}
+  for (const f of RESIDENCE_FEATURES) {
+    const a = effectiveFeatureAnswer(draft, answers, f.key)
+    if (a !== undefined) out[f.key] = a
+  }
+  return out
+}
+
 export function resolveFeatures(draft: ResidenceDraft, answers: FeatureAnswers): {
   features: Record<FeatureKey, boolean> | null
   unresolved: FeatureKey[]

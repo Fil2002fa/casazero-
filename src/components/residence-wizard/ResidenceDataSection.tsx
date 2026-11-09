@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { DateField } from '@/components/DateField'
 import { Field } from './WizardFields'
@@ -14,12 +15,16 @@ export type ResidenceDataDefaults = {
   delivery_date?: string
 }
 
+// Note sotto i quattro campi (provenienza, suggerimenti). Vuote nel wizard manuale.
+export type ResidenceDataNotes = Partial<Record<keyof ResidenceDataDefaults, ReactNode>>
+
 // Le due sezioni del passo 1: "Dati residenza" e "Edificio esistente".
 // I campi di testo restano non controllati (il submit legge new FormData(form));
 // lo stato dell'edificio esistente è del chiamante, che lo azzera al ripristino
 // dal bfcache.
 export function ResidenceDataSection({
   defaults,
+  notes,
   existingBuilding,
   onExistingBuildingChange,
   unitsAlreadyDelivered,
@@ -28,6 +33,7 @@ export function ResidenceDataSection({
   onShowDateWizardChange,
 }: {
   defaults?: ResidenceDataDefaults
+  notes?: ResidenceDataNotes
   existingBuilding: boolean
   onExistingBuildingChange: (checked: boolean) => void
   unitsAlreadyDelivered: boolean
@@ -40,11 +46,11 @@ export function ResidenceDataSection({
       <section className="bg-surface rounded-xl border border-border p-4 space-y-3">
         <h2 className="text-sm font-medium text-text-primary">Dati residenza</h2>
 
-        <Field label="Nome *" name="name" placeholder="es. Residenza Cavaccio" required defaultValue={defaults?.name} />
-        <Field label="Indirizzo *" name="address" placeholder="Via Roma 1, Padova" required defaultValue={defaults?.address} />
-        <Field label="Classe energetica" name="energy_class" placeholder="es. A4" defaultValue={defaults?.energy_class} />
+        <Field label="Nome *" name="name" placeholder="es. Residenza Cavaccio" required defaultValue={defaults?.name} note={notes?.name} />
+        <Field label="Indirizzo *" name="address" placeholder="Via Roma 1, Padova" required defaultValue={defaults?.address} note={notes?.address} />
+        <Field label="Classe energetica" name="energy_class" placeholder="es. A4" defaultValue={defaults?.energy_class} note={notes?.energy_class} />
         <div>
-          <Field label="Data consegna *" name="delivery_date" type="date" required defaultValue={defaults?.delivery_date} />
+          <Field label="Data consegna *" name="delivery_date" type="date" required defaultValue={defaults?.delivery_date} note={notes?.delivery_date} />
           <p className="text-xs text-text-secondary mt-1">
             Data di consegna delle parti comuni. Da qui partono le scadenze delle
             manutenzioni condominiali (data consegna + frequenza). Le scadenze di ogni

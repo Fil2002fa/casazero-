@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import type { UnitRow } from './shared'
 
@@ -11,12 +12,15 @@ export function UnitListSection({
   onUpdate,
   onAdd,
   onRemove,
+  rowNote,
 }: {
   units: UnitRow[]
   rowErrors: Record<number, string>
   onUpdate: (index: number, patch: Partial<UnitRow>) => void
   onAdd: () => void
   onRemove: (index: number) => void
+  // Sotto la riga: nella revisione da documento, provenienza della singola unità.
+  rowNote?: (index: number) => ReactNode
 }) {
   // Il riepilogo conta solo le righe con un nome compilato: una riga appena
   // aggiunta e ancora vuota non è un'unità.
@@ -73,6 +77,7 @@ export function UnitListSection({
           {rowErrors[i] && (
             <p className="text-xs text-semantic-red mt-1">{rowErrors[i]}</p>
           )}
+          {rowNote?.(i)}
         </div>
       ))}
 
