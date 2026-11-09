@@ -14,8 +14,10 @@ import { useDialogFocus } from './useDialogFocus'
 // usi anche il pannello Configura (3a): una sola implementazione del guscio.
 //
 // Il guscio non conosce il contenuto: titolo e sottotitolo nell'intestazione,
-// il corpo è `children`. `open` comanda l'hook anche a pannello chiuso, così
-// la chiusura restituisce il focus. `onClose` deve avere identità stabile
+// il corpo è `children`, un'azione sempre visibile può andare in `footer`.
+// Altezza h-dvh (mai 100vh: sul mobile la barra del browser la tronca), colonna
+// flex: intestazione e footer restano fermi, scorre solo il corpo.
+// `open` comanda l'hook anche a pannello chiuso, così la chiusura restituisce il focus. `onClose` deve avere identità stabile
 // (useCallback nel chiamante): se cambia a ogni render l'effetto del focus si
 // riesegue e ruba il focus.
 
@@ -26,10 +28,12 @@ type Props = {
   titleId: string
   title: string
   subtitle?: string
+  /** Fisso in fondo al pannello, sempre visibile; il corpo scorre sopra. */
+  footer?: ReactNode
   children: ReactNode
 }
 
-export function SidePanel({ open, onClose, titleId, title, subtitle, children }: Props) {
+export function SidePanel({ open, onClose, titleId, title, subtitle, footer, children }: Props) {
   const panelRef = useRef<HTMLDivElement>(null)
   useDialogFocus(open, onClose, panelRef)
 
@@ -44,9 +48,9 @@ export function SidePanel({ open, onClose, titleId, title, subtitle, children }:
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="fixed inset-y-0 right-0 z-modal flex w-full max-w-xl flex-col overflow-y-auto bg-surface shadow-elevated outline-none"
+        className="fixed right-0 top-0 z-modal flex h-dvh w-full max-w-xl flex-col overflow-hidden bg-surface shadow-elevated outline-none"
       >
-        <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-border bg-surface px-4 py-4 sm:px-6">
+        <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border bg-surface px-4 py-4 sm:px-6">
           <div className="min-w-0">
             <h2 id={titleId} className="text-lg font-semibold text-text-primary break-words">
               {title}
@@ -63,7 +67,13 @@ export function SidePanel({ open, onClose, titleId, title, subtitle, children }:
           </button>
         </header>
 
-        {children}
+        <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+
+        {footer !== undefined && (
+          <footer className="shrink-0 border-t border-border bg-surface px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
+            {footer}
+          </footer>
+        )}
       </div>
     </>,
     document.body,

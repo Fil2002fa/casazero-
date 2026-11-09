@@ -3,6 +3,9 @@
 import { useCallback, useMemo, useState, useTransition } from 'react'
 import { MaintenanceList } from './MaintenanceList'
 import { MaintenanceDetailPanel } from './MaintenanceDetailPanel'
+import { ConfigureTable } from './ConfigureTable'
+import { ConfigurePanel } from './ConfigurePanel'
+import { buildConfigRows, type ConfigItem } from '@/lib/maintenance-config'
 import { buildVoceDetail } from '@/lib/maintenance-detail'
 import { setTemplateActivationForResidence } from '../fornitori/actions'
 import { resolveCompletionMode } from '@/lib/maintenance-status'
@@ -23,6 +26,9 @@ export type ItemRow = {
   frequency_months: number | null
   warranty_info: string | null
   supplier_id: string | null
+  due_basis_override: string | null
+  // completions(count): serve solo alle regole di data di Configura.
+  completions: { count: number }[] | null
   maintenance_templates: {
     title: string
     category: string
@@ -87,15 +93,17 @@ type PendingAction = {
   hasUndeliveredUnitItems: boolean
 }
 
-export function ManutenzioniClient({ residenceId, residenceName, items, completions, canManagePlan, today: todayServer }: Props) {
+export function ManutenzioniClient({ residenceId, residenceName, items, completions, suppliers, canManagePlan, today: todayServer }: Props) {
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null)
   // Voce aperta nel pannello di dettaglio (lista per voce).
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
-  const [planView, setPlanView] = useState<'attive' | 'escluse'>('attive')
-  // La vista Escluse è composizione del piano, riservata al costruttore: se lo stato
-  // finisse su 'escluse' per qualunque via, l'admin va forzato su 'attive' invece di
-  // atterrare su una schermata senza selettore per uscirne.
-  const effectivePlanView = canManagePlan ? planView : 'attive'
+  const [planView, setPlanView] = useState<'piano' | 'configura' | 'escluse'>('piano')
+  // Voce aperta nel pannello Configura (solo super_admin).
+  const [configureTemplateId, setConfigureTemplateId] = useState<string | null>(null)
+  // Configura ed Escluse sono composizione del piano, riservate al costruttore: se lo stato
+  // finisse lì per qualunque via, l'admin va forzato su 'piano' invece di atterrare su
+  // una schermata senza selettore per uscirne.
+  const effectivePlanView = canManagePlan ? planView : 'piano'
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -121,6 +129,29 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
       if (!res.error) setPendingAction(null)
     })
   }
+
+  // Dati di Configura: solo per il super_admin (l'admin non vede fornitori né la tab).
+  const configItems = useMemo<ConfigItem[]>(() => !canManagePlan ? [] : items.map(i => ({
+    id: i.id,
+    template_id: i.template_id,
+    unit_id: i.unit_id,
+    status: i.status,
+    next_due_date: i.next_due_date,
+    completion_mode: i.completion_mode,
+    obligation_type: i.obligation_type,
+    activation_status: i.activation_status,
+    frequency_months: i.frequency_months,
+    warranty_info: i.warranty_info,
+    supplier_id: i.supplier_id,
+    due_basis_override: i.due_basis_override,
+    has_completions: (i.completions?.[0]?.count ?? 0) > 0,
+    suppliers: i.suppliers ? { id: i.suppliers.id, name: i.suppliers.name } : null,
+    maintenance_templates: i.maintenance_templates,
+    units: i.units ? { delivery_date: i.units.delivery_date } : null,
+  })), [items, canManagePlan])
+  const configRows = useMemo(() => buildConfigRows(configItems), [configItems])
+  const configRow = configureTemplateId === null ? null : configRows.find(r => r.templateId === configureTemplateId) ?? null
+  const closeConfigure = useCallback(() => setConfigureTemplateId(null), [])
 
   // Gli item archiviati spariscono dal piano attivo; le loro completion restano nel fascicolo
   const liveItems = items.filter(i => i.activation_status !== 'archiviata')
@@ -172,31 +203,29 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
 
   return (
     <div className="space-y-6">
-      {/* Segmented control: piano attivo vs tipi esclusi — solo per chi può comporre il piano */}
+      {/* Segmented control: Piano, Configura, Escluse — solo per chi può comporre il piano */}
       {canManagePlan && (
         <div className="flex rounded-lg border border-border p-0.5 bg-surface">
-          <button
-            onClick={() => setPlanView('attive')}
-            aria-pressed={planView === 'attive'}
-            className={`flex-1 h-11 md:h-9 rounded-md text-sm font-medium text-text-primary transition-colors ${
-              planView === 'attive' ? 'bg-background shadow-sm' : ''
-            }`}
-          >
-            Attive
-          </button>
-          <button
-            onClick={() => setPlanView('escluse')}
-            aria-pressed={planView === 'escluse'}
-            className={`flex-1 h-11 md:h-9 rounded-md text-sm font-medium text-text-primary transition-colors ${
-              planView === 'escluse' ? 'bg-background shadow-sm' : ''
-            }`}
-          >
-            Escluse{excludedTemplates.length > 0 ? ` (${excludedTemplates.length})` : ''}
-          </button>
+          {([
+            ['piano', 'Piano'],
+            ['configura', 'Configura'],
+            ['escluse', `Escluse${excludedTemplates.length > 0 ? ` (${excludedTemplates.length})` : ''}`],
+          ] as const).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => { setPlanView(key); setConfigureTemplateId(null) }}
+              aria-pressed={planView === key}
+              className={`flex-1 h-11 md:h-9 rounded-md text-sm font-medium text-text-primary transition-colors ${
+                planView === key ? 'bg-background shadow-sm' : ''
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       )}
 
-      {effectivePlanView === 'attive' && (
+      {effectivePlanView === 'piano' && (
         <MaintenanceList
           items={items}
           completions={completions}
@@ -206,6 +235,11 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
           onSelectUnit={setSelectedUnitId}
           onOpen={setSelectedTemplateId}
         />
+      )}
+
+      {/* Configura per voce: una riga per voce, un solo Salva nel pannello */}
+      {effectivePlanView === 'configura' && (
+        <ConfigureTable rows={configRows} onOpen={setConfigureTemplateId} />
       )}
 
       {/* Vista Escluse — tipi interamente archiviati, sorgente per la reinclusione */}
@@ -249,6 +283,18 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
       )}
 
       <MaintenanceDetailPanel detail={detail} onClose={closeDetail} />
+
+      {canManagePlan && effectivePlanView === 'configura' && configRow !== null && (
+        <ConfigurePanel
+          key={configRow.templateId}
+          row={configRow}
+          items={configItems.filter(i => i.template_id === configRow.templateId)}
+          suppliers={suppliers}
+          residenceId={residenceId}
+          today={todayServer}
+          onClose={closeConfigure}
+        />
+      )}
 
       {/* Modale di conferma (preview-before-apply): dichiara righe toccate ed effetto */}
       {pendingAction && (

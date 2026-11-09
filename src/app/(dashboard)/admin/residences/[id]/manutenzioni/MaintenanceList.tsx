@@ -277,7 +277,7 @@ function ListRow({ row, onOpen }: { row: MaintenanceListRow; onOpen: (templateId
   )
 }
 
-function Cell({ label, children }: { label: string; children: React.ReactNode }) {
+export function Cell({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="min-w-0">
       <span className="sr-only">{label}: </span>
@@ -287,7 +287,7 @@ function Cell({ label, children }: { label: string; children: React.ReactNode })
 }
 
 /** Trattino neutro: cella non applicabile o senza dato. Mai un testo di scadenza. */
-function Dash() {
+export function Dash() {
   return (
     <>
       <span aria-hidden="true" className="text-sm text-text-secondary">—</span>
@@ -296,7 +296,7 @@ function Dash() {
   )
 }
 
-function Mixed() {
+export function Mixed() {
   return (
     <span className="text-xs text-text-secondary" title="Valori diversi tra le unità">
       Valori diversi
@@ -306,7 +306,7 @@ function Mixed() {
 
 // Obbligo di legge = badge pieno scuro con §; Raccomandata = badge a contorno;
 // Consiglio = solo testo grigio.
-function ObligationCell({ obligations }: { obligations: readonly ObligationType[] }) {
+export function ObligationCell({ obligations }: { obligations: readonly ObligationType[] }) {
   if (obligations.length === 0) return <Dash />
   if (obligations.length > 1) return <Mixed />
   const type = obligations[0]
