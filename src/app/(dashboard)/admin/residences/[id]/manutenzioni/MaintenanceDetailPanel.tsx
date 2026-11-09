@@ -1,11 +1,9 @@
 'use client'
 
-import { useRef, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
-import { X } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { AwaitingDeliveryChip } from '@/components/AwaitingDelivery'
 import { PromemoriaBadge } from '@/components/ui/Badge'
-import { useDialogFocus } from '@/components/ui/useDialogFocus'
+import { SidePanel } from '@/components/ui/SidePanel'
 import { cn } from '@/lib/cn'
 import { formatDateIT } from '@/lib/formatDate'
 import { rowScopeLabel } from '@/lib/maintenance-list'
@@ -13,11 +11,9 @@ import type { DetailSupplier, Field, SupplierSection, VoceDetail } from '@/lib/m
 import { pluralize } from '@/lib/pluralize'
 import { StateBadge } from './StateBadge'
 
-// Pannello a destra sopra la pagina: la lista non si sposta. Stesso aspetto
-// del drawer della sidebar (sfondo scuro cliccabile, pannello z-modal) e stessa
-// meccanica (useDialogFocus: focus iniziale, Tab intrappolato, Escape, scroll
-// bloccato, focus restituito alla riga). Montato in portal su document.body
-// come Modal.
+// Contenuto del pannello a destra di una voce. Il guscio (portal, sfondo
+// cliccabile, X, focus, Tab, Escape, scroll) è SidePanel, condiviso con il
+// pannello Configura.
 //
 // Sola lettura. Tutti i valori e i testi arrivano da maintenance-detail.ts
 // (verify:maintdetail): qui solo lo schermo. Le voci consigliate (promemoria)
@@ -32,102 +28,74 @@ type Props = {
 }
 
 export function MaintenanceDetailPanel({ detail, onClose }: Props) {
-  const panelRef = useRef<HTMLDivElement>(null)
-  useDialogFocus(detail !== null, onClose, panelRef)
-
-  if (detail === null) return null
+  if (detail === null) {
+    // SidePanel resta montato anche chiuso: il suo hook restituisce il focus alla riga.
+    return <SidePanel open={false} onClose={onClose} titleId="voce-detail-title" title="">{null}</SidePanel>
+  }
   const { row } = detail
   const reminder = row.group === 'consigliate'
 
-  return createPortal(
-    <>
-      <div className="fixed inset-0 z-modal-backdrop bg-brand-dark/40" onClick={onClose} aria-hidden="true" />
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="voce-detail-title"
-        tabIndex={-1}
-        className="fixed inset-y-0 right-0 z-modal flex w-full max-w-xl flex-col overflow-y-auto bg-surface shadow-elevated outline-none"
-      >
-        <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-border bg-surface px-4 py-4 sm:px-6">
-          <div className="min-w-0">
-            <h2 id="voce-detail-title" className="text-lg font-semibold text-text-primary break-words">
-              {detail.title}
-            </h2>
-            <p className="text-xs text-text-secondary">{detail.category} · {rowScopeLabel(row)}</p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Chiudi"
-            className="inline-flex h-11 w-11 md:h-8 md:w-8 flex-shrink-0 items-center justify-center rounded-lg text-text-secondary hover:bg-background cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium"
-          >
-            <X className="h-4 w-4" strokeWidth={1.8} />
-          </button>
-        </header>
-
-        <div className="space-y-6 px-4 py-5 sm:px-6">
-          <Section title="Stato">
-            <dl className="space-y-2.5">
-              {reminder ? (
-                <Item label="Frequenza">
-                  {detail.frequency.mixed || row.frequencies.length !== 1
-                    ? <FieldValue field={detail.frequency} />
-                    : <PromemoriaBadge frequencyMonths={row.frequencies[0]} />}
-                </Item>
-              ) : (
-                <>
-                  <Item label="Stato">
-                    <div className="space-y-1">
-                      <StateBadge state={row.group as Exclude<typeof row.group, 'consigliate'>} />
-                      {row.awaitingCount > 0 && row.awaitingCount < row.timedCount && (
-                        <div><AwaitingDeliveryChip count={row.awaitingCount} total={row.timedCount} /></div>
-                      )}
-                    </div>
-                  </Item>
-                  <Item label="Prossima">
-                    {row.next === null ? <Dash /> : (
-                      <span className="text-sm text-text-primary">
-                        {formatDateIT(row.next.date)}
-                        {row.next.unitLabel !== null && row.unitCount > 1 && (
-                          <span className="text-text-secondary"> · {row.next.unitLabel}</span>
-                        )}
-                      </span>
+  return (
+    <SidePanel open onClose={onClose} titleId="voce-detail-title" title={detail.title} subtitle={`${detail.category} · ${rowScopeLabel(row)}`}>
+      <div className="space-y-6 px-4 py-5 sm:px-6">
+        <Section title="Stato">
+          <dl className="space-y-2.5">
+            {reminder ? (
+              <Item label="Frequenza">
+                {detail.frequency.mixed || row.frequencies.length !== 1
+                  ? <FieldValue field={detail.frequency} />
+                  : <PromemoriaBadge frequencyMonths={row.frequencies[0]} />}
+              </Item>
+            ) : (
+              <>
+                <Item label="Stato">
+                  <div className="space-y-1">
+                    <StateBadge state={row.group as Exclude<typeof row.group, 'consigliate'>} />
+                    {row.awaitingCount > 0 && row.awaitingCount < row.timedCount && (
+                      <div><AwaitingDeliveryChip count={row.awaitingCount} total={row.timedCount} /></div>
                     )}
-                  </Item>
-                  <Item label="Ultima">
-                    {row.last === null ? <Dash /> : <span className="text-sm text-text-primary">{formatDateIT(row.last)}</span>}
-                  </Item>
-                  <Item label="Frequenza"><FieldValue field={detail.frequency} /></Item>
-                </>
-              )}
-              <Item label="Regola"><FieldValue field={detail.rule} /></Item>
-              <Item label="Chi la chiude"><FieldValue field={detail.closer} /></Item>
-              <Item label="Obbligo"><FieldValue field={detail.obligation} /></Item>
-              <Item label="Info garanzia"><FieldValue field={detail.warranty} /></Item>
-            </dl>
+                  </div>
+                </Item>
+                <Item label="Prossima">
+                  {row.next === null ? <Dash /> : (
+                    <span className="text-sm text-text-primary">
+                      {formatDateIT(row.next.date)}
+                      {row.next.unitLabel !== null && row.unitCount > 1 && (
+                        <span className="text-text-secondary"> · {row.next.unitLabel}</span>
+                      )}
+                    </span>
+                  )}
+                </Item>
+                <Item label="Ultima">
+                  {row.last === null ? <Dash /> : <span className="text-sm text-text-primary">{formatDateIT(row.last)}</span>}
+                </Item>
+                <Item label="Frequenza"><FieldValue field={detail.frequency} /></Item>
+              </>
+            )}
+            <Item label="Regola"><FieldValue field={detail.rule} /></Item>
+            <Item label="Chi la chiude"><FieldValue field={detail.closer} /></Item>
+            <Item label="Obbligo"><FieldValue field={detail.obligation} /></Item>
+            <Item label="Info garanzia"><FieldValue field={detail.warranty} /></Item>
+          </dl>
+        </Section>
+
+        {detail.units !== null && (
+          <Section title={`Unità · ${detail.units.length}`}>
+            <UnitsGrid detail={detail} reminder={reminder} />
           </Section>
+        )}
 
-          {detail.units !== null && (
-            <Section title={`Unità · ${detail.units.length}`}>
-              <UnitsGrid detail={detail} reminder={reminder} />
-            </Section>
-          )}
-
-          {detail.suppliers !== null && (
-            <Section title="Chi chiamare">
-              <Suppliers section={detail.suppliers} />
-            </Section>
-          )}
-
-          <Section title="Storico">
-            <History detail={detail} />
+        {detail.suppliers !== null && (
+          <Section title="Chi chiamare">
+            <Suppliers section={detail.suppliers} />
           </Section>
-        </div>
+        )}
+
+        <Section title="Storico">
+          <History detail={detail} />
+        </Section>
       </div>
-    </>,
-    document.body,
+    </SidePanel>
   )
 }
 
