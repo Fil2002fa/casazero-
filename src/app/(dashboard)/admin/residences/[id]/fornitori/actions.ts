@@ -10,26 +10,7 @@ import { nextDueFrom } from '@/lib/maintenance-due'
 import { resolveCompletionMode, resolveFrequencyMonths, todayISO } from '@/lib/maintenance-status'
 import { unitNotDelivered } from '@/lib/unit-utils'
 import { ITEM_CONFIG_TEMP_ERROR } from '@/lib/itemConfigMessages'
-
-function modeToPriority(mode: CompletionMode | null): string | null {
-  if (mode === null) return null
-  const map: Record<CompletionMode, string> = {
-    promemoria:     'N1',
-    residente:      'N2',
-    amministratore: 'N3',
-  }
-  return map[mode]
-}
-
-function priorityToMode(priority: string | null): CompletionMode | null {
-  if (priority === null) return null
-  const map: Record<string, CompletionMode> = {
-    N1: 'promemoria',
-    N2: 'residente',
-    N3: 'amministratore',
-  }
-  return map[priority] ?? null
-}
+import { modeToPriority, priorityToMode } from '@/lib/completion-mode'
 
 // Crea il fornitore E la riga "ha realizzato" nella stessa azione: la select
 // del sistema sostituisce l'input categories, quindi ha già il dato per
