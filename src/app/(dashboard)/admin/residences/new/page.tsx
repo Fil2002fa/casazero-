@@ -183,6 +183,9 @@ export default function NewResidencePage() {
           <h1 className="text-base font-medium text-text-primary">Nuova residenza</h1>
           <p className="text-xs text-text-secondary">{STEP_TITLES[step]}</p>
         </div>
+        <Link href="/admin/residences/new/da-documento" className="ml-auto text-sm text-brand-medium font-medium">
+          Da documento
+        </Link>
       </div>
 
       {resetNotice && (
