@@ -4,7 +4,8 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/admin'
-import { RESIDENCE_FEATURES, featureFieldName } from '@/lib/residence-features'
+import { RESIDENCE_FEATURES, featureFieldName, type FeatureKey } from '@/lib/residence-features'
+import { prepareResidenceInput, residenceRpcParams } from '@/lib/residence-input'
 
 export async function createResidence(formData: FormData) {
   const supabase = await createClient()
@@ -20,114 +21,51 @@ export async function createResidence(formData: FormData) {
   if (profile?.role !== 'super_admin') return { error: 'Permessi insufficienti' }
   if (!profile.builder_id) return { error: 'Nessun builder associato al tuo account' }
 
-  const name         = (formData.get('name') as string)?.trim()
-  const address      = (formData.get('address') as string)?.trim() || null
-  const energyClass  = (formData.get('energy_class') as string)?.trim() || null
-  const deliveryDate = formData.get('delivery_date') as string
-
-  if (!name || !address || !deliveryDate) return { error: 'Nome, indirizzo e data di consegna obbligatori' }
-
-  // Opzione "Unità già consegnate tutte il <data>" (edificio esistente). Il
-  // campo esiste solo con l'opzione attiva: assente = unità non consegnate,
-  // p_units_delivery_date NULL (044). Formato controllato qui perché un valore
-  // malformato arriverebbe alla RPC come errore di cast generico.
-  const unitsDeliveryRaw = formData.get('units_delivery_date')
-  const unitsDeliveryDate = typeof unitsDeliveryRaw === 'string' && unitsDeliveryRaw.trim()
-    ? unitsDeliveryRaw.trim()
-    : null
-  if (unitsDeliveryRaw !== null && !unitsDeliveryDate) return { error: 'Indica la data di consegna delle unità' }
-  if (unitsDeliveryDate && !/^\d{4}-\d{2}-\d{2}$/.test(unitsDeliveryDate)) {
-    return { error: 'Data di consegna delle unità non valida' }
+  // Adattatore: legge il FormData e passa valori grezzi al modulo condiviso,
+  // che applica le regole (src/lib/residence-input.ts).
+  //
+  // Date per categoria: il field name nel wizard è date_${category} con il
+  // valore esatto del template; si toglie il prefisso e il modulo scarta i
+  // vuoti.
+  const categoryDates: Record<string, unknown> = {}
+  for (const [key, value] of formData.entries()) {
+    if (key.startsWith('date_')) categoryDates[key.slice('date_'.length)] = value
   }
 
-  const unitsResult = parseUnits(formData.get('units'))
-  if ('error' in unitsResult) return { error: unitsResult.error }
-  const units = unitsResult.units
+  // Dotazioni: si itera la COSTANTE, mai le chiavi del FormData (una chiave
+  // mancante o rinominata passerebbe in silenzio). Una checkbox non spuntata
+  // non compare affatto nel FormData, quindi l'assenza vale false, ed è un
+  // false DICHIARATO: chi ha attraversato il passo 2 ha risposto, e un "no"
+  // dichiarato è un dato che vale. Il terzo stato della RPC (p_features NULL
+  // = "dotazioni non dichiarate", 034 righe 33-44) resta riservato a chi crea
+  // residenze senza passare dal wizard.
+  const features = Object.fromEntries(
+    RESIDENCE_FEATURES.map(f => [f.key, formData.get(featureFieldName(f.key)) !== null])
+  ) as Record<FeatureKey, boolean>
+
+  const prepared = prepareResidenceInput({
+    name: formData.get('name'),
+    address: formData.get('address'),
+    energyClass: formData.get('energy_class'),
+    deliveryDate: formData.get('delivery_date'),
+    unitsDeliveryDate: formData.get('units_delivery_date'),
+    units: formData.get('units'),
+    categoryDates,
+    features,
+  })
+  if ('error' in prepared) return { error: prepared.error }
 
   const admin = createServiceClient()
 
-  // Il field name nel wizard è date_${category} con il valore esatto del template.
-  // La RPC le salva in residence_category_dates (044), solo le categorie esistenti.
-  const categoryDates: Record<string, string> = {}
-  for (const [key, value] of formData.entries()) {
-    if (key.startsWith('date_') && typeof value === 'string' && value.trim()) {
-      categoryDates[key.slice('date_'.length)] = value.trim()
-    }
-  }
-
-  // Dotazioni dichiarate nel wizard.
-  //
-  // Si itera la COSTANTE, mai le chiavi che arrivano dal FormData: derivare
-  // l'oggetto dall'input significa che un campo mancante o rinominato passa in
-  // silenzio, e la dotazione sparisce dal piano senza che nulla lo segnali —
-  // esattamente la classe di bug per cui RESIDENCE_FEATURES esiste.
-  //
-  // Si inviano tutte e 19 le risposte, anche i "no": una checkbox non spuntata
-  // non compare affatto nel FormData, quindi l'assenza qui vale false, ed è un
-  // false DICHIARATO. Il terzo stato della RPC (p_features NULL = "dotazioni
-  // non dichiarate", 034 righe 33-44) resta riservato a chi crea residenze
-  // senza passare dal wizard: chi ha attraversato quella schermata ha risposto,
-  // e un "no" dichiarato è un dato che vale.
-  const features = Object.fromEntries(
-    RESIDENCE_FEATURES.map(f => [f.key, formData.get(featureFieldName(f.key)) !== null])
-  )
-
   // Residenza + unità + maintenance_items in un'unica transazione:
   // qualsiasi errore → ROLLBACK totale, nessuna residenza parziale.
-  const { data: residenceId, error: rpcErr } = await admin.rpc('czero_create_residence_with_units', {
-    p_builder_id: profile.builder_id,
-    p_name: name,
-    p_address: address,
-    p_energy_class: energyClass,
-    p_delivery_date: deliveryDate,
-    p_units: units,
-    p_category_dates: categoryDates,
-    p_features: features,
-    p_units_delivery_date: unitsDeliveryDate,
-  })
+  const { data: residenceId, error: rpcErr } = await admin.rpc(
+    'czero_create_residence_with_units',
+    residenceRpcParams(profile.builder_id, prepared.input),
+  )
 
   if (rpcErr || !residenceId) return { error: rpcErr?.message ?? 'Errore creazione residenza' }
 
   revalidatePath('/admin/residences')
   redirect(`/admin/residences/${residenceId}/documenti?onboarding=1`)
-}
-
-const MAX_UNITS = 200
-
-// Valida il JSON delle unità arrivato dal client. L'hidden field è manipolabile
-// dai DevTools: prima la shape (array di {label: string, floor: number}), poi le
-// stesse regole di merito del client (≥1 unità, label non vuote e uniche
-// case-insensitive, floor intero ≥ 0).
-function parseUnits(raw: FormDataEntryValue | null):
-  { units: { label: string; floor: number }[] } | { error: string } {
-  if (typeof raw !== 'string') return { error: 'Dati unità mancanti' }
-
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(raw)
-  } catch {
-    return { error: 'Dati unità non validi' }
-  }
-
-  if (!Array.isArray(parsed)) return { error: 'Dati unità non validi' }
-  if (parsed.length === 0) return { error: 'Serve almeno una unità' }
-  if (parsed.length > MAX_UNITS) return { error: `Massimo ${MAX_UNITS} unità per residenza` }
-
-  const units: { label: string; floor: number }[] = []
-  const seen = new Set<string>()
-  for (const entry of parsed) {
-    if (typeof entry !== 'object' || entry === null) return { error: 'Dati unità non validi' }
-    const { label, floor } = entry as Record<string, unknown>
-    if (typeof label !== 'string' || typeof floor !== 'number') return { error: 'Dati unità non validi' }
-    const trimmed = label.trim()
-    if (!trimmed) return { error: 'Ogni unità deve avere un nome' }
-    if (!Number.isInteger(floor) || floor < 0) {
-      return { error: `Piano non valido per "${trimmed}": serve un numero intero da 0 in su` }
-    }
-    const key = trimmed.toLowerCase()
-    if (seen.has(key)) return { error: `Nome unità duplicato: "${trimmed}"` }
-    seen.add(key)
-    units.push({ label: trimmed, floor })
-  }
-  return { units }
 }
