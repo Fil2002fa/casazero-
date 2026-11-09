@@ -1,81 +1,30 @@
 'use client'
 
-import { forwardRef, useEffect, useRef, useState, useTransition } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
-import { ChevronLeft, ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react'
+import { ChevronLeft } from 'lucide-react'
 import { createResidence } from './actions'
+import { type FeatureKey } from '@/lib/residence-features'
+import { MAX_UNITS } from '@/lib/residence-input'
+import { ResidenceDataSection } from '@/components/residence-wizard/ResidenceDataSection'
+import { FeaturesSection } from '@/components/residence-wizard/FeaturesSection'
 import {
-  FEATURE_GROUPS,
-  RESIDENCE_FEATURES,
-  featureFieldName,
-  type FeatureKey,
-} from '@/lib/residence-features'
-import { pluralize } from '@/lib/pluralize'
-import { DateField } from '@/components/DateField'
-
-const WIZARD_CATEGORIES = [
-  { label: 'Coperture e tetto',      value: 'Coperture'    },
-  { label: 'Ventilazione',           value: 'Ventilazione' },
-  { label: 'Termico e clima',        value: 'Termico'      },
-  { label: 'Elettrico',              value: 'Elettrico'    },
-  { label: 'Fotovoltaico',           value: 'Fotovoltaico' },
-  { label: 'Finiture e serramenti',  value: 'Finiture'     },
-  { label: 'Sicurezza in copertura', value: 'Sicurezza'    },
-  { label: 'Scarichi e spurghi',     value: 'Spurghi'      },
-  { label: 'Ascensore',              value: 'Ascensore'    },
-  { label: 'Antincendio',            value: 'Antincendio'  },
-  { label: 'Idrico e sanitario',     value: 'Idrico'       },
-  { label: 'Accessi ed esterni',     value: 'Accessi'      },
-]
-
-const MAX_UNITS = 200
+  ReplaceUnitsConfirm,
+  UnitGeneratorSection,
+  useUnitGenerator,
+} from '@/components/residence-wizard/UnitGeneratorSection'
+import { UnitListSection } from '@/components/residence-wizard/UnitListSection'
+import {
+  emptyFeatures,
+  validateUnitRows,
+  type UnitRow,
+} from '@/components/residence-wizard/shared'
 
 const STEP_TITLES = {
   1: 'Passo 1 di 3 — Dati residenza',
   2: 'Passo 2 di 3 — Dotazioni',
   3: 'Passo 3 di 3 — Unità',
 } as const
-
-type UnitRow = { label: string; floor: string }
-
-// Tutte e 19 le dotazioni a false. Il wizard dichiara sempre il vocabolario
-// intero, "no" compresi: chi attraversa la schermata ha risposto. Lo stato
-// "non dichiarato" del DB (p_features NULL) resta a chi crea residenze senza
-// passare di qui — vedi il commento in actions.ts.
-function emptyFeatures(): Record<FeatureKey, boolean> {
-  return Object.fromEntries(
-    RESIDENCE_FEATURES.map(f => [f.key, false])
-  ) as Record<FeatureKey, boolean>
-}
-
-// Fonte di verità unica per i nomi generati: usata sia dall'anteprima
-// sia dalla generazione vera, così non possono divergere.
-function generatedLabel(prefix: string, n: number): string {
-  return prefix ? `${prefix} ${n}` : String(n)
-}
-
-// Ritorna un messaggio d'errore per riga (indice → messaggio); vuoto = tutto valido.
-function validateUnitRows(rows: UnitRow[]): Record<number, string> {
-  const errors: Record<number, string> = {}
-  const seen = new Set<string>()
-  rows.forEach((row, i) => {
-    const problems: string[] = []
-    const label = row.label.trim()
-    if (!label) {
-      problems.push('nome obbligatorio')
-    } else if (seen.has(label.toLowerCase())) {
-      problems.push('nome già usato')
-    } else {
-      seen.add(label.toLowerCase())
-    }
-    const floor = Number(row.floor)
-    if (row.floor.trim() === '' || !Number.isInteger(floor) || floor < 0) {
-      problems.push('piano: numero intero da 0 in su')
-    }
-    if (problems.length) errors[i] = problems.join(' · ')
-  })
-  return errors
-}
 
 export default function NewResidencePage() {
   const [pending, startTransition] = useTransition()
@@ -91,16 +40,20 @@ export default function NewResidencePage() {
   const [units, setUnits] = useState<UnitRow[]>([])
   const [rowErrors, setRowErrors] = useState<Record<number, string>>({})
   const [listError, setListError] = useState<string | null>(null)
-
-  // Generatore a pattern (parte sempre dal numero 1; numerazioni diverse
-  // si ottengono modificando le righe della lista, che è la fonte di verità)
-  const [genPrefix, setGenPrefix] = useState('Unità')
-  const [genCount, setGenCount] = useState('')
-  const [genPerFloor, setGenPerFloor] = useState('2')
-  const [genError, setGenError] = useState<string | null>(null)
-  const genCountRef = useRef<HTMLInputElement>(null)
-  const [showReplaceConfirm, setShowReplaceConfirm] = useState(false)
   const [resetNotice, setResetNotice] = useState(false)
+
+  const generator = useUnitGenerator({
+    units,
+    onGenerate: rows => {
+      setUnits(rows)
+      setRowErrors({})
+      setListError(null)
+    },
+  })
+  // Le funzioni dell'hook cambiano a ogni render: l'effetto del pageshow
+  // (montato una volta sola) le legge da qui, non dalla closure del mount.
+  const generatorRef = useRef(generator)
+  generatorRef.current = generator
 
   const formRef = useRef<HTMLFormElement>(null)
   // true solo tra l'avvio di una createResidence e l'esito: distingue
@@ -134,11 +87,7 @@ export default function NewResidencePage() {
       setExistingBuilding(false)
       setShowDateWizard(false)
       setUnitsAlreadyDelivered(false)
-      setGenPrefix('Unità')
-      setGenCount('')
-      setGenPerFloor('2')
-      setGenError(null)
-      setShowReplaceConfirm(false)
+      generatorRef.current.reset()
       setResetNotice(true)
     }
     window.addEventListener('pageshow', handlePageShow)
@@ -158,55 +107,6 @@ export default function NewResidencePage() {
     setError(null)
     if (step === 1 && !form.reportValidity()) return
     setStep(s => (s === 1 ? 2 : 3))
-  }
-
-  // Campi del generatore validi? Unica definizione, condivisa da anteprima,
-  // "Genera" e generazione effettiva. Esplosa in due booleani (invece
-  // dell'IIFE unica) per poter decidere quale campo mettere a fuoco
-  // quando "Genera" fallisce.
-  const genCountNum = parseInt(genCount, 10)
-  const genCountValid = Number.isInteger(genCountNum) && genCountNum >= 1 && genCountNum <= MAX_UNITS
-  const genPerFloorNum = parseInt(genPerFloor, 10)
-  const genPerFloorValid = Number.isInteger(genPerFloorNum) && genPerFloorNum >= 1
-
-  // Con 1 sola unità il piano è sempre 1 qualunque sia "Unità per piano"
-  // (Math.floor(0/n)+1 === 1 per ogni n ≥ 1 in doGenerate sotto): il campo
-  // non ha più alcun effetto e va nascosto, senza toccare il calcolo.
-  const genCountIsOne = genCountValid && genCountNum === 1
-
-  // Campo nascosto quando genCountIsOne: la sua validità non deve poter
-  // bloccare "Genera". perFloor = 1 riproduce lo stesso identico risultato
-  // di doGenerate per qualunque perFloor valido (vedi commento sopra), senza
-  // leggere genPerFloor quando non è a schermo.
-  const gen = genCountIsOne
-    ? { count: 1, perFloor: 1 }
-    : genCountValid && genPerFloorValid ? { count: genCountNum, perFloor: genPerFloorNum } : null
-
-  function doGenerate() {
-    if (!gen) return
-    const prefix = genPrefix.trim()
-    setUnits(Array.from({ length: gen.count }, (_, i) => ({
-      label: generatedLabel(prefix, i + 1),
-      floor: String(Math.floor(i / gen.perFloor) + 1),
-    })))
-    setRowErrors({})
-    setListError(null)
-  }
-
-  function handleGenerate() {
-    if (!gen) {
-      setGenError(`Controlla i campi del generatore: numero di unità (da 1 a ${MAX_UNITS}) e unità per piano (almeno 1)`)
-      if (!genCountValid) genCountRef.current?.focus()
-      return
-    }
-    setGenError(null)
-    // Conferma solo se in lista ci sono già unità con un nome: righe vuote
-    // appena aggiunte non sono lavoro da proteggere.
-    if (units.some(u => u.label.trim())) {
-      setShowReplaceConfirm(true)
-      return
-    }
-    doGenerate()
   }
 
   function updateUnit(index: number, patch: Partial<UnitRow>) {
@@ -235,7 +135,7 @@ export default function NewResidencePage() {
 
     setError(null)
     setListError(null)
-    setGenError(null)
+    generator.setError(null)
     setResetNotice(false)
 
     // Rete di sicurezza: se un required dello step 1 (ora nascosto) non è più
@@ -273,24 +173,6 @@ export default function NewResidencePage() {
     })
   }
 
-  // Contato scorrendo la costante, non Object.values(features): l'elenco delle
-  // dotazioni che esistono è uno solo, e il riepilogo deve leggerlo da lì.
-  const featureCount = RESIDENCE_FEATURES.filter(f => features[f.key]).length
-
-  // Il riepilogo conta solo le righe con un nome compilato: una riga appena
-  // aggiunta e ancora vuota non è un'unità.
-  const filledUnits = units.filter(u => u.label.trim())
-  const floorCount = new Set(filledUnits.map(u => u.floor.trim())).size
-
-  // Anteprima live del generatore: primi 3 nomi + "…" e intervallo piani.
-  const genPreview = gen ? (() => {
-    const prefix = genPrefix.trim()
-    const names = Array.from({ length: Math.min(gen.count, 3) }, (_, i) => generatedLabel(prefix, i + 1))
-    const maxFloor = Math.floor((gen.count - 1) / gen.perFloor) + 1
-    const floors = maxFloor === 1 ? 'piano 1' : `piani 1–${maxFloor}`
-    return `Verranno generate: ${names.join(', ')}${gen.count > 3 ? '…' : ''} · ${floors}`
-  })() : null
-
   return (
     <>
       <div className="flex items-center gap-3 mb-6">
@@ -318,99 +200,18 @@ export default function NewResidencePage() {
       <form ref={formRef} onSubmit={handleSubmit} noValidate className="space-y-5">
         {/* ============ STEP 1 — Dati residenza ============ */}
         <div className={step === 1 ? 'space-y-5' : 'hidden'}>
-          <section className="bg-surface rounded-xl border border-border p-4 space-y-3">
-            <h2 className="text-sm font-medium text-text-primary">Dati residenza</h2>
-
-            <Field label="Nome *" name="name" placeholder="es. Residenza Cavaccio" required />
-            <Field label="Indirizzo *" name="address" placeholder="Via Roma 1, Padova" required />
-            <Field label="Classe energetica" name="energy_class" placeholder="es. A4" />
-            <div>
-              <Field label="Data consegna *" name="delivery_date" type="date" required />
-              <p className="text-xs text-text-secondary mt-1">
-                Data di consegna delle parti comuni. Da qui partono le scadenze delle
-                manutenzioni condominiali (data consegna + frequenza). Le scadenze di ogni
-                unità partono dalla sua consegna, che si registra dalla pagina Unità.
-              </p>
-            </div>
-          </section>
-
-          {/* Edificio esistente */}
-          <section className="bg-surface rounded-xl border border-border p-4 space-y-3">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={existingBuilding}
-                onChange={e => {
-                  setExistingBuilding(e.target.checked)
-                  setShowDateWizard(e.target.checked)
-                  if (!e.target.checked) setUnitsAlreadyDelivered(false)
-                }}
-                className="w-4 h-4 rounded accent-brand-dark"
-              />
-              <div>
-                <p className="text-sm font-medium text-text-primary">Edificio esistente</p>
-                <p className="text-xs text-text-secondary">
-                  Attiva per edifici già abitati: potrai inserire, per ogni categoria,
-                  la data dell&apos;ultimo intervento noto invece della data di consegna.
-                </p>
-              </div>
-            </label>
-
-            {/* Il campo data esiste solo con l'opzione attiva: senza, non arriva
-                nel FormData e le unità nascono non consegnate. */}
-            {existingBuilding && (
-              <div className="space-y-2">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={unitsAlreadyDelivered}
-                    onChange={e => setUnitsAlreadyDelivered(e.target.checked)}
-                    className="w-4 h-4 rounded accent-brand-dark"
-                  />
-                  <span className="text-sm text-text-primary">Unità già consegnate tutte il</span>
-                </label>
-                {unitsAlreadyDelivered && (
-                  <DateField name="units_delivery_date" required />
-                )}
-                <p className="text-xs text-text-secondary">
-                  {unitsAlreadyDelivered
-                    ? 'Tutte le unità nascono consegnate in questa data: le loro scadenze partono da qui.'
-                    : 'Senza questa opzione le unità nascono non consegnate: la consegna di ciascuna si registra dalla pagina Unità.'}
-                </p>
-              </div>
-            )}
-
-            {existingBuilding && (
-              <div>
-                <button
-                  type="button"
-                  onClick={() => setShowDateWizard(!showDateWizard)}
-                  className="flex items-center gap-2 text-sm text-brand-medium"
-                >
-                  {showDateWizard ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                  {showDateWizard ? 'Nascondi' : 'Mostra'} wizard date per categoria
-                </button>
-
-                {showDateWizard && (
-                  <div className="mt-3 space-y-3">
-                    <p className="text-xs text-text-secondary">
-                      Lascia vuoto per usare la data di consegna come base. La scadenza sarà calcolata
-                      come <em>data base + frequenza template</em>.
-                    </p>
-                    {WIZARD_CATEGORIES.map(({ label, value }) => (
-                      <div key={value} className="flex items-center gap-3">
-                        <label className="text-xs text-text-secondary w-40 flex-shrink-0">{label}</label>
-                        <DateField
-                          name={`date_${value}`}
-                          className="flex-1 border border-border rounded-lg px-3 py-1.5 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </section>
+          <ResidenceDataSection
+            existingBuilding={existingBuilding}
+            onExistingBuildingChange={checked => {
+              setExistingBuilding(checked)
+              setShowDateWizard(checked)
+              if (!checked) setUnitsAlreadyDelivered(false)
+            }}
+            unitsAlreadyDelivered={unitsAlreadyDelivered}
+            onUnitsAlreadyDeliveredChange={setUnitsAlreadyDelivered}
+            showDateWizard={showDateWizard}
+            onShowDateWizardChange={setShowDateWizard}
+          />
 
           <button
             type="button"
@@ -423,48 +224,10 @@ export default function NewResidencePage() {
 
         {/* ============ STEP 2 — Dotazioni ============ */}
         <div className={step === 2 ? 'space-y-5' : 'hidden'}>
-          <section className="bg-surface rounded-xl border border-border p-4 space-y-5">
-            <div>
-              <h2 className="text-sm font-medium text-text-primary">Dotazioni dell&apos;edificio</h2>
-              <p className="text-xs text-text-secondary mt-1">
-                Spunta ciò che la residenza ha davvero: il piano di manutenzione nascerà
-                con le sole voci che riguardano queste dotazioni. Puoi proseguire senza
-                spuntare nulla.
-              </p>
-            </div>
-
-            {FEATURE_GROUPS.map(group => (
-              <div key={group} className="space-y-2.5">
-                <h3 className="text-xs font-medium text-text-secondary">{group}</h3>
-                {RESIDENCE_FEATURES.filter(f => f.group === group).map(f => (
-                  <label key={f.key} className="flex items-start gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      name={featureFieldName(f.key)}
-                      checked={features[f.key]}
-                      onChange={e =>
-                        setFeatures(prev => ({ ...prev, [f.key]: e.target.checked }))
-                      }
-                      className="w-4 h-4 mt-0.5 flex-shrink-0 rounded accent-brand-dark"
-                    />
-                    <div>
-                      <p className="text-sm text-text-primary">{f.label}</p>
-                      {'help' in f && (
-                        <p className="text-xs text-text-secondary mt-0.5">{f.help}</p>
-                      )}
-                    </div>
-                  </label>
-                ))}
-              </div>
-            ))}
-
-            {/* Riepilogo: chi salta il passaggio deve accorgersene. */}
-            <p className="text-xs text-text-secondary border-t border-border pt-3">
-              {featureCount === 0
-                ? 'Nessuna dotazione dichiarata'
-                : pluralize(featureCount, 'dotazione dichiarata', 'dotazioni dichiarate')}
-            </p>
-          </section>
+          <FeaturesSection
+            features={features}
+            onChange={(key, checked) => setFeatures(prev => ({ ...prev, [key]: checked }))}
+          />
 
           <div className="flex gap-3">
             <button
@@ -486,103 +249,15 @@ export default function NewResidencePage() {
 
         {/* ============ STEP 3 — Unità ============ */}
         <div className={step === 3 ? 'space-y-5' : 'hidden'}>
-          {/* Generatore a pattern */}
-          <section className="bg-surface rounded-xl border border-border p-4 space-y-3">
-            <h2 className="text-sm font-medium text-text-primary">Genera unità</h2>
-            <p className="text-xs text-text-secondary">
-              Scorciatoia per popolare la lista. Ogni riga resta poi modificabile singolarmente.
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <GenField ref={genCountRef} label="Numero di unità *" value={genCount} onChange={setGenCount} type="number" min="1" max={String(MAX_UNITS)} placeholder="es. 14" />
-              <GenField label="Nome unità" value={genPrefix} onChange={setGenPrefix} placeholder="es. Unità, Int., A" />
-            </div>
-            {!genCountIsOne && (
-              <GenField
-                label="Unità per piano"
-                value={genPerFloor}
-                onChange={setGenPerFloor}
-                type="number"
-                min="1"
-                hint="Per assegnare i piani in automatico: es. 2 = le prime due unità al piano 1, le successive al piano 2, e così via. Modificabile poi riga per riga."
-              />
-            )}
-            {genPreview && (
-              <p className="text-xs text-text-secondary">{genPreview}</p>
-            )}
-            <button
-              type="button"
-              onClick={handleGenerate}
-              className="w-full py-2 border border-brand-dark text-brand-dark rounded-lg text-sm font-medium"
-            >
-              Genera
-            </button>
-            {genError && (
-              <p className="text-xs text-semantic-red">{genError}</p>
-            )}
-          </section>
+          <UnitGeneratorSection generator={generator} />
 
-          {/* Lista editabile — fonte di verità */}
-          <section className="bg-surface rounded-xl border border-border p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-medium text-text-primary">Unità</h2>
-              {filledUnits.length > 0 && (
-                <p className="text-xs text-text-secondary">
-                  {filledUnits.length} unità su {floorCount} {floorCount === 1 ? 'piano' : 'piani'}
-                </p>
-              )}
-            </div>
-
-            {units.length === 0 && (
-              <p className="text-xs text-text-secondary">
-                Nessuna unità in lista. Usa il generatore qui sopra o aggiungile una a una.
-              </p>
-            )}
-
-            {units.map((unit, i) => (
-              <div key={i}>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={unit.label}
-                    onChange={e => updateUnit(i, { label: e.target.value })}
-                    placeholder={`es. Int. ${i + 1}`}
-                    maxLength={60}
-                    aria-label={`Nome unità ${i + 1}`}
-                    className={`flex-1 min-w-0 border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium ${rowErrors[i] ? 'border-semantic-red' : 'border-border'}`}
-                  />
-                  <input
-                    type="number"
-                    value={unit.floor}
-                    onChange={e => updateUnit(i, { floor: e.target.value })}
-                    placeholder="Piano"
-                    min="0"
-                    aria-label={`Piano unità ${i + 1}`}
-                    className={`w-20 border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium ${rowErrors[i] ? 'border-semantic-red' : 'border-border'}`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeUnit(i)}
-                    aria-label={`Rimuovi unità ${i + 1}`}
-                    className="p-2 rounded-lg text-text-secondary hover:text-semantic-red transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-                {rowErrors[i] && (
-                  <p className="text-xs text-semantic-red mt-1">{rowErrors[i]}</p>
-                )}
-              </div>
-            ))}
-
-            <button
-              type="button"
-              onClick={addUnit}
-              className="flex items-center gap-1.5 text-sm text-brand-medium font-medium"
-            >
-              <Plus className="w-4 h-4" strokeWidth={2} />
-              Aggiungi unità
-            </button>
-          </section>
+          <UnitListSection
+            units={units}
+            rowErrors={rowErrors}
+            onUpdate={updateUnit}
+            onAdd={addUnit}
+            onRemove={removeUnit}
+          />
 
           {listError && (
             <div className="bg-semantic-red-bg border border-semantic-red/20 rounded-xl p-3">
@@ -615,81 +290,13 @@ export default function NewResidencePage() {
         </div>
       </form>
 
-      {/* Modale conferma sostituzione lista unità */}
-      {showReplaceConfirm && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-6">
-          <div className="bg-surface rounded-xl border border-border p-5 w-full max-w-sm space-y-3">
-            <p className="text-sm font-medium text-text-primary">Sostituire le unità?</p>
-            <p className="text-sm text-text-secondary">
-              Le {filledUnits.length} unità in lista verranno sostituite da quelle generate.
-            </p>
-            <div className="flex gap-2 justify-end pt-1">
-              <button
-                type="button"
-                onClick={() => setShowReplaceConfirm(false)}
-                className="px-4 py-2 border border-border rounded-lg text-sm text-text-secondary"
-              >
-                Annulla
-              </button>
-              <button
-                type="button"
-                onClick={() => { setShowReplaceConfirm(false); doGenerate() }}
-                className="px-4 py-2 bg-brand-dark text-white rounded-lg text-sm font-medium"
-              >
-                Sostituisci
-              </button>
-            </div>
-          </div>
-        </div>
+      {generator.showReplaceConfirm && (
+        <ReplaceUnitsConfirm
+          count={generator.filledCount}
+          onCancel={() => generator.setShowReplaceConfirm(false)}
+          onConfirm={generator.confirmReplace}
+        />
       )}
     </>
   )
 }
-
-function Field({
-  label, name, placeholder, required, type = 'text',
-}: {
-  label: string; name: string; placeholder?: string; required?: boolean; type?: string
-}) {
-  return (
-    <div>
-      <label className="text-xs text-text-secondary mb-1 block">{label}</label>
-      {type === 'date' ? (
-        <DateField name={name} required={required} />
-      ) : (
-        <input
-          type={type}
-          name={name}
-          placeholder={placeholder}
-          required={required}
-          className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
-        />
-      )}
-    </div>
-  )
-}
-
-const GenField = forwardRef<HTMLInputElement, {
-  label: string; value: string; onChange: (v: string) => void
-  placeholder?: string; type?: string; min?: string; max?: string; hint?: string
-}>(function GenField(
-  { label, value, onChange, placeholder, type = 'text', min, max, hint },
-  ref
-) {
-  return (
-    <div>
-      <label className="text-xs text-text-secondary mb-1 block">{label}</label>
-      <input
-        ref={ref}
-        type={type}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
-        min={min}
-        max={max}
-        className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-medium"
-      />
-      {hint && <p className="text-xs text-text-secondary mt-1">{hint}</p>}
-    </div>
-  )
-})
