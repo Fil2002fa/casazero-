@@ -185,7 +185,7 @@ function PlanSummarySection({ residenceId, overdueItems, upcomingItems, today }:
           {overdueItems.slice(0, 5).map(item => (
             <PlanSummaryRow
               key={item.id}
-              href={`/admin/residences/${residenceId}/manutenzioni?filtro=scaduta`}
+              href={`/admin/residences/${residenceId}/manutenzioni`}
               title={item.maintenance_templates?.title ?? '—'}
               unitLabel={item.unit_id === null ? 'Condominio' : item.units ? formatUnitLabel(item.units.label) : '—'}
               dateLabel={item.next_due_date ? `scaduta il ${formatDate(item.next_due_date)}` : null}

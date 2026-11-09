@@ -9,7 +9,7 @@ import { Select } from '@/components/ui/Input'
 import { ItemConfigForm } from './ItemConfigForm'
 import { MaintenanceList } from './MaintenanceList'
 import { MaintenanceDetailPanel } from './MaintenanceDetailPanel'
-import { buildVoceDetail, type VoceDetail } from '@/lib/maintenance-detail'
+import { buildVoceDetail } from '@/lib/maintenance-detail'
 import { setTemplateActivationForResidence } from '../fornitori/actions'
 import { sollecitaItem, type SollecitoResult } from './actions'
 import { isOverdueLive, isInCorso, isAwaitingDelivery, resolveCompletionMode } from '@/lib/maintenance-status'
@@ -219,19 +219,18 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
   const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null)
   // Voce aperta nel pannello di dettaglio (lista per voce, commit 2a).
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
-  // Voce da portare in vista dopo "Configura per unità" dal pannello (ref: non
-  // è stato da rendere, serve solo all'effetto di scorrimento qui sotto).
+  // Voce da portare in vista nella vista per_unita (ref: non è stato da
+  // rendere, serve solo all'effetto di scorrimento qui sotto). Oggi nessuno la
+  // imposta: la vista non ha ingressi.
   const scrollTargetRef = useRef<string | null>(null)
   const [expandedCompletion, setExpandedCompletion] = useState<string | null>(null)
   const [planView, setPlanView] = useState<'attive' | 'escluse'>('attive')
-  // Scheda Attive: la lista per voce è la vista di default; "per unità" è la
-  // vista precedente (zona attenzione, drill-down con Configura per unità,
-  // Completate), che resta raggiungibile finché Configura per voce non la
-  // sostituisce (commit 3a). I link con ?filtro= o ?modalita= (es. la card
-  // Scadute della residenza) aprono quella: i filtri vivono solo lì.
-  const [attiveView, setAttiveView] = useState<'lista' | 'per_unita'>(
-    initialFilter !== null || initialModeFilter !== null ? 'per_unita' : 'lista'
-  )
+  // Scheda Attive: la lista per voce è l'unica vista raggiungibile. "per unità"
+  // (zona attenzione, drill-down, Completate) è la vista precedente: resta nel
+  // codice, ma nessun bottone e nessun parametro URL la apre più — ?filtro= e
+  // ?modalita= atterrano sulla lista e vengono ignorati. Verrà tolta con il
+  // commit 3a (Configura per voce).
+  const [attiveView, setAttiveView] = useState<'lista' | 'per_unita'>('lista')
   // La vista Escluse è composizione del piano, riservata al costruttore: se lo stato
   // finisse su 'escluse' per qualunque via (oggi nessuna, ma niente lo garantisce in
   // futuro — es. un parametro URL), l'admin va forzato su 'attive' invece di atterrare
@@ -256,13 +255,8 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
   )
   // Identità stabile: useDialogFocus la mette nelle dipendenze dell'effetto.
   const closeDetail = useCallback(() => setSelectedTemplateId(null), [])
-  const configureFromDetail = useCallback((d: VoceDetail) => {
-    scrollTargetRef.current = d.templateId
-    setSelectedTemplateId(null)
-    setActiveFilter(null) // un filtro Scadute/In corso potrebbe nascondere proprio questa voce
-    setAttiveView('per_unita')
-    setExpandedTemplate(templateKey(d.category, d.title))
-  }, [])
+  // Nessun ingresso alla vista per_unita dalla UI (consegna 10/11): il codice
+  // resta morto fino al commit 3a, che lo sostituisce e lo toglie.
   useEffect(() => {
     const id = scrollTargetRef.current
     if (id === null || attiveView !== 'per_unita') return
@@ -459,15 +453,6 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
           selectedUnitId={selectedUnitId}
           onSelectUnit={id => { setSelectedUnitId(id); setExpandedTemplate(null) }}
           onOpen={setSelectedTemplateId}
-          headerAction={
-            <button
-              type="button"
-              onClick={() => setAttiveView('per_unita')}
-              className="rounded-lg border border-border bg-surface px-3 h-11 md:h-9 text-sm font-medium text-brand-dark hover:bg-background cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium"
-            >
-              Configura per unità
-            </button>
-          }
         />
       )}
 
@@ -825,7 +810,7 @@ export function ManutenzioniClient({ residenceId, residenceName, items, completi
         </section>
       )}
 
-      <MaintenanceDetailPanel detail={detail} onClose={closeDetail} onConfigure={configureFromDetail} />
+      <MaintenanceDetailPanel detail={detail} onClose={closeDetail} />
 
       {/* Modale di conferma (preview-before-apply): dichiara righe toccate ed effetto */}
       {pendingAction && (

@@ -29,11 +29,9 @@ import { StateBadge } from './StateBadge'
 type Props = {
   detail: VoceDetail | null
   onClose: () => void
-  /** "Configura per unità": chiude il pannello e porta alla vista per unità su questa voce. */
-  onConfigure: (detail: VoceDetail) => void
 }
 
-export function MaintenanceDetailPanel({ detail, onClose, onConfigure }: Props) {
+export function MaintenanceDetailPanel({ detail, onClose }: Props) {
   const panelRef = useRef<HTMLDivElement>(null)
   useDialogFocus(detail !== null, onClose, panelRef)
 
@@ -126,16 +124,6 @@ export function MaintenanceDetailPanel({ detail, onClose, onConfigure }: Props) 
           <Section title="Storico">
             <History detail={detail} />
           </Section>
-
-          <div className="border-t border-border pt-4">
-            <button
-              type="button"
-              onClick={() => onConfigure(detail)}
-              className="rounded-lg border border-border bg-surface px-3 h-11 md:h-9 text-sm font-medium text-brand-dark hover:bg-background cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium"
-            >
-              Configura per unità
-            </button>
-          </div>
         </div>
       </div>
     </>,
