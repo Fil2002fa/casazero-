@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { requireProfile } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import {
-  isCountable, isOverdueLive, resolveCompletionMode, resolveFrequencyMonths,
+  isCountable, isOverdueLive, isAwaitingDelivery, resolveCompletionMode, resolveFrequencyMonths,
   resolveObligationType, resolveLiveStatus, todayISO,
   type LiveStatusItem,
 } from '@/lib/maintenance-status'
@@ -81,6 +81,7 @@ export default async function ManutenzioniPage() {
     obligationType: resolveObligationType(i),
     frequencyMonths: resolveFrequencyMonths(i),
     status: resolveLiveStatus(i, today),
+    isAwaitingDelivery: isAwaitingDelivery(i),
     mode: resolveCompletionMode(i),
     unitId: i.unit_id,
     residenceId: i.residence_id,

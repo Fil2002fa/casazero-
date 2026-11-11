@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
 import type { CompletionMode, MaintenanceStatus, ObligationType } from '@/types/database'
 import { StatusBadge, PromemoriaBadge, TypeBadge } from '@/components/ui/Badge'
+import { AwaitingDeliveryLine } from '@/components/AwaitingDelivery'
 import { Button } from '@/components/ui/Button'
 import { formatFrequency } from '@/lib/formatFrequency'
 import { CompletionSheet } from './CompletionSheet'
@@ -16,6 +17,7 @@ export type ListItem = {
   obligationType: ObligationType | null
   frequencyMonths: number | null
   status: MaintenanceStatus
+  isAwaitingDelivery: boolean
   mode: CompletionMode | null
   unitId: string | null
   residenceId: string
@@ -84,7 +86,7 @@ export function ManutenzioniList({
           >
             <div className="flex-1 min-w-0 space-y-1.5">
               <div className="flex items-center gap-2 flex-wrap">
-                <StatusBadge status={item.status} />
+                {item.isAwaitingDelivery ? <AwaitingDeliveryLine /> : <StatusBadge status={item.status} />}
                 {item.obligationType && <TypeBadge obligationType={item.obligationType} />}
               </div>
               <p className="text-base font-medium text-text-primary">{item.title}</p>
