@@ -97,19 +97,21 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
         <Link href="/manutenzioni" aria-label="Torna alle manutenzioni" className="flex items-center justify-center w-11 h-11 -ml-3 -mr-2 flex-shrink-0 text-text-secondary rounded-lg active:bg-background">
           <ChevronLeft className="w-5 h-5" strokeWidth={1.6} />
         </Link>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm text-text-secondary">{tpl?.category}</p>
-          <h1 className="font-serif text-[22px] font-semibold text-text-primary break-words">{tpl?.title}</h1>
-        </div>
+        <div className="flex-1 min-w-0 space-y-2">
+          <div>
+            <p className="text-sm text-text-secondary [overflow-wrap:anywhere]">{tpl?.category}</p>
+            <h1 className="font-serif text-[22px] font-semibold text-text-primary [overflow-wrap:anywhere]">{tpl?.title}</h1>
+          </div>
         {/* Promemoria: solo "Consigliata · ogni X mesi", mai stato né scadenza. */}
         {mode === 'promemoria' ? (
           <PromemoriaBadge frequencyMonths={frequencyMonths} className="flex-shrink-0" />
         ) : (
-          <div className="flex flex-col items-end gap-1 flex-shrink-0">
+          <div className="flex flex-wrap items-center gap-1">
             <StatusBadge status={status} />
             {obligationType && <TypeBadge obligationType={obligationType} />}
           </div>
         )}
+        </div>
       </div>
 
       <div className="p-4 space-y-4">
