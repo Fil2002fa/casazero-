@@ -154,8 +154,8 @@ export default async function FascicoloPage() {
 
   return (
     <div className="p-4 space-y-6 pb-safe">
-      <header className="flex items-start justify-between gap-3">
-        <div>
+      <header className="flex flex-col items-start gap-3 sm:flex-row sm:justify-between">
+        <div className="min-w-0">
           <h1 className="font-serif text-[22px] font-semibold text-text-primary">Fascicolo</h1>
           <p className="text-sm text-text-secondary mt-0.5">Registro permanente degli interventi</p>
         </div>
