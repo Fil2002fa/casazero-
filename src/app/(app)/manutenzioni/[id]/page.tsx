@@ -11,6 +11,7 @@ import { AwaitingDeliveryNote } from '@/components/AwaitingDelivery'
 import type { ObligationType } from '@/types/database'
 import { formatRegisteredBy } from '@/lib/formatRegisteredBy'
 import { formatFrequency } from '@/lib/formatFrequency'
+import { pluralize } from '@/lib/pluralize'
 import {
   isOverdueLive, resolveCompletionMode, resolveFrequencyMonths, resolveLiveStatus,
   resolveObligationType, todayISO, formatRelativeDue,
@@ -139,6 +140,11 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
           <p className="text-base text-text-secondary">
             Frequenza: {frequencyMonths === 12 ? 'ogni anno' : frequencyMonths == null ? 'non indicata' : formatFrequency(frequencyMonths)}
           </p>
+          {frequencyMonths != null && (
+            <p className="text-sm text-text-secondary">
+              Ogni {pluralize(frequencyMonths, 'mese', 'mesi')} dall&apos;ultima esecuzione.
+            </p>
+          )}
           {completions?.[0] && (
             <p className="text-sm text-text-secondary">
               Ultima esecuzione: {new Date(completions[0].completed_at).toLocaleDateString('it-IT', {
@@ -225,19 +231,25 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
         )}
 
         {/* Storico */}
-        {(completions?.length ?? 0) > 0 && (
+        {
           <div className="space-y-2">
             <h2 className="text-sm font-medium text-text-primary">Storico interventi</h2>
-            <div className="space-y-2">
-              {completions?.map(c => {
+            {(completions?.length ?? 0) === 0 && (
+              <p className="text-base text-text-secondary">Nessun intervento registrato finora.</p>
+            )}
+            <ol className="border-l border-border ml-3 space-y-3">
+              {completions?.map((c, index) => {
                 const comp = c as {
                   id: string; completed_at: string
                   performed_by_name: string | null; notes: string | null
                   attachments: { id: string; file_name: string }[]
                 }
                 return (
-                  <div key={comp.id} className="bg-surface rounded-xl border border-border p-4">
-                    <div className="flex items-center justify-between mb-1">
+                  <li key={comp.id} className="relative ml-5 bg-surface rounded-xl border border-border p-4 [overflow-wrap:anywhere]">
+                    <span className="absolute -left-9 top-4 w-6 h-6 rounded-full border border-border bg-surface flex items-center justify-center text-xs text-text-secondary" aria-label={`Intervento ${index + 1}`}>
+                      {index + 1}
+                    </span>
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                       <span className="text-sm font-medium text-text-primary">
                         {new Date(comp.completed_at).toLocaleDateString('it-IT', {
                           day: 'numeric', month: 'long', year: 'numeric',
@@ -249,18 +261,20 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-text-secondary break-words">
-                      Eseguito da: {formatRegisteredBy(comp.performed_by_name, mode, null)}
-                    </p>
+                    {comp.performed_by_name && (
+                      <p className="text-xs text-text-secondary break-words">
+                        Eseguito da: {formatRegisteredBy(comp.performed_by_name, mode, null)}
+                      </p>
+                    )}
                     {comp.notes && (
                       <p className="text-base text-text-secondary mt-1 leading-relaxed break-words">{comp.notes}</p>
                     )}
-                  </div>
+                  </li>
                 )
               })}
-            </div>
+            </ol>
           </div>
-        )}
+        }
 
       </div>
     </div>
