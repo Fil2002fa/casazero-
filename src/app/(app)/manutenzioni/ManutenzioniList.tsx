@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
 import type { CompletionMode, MaintenanceStatus, ObligationType } from '@/types/database'
 import { StatusBadge, PromemoriaBadge, TypeBadge } from '@/components/ui/Badge'
-import { AwaitingDeliveryLine } from '@/components/AwaitingDelivery'
+import { AWAITING_DELIVERY_LABEL } from '@/lib/maintenance-status'
 import { Button } from '@/components/ui/Button'
 import { formatFrequency } from '@/lib/formatFrequency'
 import { CompletionSheet } from './CompletionSheet'
@@ -86,7 +86,11 @@ export function ManutenzioniList({
           >
             <div className="flex-1 min-w-0 space-y-1.5">
               <div className="flex items-center gap-2 flex-wrap">
-                {item.isAwaitingDelivery ? <AwaitingDeliveryLine /> : <StatusBadge status={item.status} />}
+                {item.isAwaitingDelivery ? (
+                  <span className="inline-flex items-center rounded-full h-[22px] px-2.5 text-xs font-medium bg-neutral-600/7 text-neutral-600">
+                    {AWAITING_DELIVERY_LABEL}
+                  </span>
+                ) : <StatusBadge status={item.status} />}
                 {item.obligationType && <TypeBadge obligationType={item.obligationType} />}
               </div>
               <p className="text-base font-medium text-text-primary [overflow-wrap:anywhere]">{item.title}</p>
