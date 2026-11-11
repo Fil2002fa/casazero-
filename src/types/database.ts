@@ -62,6 +62,14 @@ export interface MaintenanceTemplate {
   scope: MaintenanceScope
   sort_order: number | null
   created_at: string
+  /** Testi per il residente (migrazione 055). `description` è ora il testo divulgativo. */
+  why_it_matters: string | null
+  who_does_it: string | null
+  what_to_keep: string | null
+  /** Array di passi (stringhe) o null. */
+  how_to: string[] | null
+  /** Vecchio testo tecnico di `description`, conservato dalla 056. */
+  technical_notes: string | null
 }
 
 /**
