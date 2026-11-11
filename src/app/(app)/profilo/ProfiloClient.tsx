@@ -264,8 +264,8 @@ export function ProfiloClient({
                 {/* Push */}
                 <div className="w-12 flex justify-center">
                   <Toggle
-                    on={prefs[row.pushKey]}
-                    disabled={savingKey === row.pushKey}
+                    on={false}
+                    disabled
                     onToggle={() => handleTogglePref(row.pushKey)}
                   />
                 </div>
@@ -279,8 +279,8 @@ export function ProfiloClient({
                     </div>
                   ) : row.emailKey ? (
                     <Toggle
-                      on={prefs[row.emailKey]}
-                      disabled={savingKey === row.emailKey}
+                      on={false}
+                      disabled
                       onToggle={() => handleTogglePref(row.emailKey!)}
                     />
                   ) : (
@@ -294,7 +294,7 @@ export function ProfiloClient({
           {prefError && <p className="text-xs text-semantic-red">{prefError}</p>}
 
           <p className="text-xs text-text-secondary pt-1">
-            Le notifiche push richiedono l&apos;installazione dell&apos;app sul dispositivo.
+            Le preferenze di notifica saranno attive a breve.
           </p>
         </section>
 
@@ -316,7 +316,7 @@ export function ProfiloClient({
 
 // ── Toggle switch ────────────────────────────────────────────────────────────
 // locked = sempre ON, nessuna interazione, nessun velo (usato per email invariante)
-// disabled = salvataggio in corso su questa chiave specifica
+// disabled = preferenza non disponibile o salvataggio in corso
 // Il bottone è l'area di tocco 44×44 attorno alla traccia visiva 36×20: i
 // margini negativi (-mx-1 -my-3) lasciano invariato l'ingombro nella riga.
 function Toggle({
@@ -336,6 +336,7 @@ function Toggle({
       role="switch"
       aria-checked={on}
       aria-disabled={locked || disabled}
+      disabled={locked || disabled}
       onClick={locked || disabled ? undefined : onToggle}
       className={`group flex items-center justify-center w-11 h-11 -mx-1 -my-3 flex-shrink-0 focus-visible:outline-none ${
         locked    ? 'cursor-default' :
