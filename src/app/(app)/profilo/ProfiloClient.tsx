@@ -264,6 +264,7 @@ export function ProfiloClient({
                 {/* Push */}
                 <div className="w-12 flex justify-center">
                   <Toggle
+                    label={`${row.label}, push`}
                     on={false}
                     disabled
                     onToggle={() => handleTogglePref(row.pushKey)}
@@ -274,11 +275,12 @@ export function ProfiloClient({
                 <div className="w-16 flex justify-center">
                   {row.emailLocked ? (
                     <div className="flex items-center gap-1.5" title="Sempre attiva">
-                      <Toggle on locked />
+                      <Toggle label={`${row.label}, email`} on locked />
                       <Lock className="w-3.5 h-3.5 text-text-secondary/40" strokeWidth={1.6} />
                     </div>
                   ) : row.emailKey ? (
                     <Toggle
+                      label={`${row.label}, email`}
                       on={false}
                       disabled
                       onToggle={() => handleTogglePref(row.emailKey!)}
@@ -320,11 +322,13 @@ export function ProfiloClient({
 // Il bottone è l'area di tocco 44×44 attorno alla traccia visiva 36×20: i
 // margini negativi (-mx-1 -my-3) lasciano invariato l'ingombro nella riga.
 function Toggle({
+  label,
   on,
   onToggle,
   disabled,
   locked,
 }: {
+  label: string
   on: boolean
   onToggle?: () => void
   disabled?: boolean
@@ -334,6 +338,7 @@ function Toggle({
     <button
       type="button"
       role="switch"
+      aria-label={label}
       aria-checked={on}
       aria-disabled={locked || disabled}
       disabled={locked || disabled}
