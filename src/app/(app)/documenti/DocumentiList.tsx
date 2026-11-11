@@ -149,14 +149,14 @@ function DocCard({ doc }: { doc: DocItem }) {
     >
       <FileText className="w-5 h-5 text-neutral-400 flex-shrink-0" strokeWidth={1.6} />
       <div className="flex-1 min-w-0">
-        <p className="text-base font-medium text-text-primary break-words">{humanizeDocumentTitle(doc.title)}</p>
+        <p className="text-base font-medium text-text-primary [overflow-wrap:anywhere]">{humanizeDocumentTitle(doc.title)}</p>
         {doc.facts.length > 0 && (
-          <p className="text-xs text-text-secondary mt-0.5 break-words">{doc.facts.join(' · ')}</p>
+          <p className="text-xs text-text-secondary mt-0.5 [overflow-wrap:anywhere]">{doc.facts.join(' · ')}</p>
         )}
         {/* La data non si taglia mai: solo il nome file cede spazio */}
-        <p className="flex gap-1 text-xs text-neutral-500">
-          <span className="truncate">{doc.file_name}</span>
-          <span className="flex-shrink-0">· {doc.formattedDate}</span>
+        <p className="flex flex-wrap gap-x-1 text-xs text-neutral-500">
+          <span className="min-w-0 max-w-full truncate">{doc.file_name}</span>
+          <span className="flex-shrink-0 whitespace-nowrap">· {doc.formattedDate}</span>
         </p>
       </div>
       <Download className="w-4 h-4 text-neutral-400 flex-shrink-0" strokeWidth={1.6} aria-hidden="true" />
