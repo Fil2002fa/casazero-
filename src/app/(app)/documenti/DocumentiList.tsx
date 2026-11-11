@@ -89,8 +89,8 @@ export function DocumentiList({ docs, uploadSlot }: { docs: DocItem[]; uploadSlo
         )}
       </form>
 
-      {/* Filtri categoria: vanno a capo, mai nascosti fuori schermo */}
-      <div className="flex flex-wrap gap-2">
+      {/* Filtri categoria: una riga scorrevole, con spazio per il focus. */}
+      <div className="flex flex-nowrap gap-2 overflow-x-auto -mx-4 px-4 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <Chip label="Tutti" active={category === 'all'} onClick={() => setCategory('all')} />
         {CATEGORIES.map(c => (
           <Chip key={c.value} label={c.label} active={category === c.value} onClick={() => setCategory(c.value)} />
@@ -101,8 +101,17 @@ export function DocumentiList({ docs, uploadSlot }: { docs: DocItem[]; uploadSlo
       {visible.length === 0 ? (
         <div className="bg-surface rounded-xl border border-border p-8 text-center">
           <p className="text-base text-text-secondary break-words">
-            {term ? `Nessun risultato per "${search.trim()}".` : 'Nessun documento caricato.'}
+            {term ? `Nessun risultato per "${search.trim()}".` : category !== 'all' ? 'Nessun documento in questa categoria' : 'Nessun documento caricato.'}
           </p>
+          {category !== 'all' && (
+            <button
+              type="button"
+              onClick={() => setCategory('all')}
+              className="inline-flex items-center min-h-11 text-sm text-brand-medium underline rounded-lg focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20"
+            >
+              Mostra tutti
+            </button>
+          )}
         </div>
       ) : category !== 'all' ? (
         <div className="space-y-2">
