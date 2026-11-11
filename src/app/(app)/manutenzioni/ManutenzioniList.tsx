@@ -59,7 +59,7 @@ export function ManutenzioniList({
                   <StatusBadge status="scaduta" />
                   {item.obligationType && <TypeBadge obligationType={item.obligationType} />}
                 </div>
-                <p className="text-base font-medium text-text-primary">{item.title}</p>
+                <p className="text-base font-medium text-text-primary [overflow-wrap:anywhere]">{item.title}</p>
                 <p className="text-sm text-text-secondary">{formatFrequency(item.frequencyMonths)}</p>
               </div>
               <ChevronRight className="w-4 h-4 text-text-secondary flex-shrink-0" strokeWidth={1.6} />
@@ -89,7 +89,7 @@ export function ManutenzioniList({
                 {item.isAwaitingDelivery ? <AwaitingDeliveryLine /> : <StatusBadge status={item.status} />}
                 {item.obligationType && <TypeBadge obligationType={item.obligationType} />}
               </div>
-              <p className="text-base font-medium text-text-primary">{item.title}</p>
+              <p className="text-base font-medium text-text-primary [overflow-wrap:anywhere]">{item.title}</p>
               <p className="text-sm text-text-secondary">{formatFrequency(item.frequencyMonths)}</p>
             </div>
             <ChevronRight className="w-4 h-4 text-text-secondary flex-shrink-0" strokeWidth={1.6} />
@@ -106,7 +106,7 @@ export function ManutenzioniList({
           >
             <div className="flex-1 min-w-0 space-y-1.5">
               <PromemoriaBadge frequencyMonths={item.frequencyMonths} />
-              <p className="text-base font-medium text-text-primary">{item.title}</p>
+              <p className="text-base font-medium text-text-primary [overflow-wrap:anywhere]">{item.title}</p>
             </div>
             <ChevronRight className="w-4 h-4 text-text-secondary flex-shrink-0" strokeWidth={1.6} />
           </Link>
