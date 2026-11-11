@@ -55,7 +55,7 @@ export function FascicoloList({
       <div className="grid grid-cols-3 gap-3">
         <StatBox label="Totali" value={visible.length} />
         <StatBox label={`Anno ${thisYear}`} value={yearCount} />
-        <StatBox label="Scadute" value={scaduteCount} alert={scaduteCount > 0} />
+        <StatBox label="Scadute (tutte)" value={scaduteCount} alert={scaduteCount > 0} />
       </div>
 
       {/* Filtro scope */}
