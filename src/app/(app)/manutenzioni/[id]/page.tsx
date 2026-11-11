@@ -10,9 +10,10 @@ import { N3AdminActions } from '@/components/N3AdminActions'
 import { AwaitingDeliveryNote } from '@/components/AwaitingDelivery'
 import type { ObligationType } from '@/types/database'
 import { formatRegisteredBy } from '@/lib/formatRegisteredBy'
+import { formatFrequency } from '@/lib/formatFrequency'
 import {
   isOverdueLive, resolveCompletionMode, resolveFrequencyMonths, resolveLiveStatus,
-  resolveObligationType, todayISO,
+  resolveObligationType, todayISO, formatRelativeDue,
   type LiveStatusItem,
 } from '@/lib/maintenance-status'
 
@@ -115,11 +116,10 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
       </div>
 
       <div className="p-4 space-y-4">
-        {/* Scadenza — mai per le promemoria: nessun confronto data, nessun
-            linguaggio scadenza. Senza data il piano non è partito: al posto
-            del blocco scadenza va la nota di attesa consegna, non il vuoto. */}
-        {mode !== 'promemoria' && (formattedDue ? (
-          <div className={`rounded-xl p-3 flex items-center gap-3 ${
+        <section className="bg-surface rounded-xl border border-border p-4 space-y-3 [overflow-wrap:anywhere]">
+          <h2 className="font-serif text-lg font-semibold text-text-primary">Quando</h2>
+          {mode !== 'promemoria' && (formattedDue ? (
+          <div className={`rounded-xl p-3 ${
             status === 'scaduta'
               ? 'bg-semantic-red-bg text-semantic-red'
               : status === 'in_corso'
@@ -128,20 +128,43 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
           }`}>
             <span className="text-base">
               {status === 'scaduta' ? 'Scaduta il ' : status === 'in_corso' ? 'Presa in carico · scaduta il ' : 'Prossima scadenza: '}
-              <strong>{formattedDue}</strong>
+              <strong>{status !== 'scaduta' && status !== 'in_corso' && item.next_due_date! >= todayISO()
+                ? formatRelativeDue(item.next_due_date!)
+                : formattedDue}</strong>
             </span>
           </div>
         ) : (
           <AwaitingDeliveryNote shell="app" />
-        ))}
+          ))}
+          <p className="text-base text-text-secondary">
+            Frequenza: {frequencyMonths === 12 ? 'ogni anno' : frequencyMonths == null ? 'non indicata' : formatFrequency(frequencyMonths)}
+          </p>
+          {completions?.[0] && (
+            <p className="text-sm text-text-secondary">
+              Ultima esecuzione: {new Date(completions[0].completed_at).toLocaleDateString('it-IT', {
+                day: 'numeric', month: 'long', year: 'numeric',
+              })}
+            </p>
+          )}
+        </section>
 
-        {/* Descrizione */}
-        {tpl?.description && (
-          <div className="bg-surface rounded-xl border border-border p-4">
-            <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-1">Descrizione</p>
-            <p className="text-base text-text-primary leading-relaxed break-words">{tpl.description}</p>
-          </div>
-        )}
+        <section className="bg-surface rounded-xl border border-border p-4 space-y-2">
+          <h2 className="font-serif text-lg font-semibold text-text-primary">Chi se ne occupa</h2>
+          <p className="text-base text-text-primary leading-relaxed [overflow-wrap:anywhere]">
+            {mode === 'promemoria'
+              ? 'È un consiglio per la tua casa, nessun obbligo'
+              : mode === 'amministratore'
+              ? "Se ne occupa l'amministratore di condominio, non devi fare nulla"
+              : "Tocca a te: quando l'hai fatta, registrala qui"}
+          </p>
+        </section>
+
+        <section className="bg-surface rounded-xl border border-border p-4 space-y-2">
+          <h2 className="font-serif text-lg font-semibold text-text-primary">Cos&apos;è</h2>
+          <p className="text-base text-text-primary leading-relaxed [overflow-wrap:anywhere]">
+            {tpl?.description || 'Il costruttore non ha ancora aggiunto una descrizione per questa voce.'}
+          </p>
+        </section>
 
         {/* Garanzia */}
         {item.warranty_info && (
