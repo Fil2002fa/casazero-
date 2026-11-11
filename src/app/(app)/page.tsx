@@ -9,6 +9,7 @@ import { OBLIGATION_LABELS } from '@/components/MaintenanceBadge'
 import type { ObligationType } from '@/types/database'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import { pluralize } from '@/lib/pluralize'
+import { HomeRiepilogo } from './HomeRiepilogo'
 import {
   isCountable, isInCorso, isOverdueLive, isAwaitingDelivery, resolveCompletionMode,
   resolveFrequencyMonths, resolveLiveStatus, resolveObligationType, formatRelativeDue, todayISO,
@@ -163,6 +164,12 @@ export default async function HomePage() {
           Ciao, {profile.full_name?.split(' ')[0] ?? 'benvenuto'}
         </h1>
       </header>
+
+      <HomeRiepilogo
+        items={(rawUrgent ?? []) as unknown as ItemRow[]}
+        today={today}
+        awaitingDelivery={awaitingDelivery.some(i => resolveCompletionMode(i) === 'residente') && !((rawUrgent ?? []) as unknown as ItemRow[]).some(i => isCountable(i) && resolveCompletionMode(i) === 'residente' && i.next_due_date !== null)}
+      />
 
       {/* Card residenza */}
       <div className="bg-surface rounded-xl border border-border overflow-hidden">
