@@ -14,6 +14,8 @@ import { formatRegisteredBy } from '@/lib/formatRegisteredBy'
 import { formatFrequency } from '@/lib/formatFrequency'
 import { pluralize } from '@/lib/pluralize'
 import { isResidentGuideAvailable } from '../guide-eligibility'
+import { resolveMaintenanceIllustrations } from '../maintenance-illustrations'
+import { MaintenanceIllustration } from '../MaintenanceIllustration'
 import {
   isOverdueLive, isAwaitingDelivery, AWAITING_DELIVERY_LABEL, resolveCompletionMode, resolveFrequencyMonths, resolveLiveStatus,
   resolveObligationType, todayISO,
@@ -62,7 +64,7 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
   const { data: item, error: itemError } = await supabase
     .from('maintenance_items')
     .select(`
-      id, status, next_due_date, unit_id, residence_id, completion_mode, activation_status, frequency_months, obligation_type, warranty_info,
+      id, template_id, status, next_due_date, unit_id, residence_id, completion_mode, activation_status, frequency_months, obligation_type, warranty_info,
       maintenance_templates!inner(title, category, description, why_it_matters, who_does_it, what_to_keep, how_to, technical_notes, completion_mode, is_active, frequency_months, scope, obligation_type),
       suppliers(name, phone, email),
       units(label),
@@ -152,6 +154,9 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
   })
 
   const isAdmin = profile.role === 'admin' || profile.role === 'super_admin'
+  const illustrations = canStartGuide
+    ? resolveMaintenanceIllustrations(item.template_id, tpl?.title, tpl?.how_to)
+    : null
   const isAdminMode = mode === 'amministratore'
   const registeredBy = mode === 'promemoria' ? 'Nessuna registrazione prevista.'
     : mode === 'amministratore' ? "L'amministratore di condominio."
@@ -218,6 +223,7 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
               <p className="mt-1 text-sm leading-relaxed text-text-secondary">Consulta i passaggi pratici per {tpl?.title?.toLocaleLowerCase('it-IT')}.</p>
             </div>
           </div>
+          <MaintenanceIllustration asset={illustrations?.overview} />
           <Link href={`/manutenzioni/${item.id}/guida`} className="mt-4 flex min-h-12 items-center justify-center gap-2 rounded-xl bg-brand-dark px-5 py-3 text-sm font-medium text-white focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-medium/50">
             <BookOpen aria-hidden="true" className="h-4 w-4" />
             Inizia la guida

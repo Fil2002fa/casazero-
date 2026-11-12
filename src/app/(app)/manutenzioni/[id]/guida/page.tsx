@@ -7,6 +7,7 @@ import { requireProfile } from '@/lib/auth'
 import { resolveCompletionMode, type LiveStatusItem } from '@/lib/maintenance-status'
 import { isResidentGuideAvailable } from '../../guide-eligibility'
 import { GuideExperience } from './GuideExperience'
+import { resolveMaintenanceIllustrations } from '../../maintenance-illustrations'
 
 export const metadata: Metadata = { title: 'Guida manutenzione' }
 
@@ -20,7 +21,7 @@ export default async function ResidentMaintenanceGuidePage({ params }: { params:
   const supabase = await createClient()
   const { data: item, error: itemError } = await supabase
     .from('maintenance_items')
-    .select('id, unit_id, completion_mode, activation_status, maintenance_templates!inner(title, description, who_does_it, how_to, completion_mode, is_active)')
+    .select('id, template_id, unit_id, completion_mode, activation_status, maintenance_templates!inner(title, description, who_does_it, how_to, completion_mode, is_active)')
     .eq('id', id)
     .maybeSingle()
 
@@ -64,5 +65,7 @@ export default async function ResidentMaintenanceGuidePage({ params }: { params:
   })
   if (!eligible || !template?.how_to) notFound()
 
-  return <GuideExperience title={template.title} description={template.description} whoDoesIt={template.who_does_it!} steps={template.how_to} detailHref={`/manutenzioni/${id}`} />
+  const illustrations = resolveMaintenanceIllustrations(item.template_id, template.title, template.how_to)
+
+  return <GuideExperience title={template.title} description={template.description} whoDoesIt={template.who_does_it!} steps={template.how_to} stepIllustrations={illustrations?.steps.map(step => step.illustration ?? null)} detailHref={`/manutenzioni/${id}`} />
 }

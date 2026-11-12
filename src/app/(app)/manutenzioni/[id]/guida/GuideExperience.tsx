@@ -3,16 +3,19 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, ArrowRight, AlertTriangle, Check, X } from 'lucide-react'
+import { MaintenanceIllustration } from '../../MaintenanceIllustration'
+import type { MaintenanceIllustrationAsset } from '../../maintenance-illustrations'
 
 type Props = {
   title: string
   description: string | null
   whoDoesIt: string
   steps: string[]
+  stepIllustrations?: readonly (MaintenanceIllustrationAsset | null)[]
   detailHref: string
 }
 
-export function GuideExperience({ title, description, whoDoesIt, steps, detailHref }: Props) {
+export function GuideExperience({ title, description, whoDoesIt, steps, stepIllustrations, detailHref }: Props) {
   const [started, setStarted] = useState(false)
   const [stepIndex, setStepIndex] = useState(0)
   const finished = started && stepIndex >= steps.length
@@ -66,6 +69,7 @@ export function GuideExperience({ title, description, whoDoesIt, steps, detailHr
           <div aria-live="polite" className="rounded-2xl border border-border bg-surface p-5">
             <p className="mb-4 text-[11px] font-medium uppercase tracking-[0.12em] text-brand-medium">Passaggio {stepIndex + 1}</p>
             <p className="font-serif text-[25px] leading-[1.4] text-brand-dark">{steps[stepIndex]}</p>
+            <MaintenanceIllustration key={stepIndex} asset={stepIllustrations?.[stepIndex] ?? undefined} />
           </div>
           <aside className="flex items-start gap-3 rounded-xl border border-semantic-amber/25 bg-semantic-amber/10 px-4 py-3">
             <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-semantic-amber" />
