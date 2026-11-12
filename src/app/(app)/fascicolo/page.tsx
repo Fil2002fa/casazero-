@@ -160,9 +160,9 @@ export default async function FascicoloPage() {
           <p className="text-sm text-text-secondary mt-0.5">Registro permanente degli interventi</p>
         </div>
         {reportHref && (
-          <a href={reportHref} download className={buttonVariants('secondary', 'default', 'flex-shrink-0 gap-1.5')}>
-            <FileDown className="w-3.5 h-3.5" strokeWidth={1.8} />
-            Report PDF
+          <a href={reportHref} download className={buttonVariants('primary', 'default', 'w-full sm:w-auto gap-2')}>
+            <FileDown className="w-5 h-5 flex-shrink-0" strokeWidth={1.8} aria-hidden="true" />
+            Scarica report PDF
           </a>
         )}
       </header>
@@ -170,14 +170,14 @@ export default async function FascicoloPage() {
       {/* Conformità */}
       <div className="bg-surface rounded-xl border border-border p-4">
         <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-3">Conformità</p>
-        <div className="flex items-end gap-4">
+        <div className="flex flex-wrap items-end gap-4">
           <div>
             <span className={`text-4xl font-medium ${
               conformita >= 80 ? 'text-brand-dark' : conformita >= 60 ? 'text-semantic-amber' : 'text-semantic-red'
             }`}>{conformita}%</span>
-            <p className="text-sm text-text-secondary mt-1">manutenzioni in regola</p>
+            <p className="text-sm text-text-secondary mt-1">delle manutenzioni monitorate in regola</p>
           </div>
-          <div className="flex-1 bg-background rounded-full h-2 mb-1">
+          <div className="flex-1 min-w-16 bg-background rounded-full h-2 mb-1">
             <div
               className={`h-2 rounded-full transition-all ${
                 conformita >= 80 ? 'bg-brand-medium' : conformita >= 60 ? 'bg-semantic-amber' : 'bg-semantic-red'
@@ -186,6 +186,7 @@ export default async function FascicoloPage() {
             />
           </div>
         </div>
+        <p className="text-sm leading-relaxed text-text-secondary mt-4">La percentuale riguarda le manutenzioni monitorate e non certifica lo stato generale dell&apos;edificio.</p>
       </div>
 
       <FascicoloList entries={entries} thisYear={thisYear} scaduteCount={scaduteCount} />
