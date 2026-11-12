@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { allowsResidentEmail } from '@/lib/resident-email-preferences'
 import { createClient } from '@supabase/supabase-js'
 import {
   sendEmail,
@@ -220,6 +221,7 @@ async function notifyUnitMembers(
   const roles = await getItemLinkRoles(supabase, (members ?? []).map((m: { profile_id: string }) => m.profile_id), residenceId)
 
   for (const m of members ?? []) {
+    if (type === 'n1_due' && !await allowsResidentEmail(supabase, m.profile_id, 'email_reminders')) continue
     await supabase.from('notifications').insert({
       profile_id: m.profile_id,
       type,

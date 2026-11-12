@@ -1,6 +1,6 @@
 export default function Loading() {
   return (
-    <div className="p-4 space-y-6 pb-safe animate-pulse">
+    <div role="status" aria-label="Caricamento profilo" className="p-4 space-y-4 pb-28 animate-pulse">
       <header className="space-y-2">
         <div className="h-6 w-28 bg-border rounded" />
       </header>
@@ -15,7 +15,7 @@ export default function Loading() {
         </div>
       </div>
 
-      {[0, 1].map(i => (
+      {[0, 1, 2].map(i => (
         <div key={i} className="bg-surface rounded-xl border border-border p-4 space-y-3">
           <div className="h-4 w-32 bg-border rounded" />
           <div className="h-3 w-full bg-border rounded" />

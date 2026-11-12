@@ -2,50 +2,30 @@
 
 import { useState, useTransition } from 'react'
 import Image from 'next/image'
-import { Check, Copy, Trash2, UserPlus, Users, Bell, LogOut, Smartphone, Mail, Lock } from 'lucide-react'
+import Link from 'next/link'
+import { Check, Copy, Trash2, UserPlus, Users, Bell, LogOut, Lock, UserRound, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { createFamilyInvite, revokeFamilyInvite, updateNotificationPrefs } from './actions'
 import { signOut } from '@/app/auth/actions'
 import type { NotificationPrefs } from '@/types/database'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
-import { roleLabel } from '@/lib/roleLabel'
 
 type InviteRow = { id: string; token: string; expires_at: string; qrCode: string }
 type MemberRow = { profile_id: string; full_name: string | null }
 
 // ── Configurazione eventi/canali ────────────────────────────────────────────
-type PrefRow = {
-  label: string
-  pushKey: keyof NotificationPrefs
-  emailKey: keyof NotificationPrefs | null
-  emailLocked: boolean // email sempre attiva, non disattivabile
-}
-
-const PREF_ROWS: PrefRow[] = [
-  { label: 'Manutenzioni scadute',    pushKey: 'push_maintenance_due', emailKey: null,              emailLocked: true  },
-  { label: 'Promemoria periodici',    pushKey: 'push_reminders',       emailKey: 'email_reminders', emailLocked: false },
-  { label: "Avanzamento lavori dell'amministratore", pushKey: 'push_n3_status',       emailKey: 'email_n3_status', emailLocked: false },
-  { label: 'Nuovi documenti',         pushKey: 'push_new_document',    emailKey: null,              emailLocked: false },
-  /* 'Nuovi commenti' (push_new_comment) rimosso: feature commenti smontata per
-     la demo e nessun motore ha mai inviato quella notifica. La chiave resta nel
-     tipo e nel default JSONB per la riattivazione post customer discovery. */
+const PREF_ROWS: { label: string; emailKey: 'email_reminders' | 'email_n3_status' }[] = [
+{ label: 'Manutenzioni consigliate', emailKey: 'email_reminders' },
+{ label: 'Aggiornamenti manutenzioni condominiali', emailKey: 'email_n3_status' },
 ]
 
 export function ProfiloClient({
-  email,
-  fullName,
-  phone,
-  role,
   unit,
   members,
   invites,
   appUrl,
   notifPrefs,
 }: {
-  email: string
-  fullName: string | null
-  phone: string | null
-  role: string
   unit: { id: string; label: string; residence_id: string; residence_name: string; address: string | null } | null
   members: MemberRow[]
   invites: InviteRow[]
@@ -53,6 +33,7 @@ export function ProfiloClient({
   notifPrefs: NotificationPrefs
 }) {
   const [pending, startTransition] = useTransition()
+  const [prefSaved, setPrefSaved] = useState(false)
   const [savingKey, setSavingKey] = useState<string | null>(null)
 
   const [inviteError, setInviteError] = useState<string | null>(null)
@@ -65,9 +46,11 @@ export function ProfiloClient({
     if (!unit) return
     setInviteError(null)
     startTransition(async () => {
-      const res = await createFamilyInvite(unit.id)
-      if (res.error) setInviteError(res.error)
-      else window.location.reload()
+      try {
+        const res = await createFamilyInvite(unit.id)
+        if (res.error) setInviteError(res.error)
+        else window.location.reload()
+      } catch { setInviteError('Impossibile generare l’invito. Riprova.') }
     })
   }
 
@@ -75,16 +58,20 @@ export function ProfiloClient({
     if (!unit) return
     setInviteError(null)
     startTransition(async () => {
-      const res = await revokeFamilyInvite(inviteId, unit.id)
-      if (res.error) setInviteError(res.error)
-      else window.location.reload()
+      try {
+        const res = await revokeFamilyInvite(inviteId, unit.id)
+        if (res.error) setInviteError(res.error)
+        else window.location.reload()
+      } catch { setInviteError('Impossibile revocare l’invito. Riprova.') }
     })
   }
 
-  function copyUrl(token: string, inviteId: string) {
-    navigator.clipboard.writeText(`${appUrl}/welcome/${token}`)
-    setCopiedId(inviteId)
-    setTimeout(() => setCopiedId(null), 2000)
+  async function copyUrl(token: string, inviteId: string) {
+    try {
+      await navigator.clipboard.writeText(`${appUrl}/welcome/${token}`)
+      setCopiedId(inviteId)
+      setTimeout(() => setCopiedId(null), 2000)
+    } catch { setInviteError('Impossibile copiare il link. Riprova.') }
   }
 
   async function handleTogglePref(key: keyof NotificationPrefs) {
@@ -94,12 +81,17 @@ export function ProfiloClient({
     setPrefs(newPrefs)
     setPrefError(null)
     setSavingKey(key)
-    const res = await updateNotificationPrefs(newPrefs)
-    setSavingKey(null)
-    if (res.error) {
+    setPrefSaved(false)
+    try {
+      const res = await updateNotificationPrefs(newPrefs)
+      if (res.error) {
+        setPrefs(prev)
+        setPrefError(res.error)
+      } else setPrefSaved(true)
+    } catch {
       setPrefs(prev)
-      setPrefError(res.error)
-    }
+      setPrefError('Impossibile salvare le preferenze. Riprova.')
+    } finally { setSavingKey(null) }
   }
 
   return (
@@ -109,34 +101,25 @@ export function ProfiloClient({
         <h1 className="font-serif text-[22px] font-semibold text-text-primary">Profilo</h1>
       </div>
 
-      <div className="p-4 space-y-4">
+      <div className="p-4 space-y-4 max-w-lg mx-auto">
 
-        {/* Dati personali — read-only */}
-        <section className="bg-surface rounded-xl border border-border p-4 space-y-4">
-          <h2 className="text-sm font-medium text-text-primary">Dati personali</h2>
-
-          <div className="space-y-3">
-            <div>
-              <p className="text-xs text-text-secondary mb-1">Nome</p>
-              <p className="text-base font-medium text-text-primary">{fullName || '—'}</p>
-            </div>
-
-            <div>
-              <p className="text-xs text-text-secondary mb-1">Email</p>
-              <p className="text-base text-text-primary break-all">{email}</p>
-            </div>
-
-            <div>
-              <p className="text-xs text-text-secondary mb-1">Telefono</p>
-              <p className="text-base text-text-primary">{phone || '—'}</p>
-            </div>
+        <Link href="/profilo/dati-personali" className="flex min-h-11 items-center gap-3 bg-surface rounded-xl border border-border p-4 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20">
+          <UserRound className="w-5 h-5 shrink-0 text-brand-medium" aria-hidden="true" />
+          <div className="min-w-0 flex-1">
+            <h2 className="text-sm font-medium text-text-primary">Dati personali</h2>
+            <p className="mt-1 text-xs text-text-secondary">Nome, telefono ed email del tuo account.</p>
           </div>
-        </section>
+          <ChevronRight className="w-5 h-5 shrink-0 text-text-secondary" aria-hidden="true" />
+        </Link>
 
         {/* Residenza e unità */}
+        {!unit && <section className="bg-surface rounded-xl border border-border p-4 space-y-3">
+          <h2 className="text-sm font-medium text-text-primary">La tua abitazione</h2>
+          <p className="text-sm text-text-secondary">Nessuna abitazione associata al tuo account.</p>
+        </section>}
         {unit && (
           <section className="bg-surface rounded-xl border border-border p-4 space-y-3">
-            <h2 className="text-sm font-medium text-text-primary">Residenza</h2>
+            <h2 className="text-sm font-medium text-text-primary">La tua abitazione</h2>
             <div className="space-y-2">
               <div>
                 <p className="text-xs text-text-secondary">Residenza</p>
@@ -152,6 +135,10 @@ export function ProfiloClient({
         )}
 
         {/* Accessi familiari */}
+        {!unit && <section className="bg-surface rounded-xl border border-border p-4 space-y-3">
+          <h2 className="text-sm font-medium text-text-primary">Accessi familiari</h2>
+          <p className="text-sm text-text-secondary">Gli accessi familiari richiedono un’abitazione associata.</p>
+        </section>}
         {unit && (
           <section className="bg-surface rounded-xl border border-border p-4 space-y-4">
             <div className="flex items-center gap-2">
@@ -200,7 +187,7 @@ export function ProfiloClient({
                           </button>
                         </div>
                         <div className="flex justify-center">
-                          <Image src={inv.qrCode} alt="QR invito" width={140} height={140} />
+                          {inv.qrCode ? <Image src={inv.qrCode} alt="QR invito" width={140} height={140} /> : <p className="text-xs text-text-secondary">QR non disponibile. Usa il link.</p>}
                         </div>
                         <button
                           onClick={() => copyUrl(inv.token, inv.id)}
@@ -219,7 +206,7 @@ export function ProfiloClient({
               </div>
             )}
 
-            {inviteError && <p className="text-xs text-semantic-red">{inviteError}</p>}
+            {inviteError && <p role="alert" className="text-xs text-semantic-red">{inviteError}</p>}
 
             <button
               onClick={handleGenerateInvite}
@@ -227,7 +214,7 @@ export function ProfiloClient({
               className="w-full flex items-center justify-center gap-2 h-11 border border-brand-medium rounded-lg text-sm font-medium text-brand-dark disabled:opacity-40 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20"
             >
               <UserPlus className="w-4 h-4" strokeWidth={1.8} />
-              {invites.length >= 5 ? 'Limite inviti raggiunto' : 'Genera invito familiare'}
+              {pending ? 'Operazione in corso…' : invites.length >= 5 ? 'Limite inviti raggiunto' : 'Genera invito familiare'}
             </button>
             <p className="text-xs text-text-secondary text-center">
               Il link sarà valido 30 giorni. Massimo 5 inviti attivi per unità.
@@ -239,65 +226,19 @@ export function ProfiloClient({
         <section className="bg-surface rounded-xl border border-border p-4 space-y-3">
           <div className="flex items-center gap-2">
             <Bell className="w-4 h-4 text-brand-medium" strokeWidth={1.8} />
-            <h2 className="text-sm font-medium text-text-primary">Notifiche</h2>
+            <h2 className="text-sm font-medium text-text-primary">Notifiche email</h2>
           </div>
 
-          {/* Intestazioni colonne */}
-          <div className="flex items-center gap-2 pb-1">
-            <div className="flex-1" />
-            <div className="w-12 flex items-center justify-center gap-1">
-              <Smartphone className="w-3.5 h-3.5 text-text-secondary" strokeWidth={1.6} />
-              <span className="text-xs text-text-secondary">Push</span>
-            </div>
-            <div className="w-16 flex items-center justify-center gap-1">
-              <Mail className="w-3.5 h-3.5 text-text-secondary" strokeWidth={1.6} />
-              <span className="text-xs text-text-secondary">Email</span>
-            </div>
-          </div>
-
-          {/* Righe eventi */}
+          <p className="text-xs text-text-secondary">Le preferenze regolano le email opzionali. La consegna dipende dalla configurazione del servizio email.</p>
           <div className="divide-y divide-border">
-            {PREF_ROWS.map(row => (
-              <div key={row.pushKey} className="flex items-center gap-2 py-3 first:pt-0">
-                <p className="flex-1 text-base text-text-primary leading-tight">{row.label}</p>
-
-                {/* Push */}
-                <div className="w-12 flex justify-center">
-                  <Toggle
-                    label={`${row.label}, push`}
-                    on={false}
-                    disabled
-                    onToggle={() => handleTogglePref(row.pushKey)}
-                  />
-                </div>
-
-                {/* Email */}
-                <div className="w-16 flex justify-center">
-                  {row.emailLocked ? (
-                    <div className="flex items-center gap-1.5" title="Sempre attiva">
-                      <Toggle label={`${row.label}, email`} on locked />
-                      <Lock className="w-3.5 h-3.5 text-text-secondary/40" strokeWidth={1.6} />
-                    </div>
-                  ) : row.emailKey ? (
-                    <Toggle
-                      label={`${row.label}, email`}
-                      on={false}
-                      disabled
-                      onToggle={() => handleTogglePref(row.emailKey!)}
-                    />
-                  ) : (
-                    <span className="text-xs text-border select-none">—</span>
-                  )}
-                </div>
-              </div>
-            ))}
+            <div className="flex items-center gap-3 py-3"><p className="flex-1 text-sm text-text-primary">Avvisi di scadenza e solleciti obbligatori: sempre attivi</p><Lock className="w-4 h-4 text-text-secondary" aria-hidden="true" /></div>
+            {PREF_ROWS.map(row => <div key={row.emailKey} className="flex items-center gap-3 py-4">
+              <p className="flex-1 text-sm text-text-primary">{row.label}</p>
+              <Toggle label={row.label} on={prefs[row.emailKey]} disabled={savingKey !== null} onToggle={() => handleTogglePref(row.emailKey)} />
+            </div>)}
           </div>
-
-          {prefError && <p className="text-xs text-semantic-red">{prefError}</p>}
-
-          <p className="text-xs text-text-secondary pt-1">
-            Le preferenze di notifica saranno attive a breve.
-          </p>
+          {prefError && <p role="alert" className="text-xs text-semantic-red">{prefError}</p>}
+          <p role="status" className="text-xs text-text-secondary">{savingKey ? 'Salvataggio...' : prefSaved ? 'Preferenze salvate.' : ''}</p>
         </section>
 
         {/* Logout */}
@@ -308,9 +249,6 @@ export function ProfiloClient({
           </Button>
         </form>
 
-        <p className="text-xs text-text-secondary text-center pb-2">
-          Ruolo: <span className="font-medium">{roleLabel(role)}</span>
-        </p>
       </div>
     </div>
   )

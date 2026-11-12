@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { allowsResidentEmail } from '@/lib/resident-email-preferences'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { sendEmail, emailN3StatusChanged } from '@/lib/notifications'
@@ -150,6 +151,7 @@ async function notifyResidents(residenceId: string, itemId: string, title: strin
     .is('ended_at', null)
 
   for (const m of members ?? []) {
+    if (!await allowsResidentEmail(admin, m.profile_id, 'email_n3_status')) continue
     await admin.from('notifications').insert({
       profile_id: m.profile_id,
       type: 'n3_status_changed',

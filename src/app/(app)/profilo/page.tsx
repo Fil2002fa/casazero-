@@ -14,22 +14,32 @@ export default async function ProfiloPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('full_name, phone, role, notification_prefs')
+    .select('notification_prefs')
     .eq('id', user.id)
     .single()
+
+  if (profileError) {
+    console.error('Profilo: lettura dati personali fallita', profileError)
+    throw new Error('Impossibile caricare il profilo. Riprova.')
+  }
 
   const admin = createServiceClient()
 
   // Unità e residenza dell'utente (prima memberhip attiva)
-  const { data: membershipRaw } = await admin
+  const { data: membershipRaw, error: membershipError } = await admin
     .from('unit_members')
     .select('unit_id, units(id, label, residence_id, residences(name, address))')
     .eq('profile_id', user.id)
     .is('ended_at', null)
     .limit(1)
-    .single()
+    .maybeSingle()
+
+  if (membershipError) {
+    console.error('Profilo: lettura abitazione fallita', membershipError)
+    throw new Error('Impossibile caricare la tua abitazione. Riprova.')
+  }
 
   type MembershipRaw = {
     unit_id: string
@@ -51,12 +61,17 @@ export default async function ProfiloPage() {
   type OtherMemberRaw = { profile_id: string; profiles: { full_name: string | null } | null }
   let members: { profile_id: string; full_name: string | null }[] = []
   if (unit) {
-    const { data: rawMembers } = await admin
+    const { data: rawMembers, error: membersError } = await admin
       .from('unit_members')
       .select('profile_id, profiles(full_name)')
       .eq('unit_id', unit.id)
       .is('ended_at', null)
       .neq('profile_id', user.id)
+
+    if (membersError) {
+      console.error('Profilo: lettura familiari fallita', membersError)
+      throw new Error('Impossibile caricare gli accessi familiari. Riprova.')
+    }
 
     members = ((rawMembers ?? []) as unknown as OtherMemberRaw[]).map(m => ({
       profile_id: m.profile_id,
@@ -69,13 +84,18 @@ export default async function ProfiloPage() {
   let invitesWithQR: { id: string; token: string; expires_at: string; qrCode: string }[] = []
   if (unit) {
     const now = new Date().toISOString()
-    const { data: rawInvites } = await admin
+    const { data: rawInvites, error: invitesError } = await admin
       .from('invites')
       .select('id, token, expires_at')
       .eq('unit_id', unit.id)
       .is('used_at', null)
       .gt('expires_at', now)
       .order('expires_at', { ascending: true })
+
+    if (invitesError) {
+      console.error('Profilo: lettura inviti fallita', invitesError)
+      throw new Error('Impossibile caricare gli inviti. Riprova.')
+    }
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
     invitesWithQR = await Promise.all(
@@ -98,10 +118,6 @@ export default async function ProfiloPage() {
 
   return (
     <ProfiloClient
-      email={user.email ?? ''}
-      fullName={profile?.full_name ?? null}
-      phone={profile?.phone ?? null}
-      role={profile?.role ?? 'client'}
       unit={unit}
       members={members}
       invites={invitesWithQR}

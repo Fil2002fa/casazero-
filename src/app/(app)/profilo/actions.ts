@@ -104,18 +104,49 @@ export async function revokeFamilyInvite(
   return {}
 }
 
+export async function updateResidentProfile(input: { fullName: string }): Promise<{ error?: string; fullName?: string }> {
+  if (typeof input?.fullName !== 'string') return { error: 'Inserisci un nome valido.' }
+  const fullName = input.fullName.trim().replace(/\s+/g, ' ')
+  if (fullName.length < 2 || fullName.length > 100 || /[\u0000-\u001f\u007f]/.test(fullName)) return { error: 'Inserisci un nome tra 2 e 100 caratteri.' }
+  const supabase = await createClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) return { error: 'Sessione non disponibile. Accedi di nuovo.' }
+  const { data, error } = await supabase.from('profiles').update({
+    full_name: fullName,
+    updated_at: new Date().toISOString(),
+  }).eq('id', user.id).select('full_name').single()
+  if (error || !data) {
+    console.error('updateResidentProfile: salvataggio fallito', error)
+    return { error: 'Impossibile salvare il nome. Riprova.' }
+  }
+  revalidatePath('/profilo')
+  revalidatePath('/profilo/dati-personali')
+  return { fullName: data.full_name }
+}
+
 export async function updateNotificationPrefs(
   prefs: Record<string, boolean>
 ): Promise<{ error?: string }> {
+  if (!prefs || typeof prefs.email_reminders !== 'boolean' || typeof prefs.email_n3_status !== 'boolean') return { error: 'Preferenze non valide.' }
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Non autenticato' }
 
-  const { error } = await supabase
+  const { data: profile, error: readError } = await supabase.from('profiles').select('notification_prefs').eq('id', user.id).single()
+  if (readError) {
+    console.error('updateNotificationPrefs: lettura fallita', readError)
+    return { error: 'Impossibile leggere le preferenze. Riprova.' }
+  }
+  const { data, error } = await supabase
     .from('profiles')
-    .update({ notification_prefs: prefs, updated_at: new Date().toISOString() })
+    .update({ notification_prefs: { ...profile.notification_prefs, email_reminders: prefs.email_reminders, email_n3_status: prefs.email_n3_status }, updated_at: new Date().toISOString() })
     .eq('id', user.id)
+    .select('id').single()
 
-  if (error) return { error: error.message }
+  if (error || !data) {
+    console.error('updateNotificationPrefs: salvataggio fallito', error)
+    return { error: 'Impossibile salvare le preferenze. Riprova.' }
+  }
+  revalidatePath('/profilo')
   return {}
 }
