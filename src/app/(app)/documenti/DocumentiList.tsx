@@ -154,21 +154,29 @@ function DocCard({ doc }: { doc: DocItem }) {
   return (
     <a
       href={`/api/download?bucket=documents&path=${encodeURIComponent(doc.storage_path)}`}
-      className="flex items-center gap-3 min-h-14 py-2 px-4 bg-surface rounded-xl border border-border focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20"
+      aria-label={`Scarica ${humanizeDocumentTitle(doc.title)}`}
+      className="flex flex-wrap items-start gap-3 p-4 bg-surface rounded-xl border border-border focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20"
     >
-      <FileText className="w-5 h-5 text-neutral-400 flex-shrink-0" strokeWidth={1.6} />
+      <FileText className="w-5 h-5 mt-1 text-neutral-400 flex-shrink-0" strokeWidth={1.6} aria-hidden="true" />
       <div className="flex-1 min-w-0">
-        <p className="text-base font-medium text-text-primary [overflow-wrap:anywhere]">{humanizeDocumentTitle(doc.title)}</p>
+        <p className="text-base leading-snug font-semibold text-text-primary break-words">{humanizeDocumentTitle(doc.title)}</p>
         {doc.facts.length > 0 && (
-          <p className="text-xs text-text-secondary mt-0.5 [overflow-wrap:anywhere]">{doc.facts.join(' · ')}</p>
+          <p className="text-sm leading-relaxed text-text-secondary mt-1 [overflow-wrap:anywhere]">{doc.facts.join(' · ')}</p>
         )}
-        {/* La data non si taglia mai: solo il nome file cede spazio */}
-        <p className="flex flex-wrap gap-x-1 text-xs text-neutral-500">
-          <span className="min-w-0 max-w-full truncate">{doc.file_name}</span>
+        {/* Nome file e data su righe distinte, leggibili anche su mobile. */}
+        <p className="flex flex-col gap-1 mt-2 text-xs leading-relaxed text-text-secondary">
+          <span className="min-w-0 max-w-full leading-snug break-words" title={doc.file_name}>
+            {doc.file_name.split(/(?<=[_.-])/).map((part, index) => (
+              <span key={index}>{part}<wbr /></span>
+            ))}
+          </span>
           <span className="flex-shrink-0 whitespace-nowrap">· {doc.formattedDate}</span>
         </p>
       </div>
-      <Download className="w-4 h-4 text-neutral-400 flex-shrink-0" strokeWidth={1.6} aria-hidden="true" />
+      <span className="ml-8 inline-flex min-h-11 items-center gap-2 rounded-lg bg-brand-light px-3 text-sm font-medium text-brand-dark">
+        <Download className="w-4 h-4 flex-shrink-0" strokeWidth={1.6} aria-hidden="true" />
+        Scarica
+      </span>
     </a>
   )
 }
