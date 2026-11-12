@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronLeft, ChevronDown, CalendarDays, Info, UserRound, FileText, ShieldCheck, Wrench, Phone } from 'lucide-react'
+import { ChevronLeft, ChevronDown, CalendarDays, Info, UserRound, FileText, ShieldCheck, Wrench, Phone, BookOpen, ArrowRight } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { requireProfile } from '@/lib/auth'
@@ -13,6 +13,7 @@ import type { ObligationType } from '@/types/database'
 import { formatRegisteredBy } from '@/lib/formatRegisteredBy'
 import { formatFrequency } from '@/lib/formatFrequency'
 import { pluralize } from '@/lib/pluralize'
+import { isResidentGuideAvailable } from '../guide-eligibility'
 import {
   isOverdueLive, isAwaitingDelivery, AWAITING_DELIVERY_LABEL, resolveCompletionMode, resolveFrequencyMonths, resolveLiveStatus,
   resolveObligationType, todayISO,
@@ -62,7 +63,7 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
     .from('maintenance_items')
     .select(`
       id, status, next_due_date, unit_id, residence_id, completion_mode, activation_status, frequency_months, obligation_type, warranty_info,
-      maintenance_templates!inner(title, category, description, why_it_matters, who_does_it, what_to_keep, completion_mode, is_active, frequency_months, scope, obligation_type),
+      maintenance_templates!inner(title, category, description, why_it_matters, who_does_it, what_to_keep, how_to, completion_mode, is_active, frequency_months, scope, obligation_type),
       suppliers(name, phone, email),
       units(label),
       residences(name)
@@ -85,7 +86,8 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
   const tpl = item.maintenance_templates as unknown as {
     title: string; category: string; description: string | null
     why_it_matters: string | null; who_does_it: string | null; what_to_keep: string | null
-    frequency_months: number; scope: string
+    how_to: string[] | null; completion_mode: 'residente' | 'amministratore' | 'promemoria' | null
+    is_active: boolean; frequency_months: number; scope: string
   } | null
 
   const supplier = item.suppliers as unknown as { name: string; phone: string | null; email: string | null } | null
@@ -135,6 +137,18 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
     profile.role === 'client' &&
     !membershipError &&
     membership?.unit_id === item.unit_id
+
+  const canStartGuide = isResidentGuideAvailable({
+    isClient: profile.role === 'client',
+    isOwnUnit: Boolean(item.unit_id && !membershipError && membership?.unit_id === item.unit_id),
+    isApartmentItem: item.unit_id !== null,
+    completionMode: mode,
+    activationStatus: item.activation_status,
+    templateActive: tpl?.is_active === true,
+    title: tpl?.title ?? null,
+    whoDoesIt: tpl?.who_does_it ?? null,
+    howTo: tpl?.how_to ?? null,
+  })
 
   const isAdmin = profile.role === 'admin' || profile.role === 'super_admin'
   const isAdminMode = mode === 'amministratore'
@@ -191,6 +205,25 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
           <p>Frequenza: {frequencyMonths == null ? 'non indicata' : formatFrequency(frequencyMonths)}</p>
         </div>
       </section>
+
+      {canStartGuide && (
+        <section aria-labelledby="guide-available-title" className="rounded-2xl border border-brand-medium/15 bg-brand-light/65 p-4">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface text-brand-dark">
+              <BookOpen aria-hidden="true" className="h-5 w-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 id="guide-available-title" className="font-serif text-xl leading-tight text-brand-dark">Guida pratica disponibile</h2>
+              <p className="mt-1 text-sm leading-relaxed text-text-secondary">Consulta i passaggi pratici per {tpl?.title?.toLocaleLowerCase('it-IT')}.</p>
+            </div>
+          </div>
+          <Link href={`/manutenzioni/${item.id}/guida`} className="mt-4 flex min-h-12 items-center justify-center gap-2 rounded-xl bg-brand-dark px-5 py-3 text-sm font-medium text-white focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-medium/50">
+            <BookOpen aria-hidden="true" className="h-4 w-4" />
+            Inizia la guida
+            <ArrowRight aria-hidden="true" className="h-4 w-4" />
+          </Link>
+        </section>
+      )}
 
       {((profile.role === 'client' && (isCommon || isAdminMode)) || (membershipError && profile.role === 'client' && mode === 'residente' && !isCommon) || (canCompleteResident && !isCommon)) && (
       <div className="space-y-3 rounded-2xl bg-brand-light/50 px-4 py-3">
