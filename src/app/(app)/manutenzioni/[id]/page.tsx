@@ -63,7 +63,7 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
     .from('maintenance_items')
     .select(`
       id, status, next_due_date, unit_id, residence_id, completion_mode, activation_status, frequency_months, obligation_type, warranty_info,
-      maintenance_templates!inner(title, category, description, why_it_matters, who_does_it, what_to_keep, how_to, completion_mode, is_active, frequency_months, scope, obligation_type),
+      maintenance_templates!inner(title, category, description, why_it_matters, who_does_it, what_to_keep, how_to, technical_notes, completion_mode, is_active, frequency_months, scope, obligation_type),
       suppliers(name, phone, email),
       units(label),
       residences(name)
@@ -86,7 +86,8 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
   const tpl = item.maintenance_templates as unknown as {
     title: string; category: string; description: string | null
     why_it_matters: string | null; who_does_it: string | null; what_to_keep: string | null
-    how_to: string[] | null; completion_mode: 'residente' | 'amministratore' | 'promemoria' | null
+    how_to: string[] | null; technical_notes: string | null
+    completion_mode: 'residente' | 'amministratore' | 'promemoria' | null
     is_active: boolean; frequency_months: number; scope: string
   } | null
 
@@ -255,6 +256,11 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
         {tpl?.what_to_keep?.trim() && (
           <InfoSection title="Cosa conservare" icon={<FileText aria-hidden="true" className="h-5 w-5 shrink-0 text-brand-medium" />}>
             <p>{tpl.what_to_keep}</p>
+          </InfoSection>
+        )}
+        {isAdmin && tpl?.technical_notes?.trim() && (
+          <InfoSection title="Dettagli tecnici" icon={<Wrench aria-hidden="true" className="h-5 w-5 shrink-0 text-brand-medium" />}>
+            <p>{tpl.technical_notes}</p>
           </InfoSection>
         )}
       </section>
