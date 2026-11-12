@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import Image from 'next/image'
-import { BookOpen, CalendarClock, ChevronRight } from 'lucide-react'
+import { BookOpen, Building2, CalendarClock, ChevronRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireProfile } from '@/lib/auth'
 import { MaintenanceCard } from '@/components/MaintenanceCard'
@@ -120,13 +120,12 @@ export default async function HomePage() {
   // oppure "il piano non è partito". Sono due messaggi diversi.
   const awaitingDelivery = ((rawUrgent ?? []) as unknown as ItemRow[]).filter(isAwaitingDelivery)
 
-  // Esiste almeno una voce con una data? Se no, il piano non è partito affatto
-  // e il banner verde "Tutto in ordine · Nessuna manutenzione in scadenza"
-  // sarebbe vero per omissione: niente è in ordine, niente è ancora iniziato.
-  // In quel caso parla solo la card neutra.
-  const hasAnyDated = ((rawUrgent ?? []) as unknown as ItemRow[]).some(
-    i => isCountable(i) && resolveCompletionMode(i) !== 'promemoria' && i.next_due_date !== null
-  )
+  // Stessa espressione di prima, solo nominata: HomeRiepilogo la riceve e la
+  // home la usa per non ripetere il messaggio di attesa consegna.
+  const riepilogoAwaiting =
+    awaitingDelivery.some(i => resolveCompletionMode(i) === 'residente') &&
+    !((rawUrgent ?? []) as unknown as ItemRow[]).some(i => isCountable(i) && resolveCompletionMode(i) === 'residente' && i.next_due_date !== null)
+
   const nextObligation =
     (nextItem?.obligation_type ?? nextItem?.maintenance_templates?.obligation_type ?? null) as ObligationType | null
 
@@ -158,22 +157,20 @@ export default async function HomePage() {
   return (
     <div className="p-4 space-y-6 pb-safe">
       {/* Header residenza */}
-      <header>
-        <p className="text-xs text-text-secondary uppercase tracking-wide">{residenceName}</p>
-        <h1 className="text-xl font-medium text-text-primary mt-1">
-          Ciao, {profile.full_name?.split(' ')[0] ?? 'benvenuto'}
-        </h1>
+      <header className="space-y-1 [overflow-wrap:anywhere]">
+        <h1 className="font-serif text-2xl font-semibold text-text-primary">{residenceName}</h1>
+        {unit && <p className="text-base text-text-secondary">{formatUnitLabel(unit.label)}</p>}
       </header>
 
       <HomeRiepilogo
         items={(rawUrgent ?? []) as unknown as ItemRow[]}
         today={today}
-        awaitingDelivery={awaitingDelivery.some(i => resolveCompletionMode(i) === 'residente') && !((rawUrgent ?? []) as unknown as ItemRow[]).some(i => isCountable(i) && resolveCompletionMode(i) === 'residente' && i.next_due_date !== null)}
+        awaitingDelivery={riepilogoAwaiting}
       />
 
       {/* Card residenza */}
       <div className="bg-surface rounded-xl border border-border overflow-hidden">
-        <div className="relative h-36 bg-background flex items-center justify-center">
+        <div className={`relative bg-background flex items-center justify-center ${photoUrl ? 'h-36' : 'h-16'}`}>
           {photoUrl ? (
             // Elemento LCP della home (misurato 4,66s con <img> nudo): next/image
             // ridimensiona/serve WebP e priority salta il lazy-loading e precarica.
@@ -188,13 +185,7 @@ export default async function HomePage() {
               className="object-cover"
             />
           ) : (
-            <span className="text-text-secondary text-sm">{residenceName}</span>
-          )}
-        </div>
-        <div className="px-4 py-3">
-          <p className="text-sm font-medium text-text-primary">{residenceName}</p>
-          {unit && (
-            <p className="text-xs text-text-secondary mt-0.5">{formatUnitLabel(unit.label)}</p>
+            <Building2 className="h-6 w-6 text-brand-medium" strokeWidth={1.6} aria-hidden="true" />
           )}
         </div>
       </div>
@@ -212,11 +203,6 @@ export default async function HomePage() {
             <span className="text-2xl font-medium text-semantic-red">{urgentCount}</span>
           </div>
         </Link>
-      ) : hasAnyDated ? (
-        <div className="bg-brand-light rounded-xl px-4 py-3">
-          <p className="text-sm font-medium text-brand-dark">Tutto in ordine</p>
-          <p className="text-xs text-brand-medium mt-0.5">Nessuna manutenzione in scadenza</p>
-        </div>
       ) : null}
 
       {/* Prime card urgenti */}
@@ -248,7 +234,7 @@ export default async function HomePage() {
       {/* Nessuna prossima scadenza perché il piano non è partito: card neutra,
           senza conteggi e senza colori di allarme. Non è un problema da
           risolvere da parte di chi legge, è un dato che manca a monte. */}
-      {!nextItem && awaitingDelivery.length > 0 && (
+      {!nextItem && !riepilogoAwaiting && awaitingDelivery.length > 0 && (
         <section className="space-y-2">
           <h2 className="text-sm font-medium text-text-primary">Prossima manutenzione</h2>
           <AwaitingDeliveryHomeCard />
