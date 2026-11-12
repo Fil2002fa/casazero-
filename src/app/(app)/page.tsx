@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import Image from 'next/image'
-import { BookOpen, Building2, CalendarClock, ChevronRight } from 'lucide-react'
+import { BookOpen, Building2, CalendarClock, ChevronRight, FileText } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireProfile } from '@/lib/auth'
 import { MaintenanceCard } from '@/components/MaintenanceCard'
@@ -104,14 +104,18 @@ export default async function HomePage() {
   // Banner e card leggono la STESSA lista filtrata: il conteggio non può
   // divergere da ciò che si vede (bug class count/list divergence).
   const urgent = ((rawUrgent ?? []) as unknown as ItemRow[])
-    .filter(i => isOverdueLive(i, today) || isInCorso(i))
+    .filter(i => resolveCompletionMode(i) !== 'promemoria' && (isOverdueLive(i, today) || isInCorso(i)))
   const urgentCount = urgent.length
-  const urgentItems = urgent.slice(0, 3)
 
   // Prossimo item DATATO futuro, escluse le promemoria: prima riga countable non-promemoria.
   const nextItem =
     ((rawNext ?? []) as unknown as NextItemRow[])
       .find(i => isCountable(i) && resolveCompletionMode(i) !== 'promemoria') ?? null
+
+  const primaryItem = urgent[0] ?? nextItem
+  const urgentItems = urgent.filter(i => i.id !== primaryItem?.id).slice(0, 3)
+  const showNextItem = nextItem && nextItem.id !== primaryItem?.id &&
+    !urgentItems.some(i => i.id === nextItem.id)
 
   // Voci il cui piano non è partito: la data di consegna non è registrata.
   // Si leggono dalla STESSA lista dei candidati urgenti (nessuna query in più:
@@ -162,12 +166,6 @@ export default async function HomePage() {
         {unit && <p className="text-base text-text-secondary">{formatUnitLabel(unit.label)}</p>}
       </header>
 
-      <HomeRiepilogo
-        items={(rawUrgent ?? []) as unknown as ItemRow[]}
-        today={today}
-        awaitingDelivery={riepilogoAwaiting}
-      />
-
       {/* Card residenza */}
       <div className="bg-surface rounded-xl border border-border overflow-hidden">
         <div className={`relative bg-background flex items-center justify-center ${photoUrl ? 'h-36' : 'h-16'}`}>
@@ -190,20 +188,27 @@ export default async function HomePage() {
         </div>
       </div>
 
-      {/* Banner scadenze */}
-      {urgentCount > 0 ? (
-        <Link href="/manutenzioni" className="block">
-          <div className="bg-semantic-red-bg border border-semantic-red/20 rounded-xl px-4 py-3 flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-semantic-red">
-                {urgentCount} {urgentCount === 1 ? 'scadenza richiede' : 'scadenze richiedono'} attenzione
-              </p>
-              <p className="text-xs text-semantic-red/70 mt-0.5">Tocca per vedere tutte</p>
+      <HomeRiepilogo
+        shown={primaryItem}
+        today={today}
+        awaitingDelivery={riepilogoAwaiting && urgentCount === 0}
+        urgentCount={urgentCount}
+      />
+
+      <nav aria-label="Accessi principali" className="grid grid-cols-1 min-[375px]:grid-cols-2 gap-3">
+        {[
+          { href: '/manutenzioni', title: 'Manutenzioni', subtitle: 'Scadenze e interventi', Icon: CalendarClock },
+          { href: '/documenti', title: 'Documenti', subtitle: 'Manuali e certificati', Icon: FileText },
+        ].map(({ href, title, subtitle, Icon }) => (
+          <Link key={href} href={href} className="min-w-0 rounded-xl border border-border bg-surface p-4 space-y-2 active:bg-background focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20">
+            <Icon className="w-5 h-5 text-brand-medium" strokeWidth={1.6} aria-hidden="true" />
+            <div className="break-words">
+              <p className="text-sm font-medium text-text-primary">{title}</p>
+              <p className="text-xs text-text-secondary mt-1">{subtitle}</p>
             </div>
-            <span className="text-2xl font-medium text-semantic-red">{urgentCount}</span>
-          </div>
-        </Link>
-      ) : null}
+          </Link>
+        ))}
+      </nav>
 
       {/* Prime card urgenti */}
       {urgentItems.length > 0 && (
@@ -234,7 +239,7 @@ export default async function HomePage() {
       {/* Nessuna prossima scadenza perché il piano non è partito: card neutra,
           senza conteggi e senza colori di allarme. Non è un problema da
           risolvere da parte di chi legge, è un dato che manca a monte. */}
-      {!nextItem && !riepilogoAwaiting && awaitingDelivery.length > 0 && (
+      {!nextItem && !(riepilogoAwaiting && urgentCount === 0) && awaitingDelivery.length > 0 && (
         <section className="space-y-2">
           <h2 className="text-sm font-medium text-text-primary">Prossima manutenzione</h2>
           <AwaitingDeliveryHomeCard />
@@ -242,9 +247,9 @@ export default async function HomePage() {
       )}
 
       {/* Prossima manutenzione — informativa, non un'azione di completamento */}
-      {nextItem && (
+      {nextItem && showNextItem && (
         <section className="space-y-2">
-          <h2 className="text-sm font-medium text-text-primary">Prossima manutenzione</h2>
+          <h2 className="text-sm font-medium text-text-primary">Più avanti</h2>
           <Link href={`/manutenzioni/${nextItem.id}`} className="block">
             <div className="bg-surface rounded-xl border border-border p-4 flex items-center gap-3 active:bg-background">
               <div className="w-10 h-10 rounded-lg bg-background flex items-center justify-center flex-shrink-0">
