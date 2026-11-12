@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { requireProfile } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import {
-  isCountable, isOverdueLive, isAwaitingDelivery, resolveCompletionMode, resolveFrequencyMonths,
+  isCountable, isAwaitingDelivery, resolveCompletionMode, resolveFrequencyMonths,
   resolveObligationType, resolveLiveStatus, todayISO,
   type LiveStatusItem,
 } from '@/lib/maintenance-status'
@@ -36,7 +36,7 @@ export default async function ManutenzioniPage() {
   const supabase = await createClient()
 
   // In parallelo: la query items è scopata da RLS, non dipende dalla membership
-  const [{ data: membership }, { data: rawItems }] = await Promise.all([
+  const [{ data: membership, error: membershipError }, { data: rawItems, error: itemsError }] = await Promise.all([
     supabase
       .from('unit_members')
       .select('unit_id, units(residence_id, label, residences(name))')
@@ -53,6 +53,16 @@ export default async function ManutenzioniPage() {
       .eq('activation_status', 'inclusa')
       .order('next_due_date', { ascending: true, nullsFirst: false }),
   ])
+
+  if (membershipError || itemsError) {
+    console.error('[manutenzioni] Errore caricamento lista', { membershipError, itemsError })
+    return (
+      <div className="p-5 space-y-4">
+        <h1 className="font-serif text-3xl text-text-primary">Manutenzioni</h1>
+        <p role="alert" className="text-text-secondary">Non è stato possibile caricare il piano. Riprova ricaricando la pagina.</p>
+      </div>
+    )
+  }
 
   if (!membership) {
     return (
@@ -85,29 +95,23 @@ export default async function ManutenzioniPage() {
     mode: resolveCompletionMode(i),
     unitId: i.unit_id,
     residenceId: i.residence_id,
+    nextDueDate: resolveCompletionMode(i) === 'promemoria' ? null : i.next_due_date,
   })
 
-  // Tre sezioni, stato live — garanzia strutturale: le promemoria non
-  // condividono mai bucket con voci a data (invariante "mai scadenza su promemoria").
-  const daFare = items.filter(i => isOverdueLive(i, today)).map(toListItem)
-  const consigli = items.filter(i => resolveCompletionMode(i) === 'promemoria').map(toListItem)
-  const inProgramma = items
-    .filter(i => resolveCompletionMode(i) !== 'promemoria' && !isOverdueLive(i, today))
-    .map(toListItem)
-
   return (
-    <div className="p-4 space-y-6 pb-safe">
-      <header>
+    <div className="px-5 pt-6 pb-8 space-y-5">
+      <header className="space-y-2">
+        <p className="text-xs font-medium uppercase tracking-widest text-brand-medium">Il tuo piano casa</p>
+        <h1 className="font-serif text-[36px] leading-tight tracking-tight text-brand-dark">Manutenzioni.</h1>
         <p className="text-sm text-text-secondary">
           {unit?.residences?.name ?? 'La tua residenza'} · {unit?.label ?? ''}
         </p>
-        <h1 className="font-serif text-[22px] font-semibold text-text-primary mt-1">Manutenzioni</h1>
+        <p className="text-sm leading-relaxed text-text-secondary">Le cose da fare, quelle in arrivo e gli interventi del condominio. Tutto in un posto.</p>
       </header>
 
       <ManutenzioniList
-        daFare={daFare}
-        inProgramma={inProgramma}
-        consigli={consigli}
+        items={items.map(toListItem)}
+        today={today}
         residenceName={unit?.residences?.name ?? 'La tua residenza'}
         unitLabel={unit?.label ?? ''}
       />
