@@ -1,0 +1,98 @@
+/* Home residente — token e blocchi dal mockup approvato (docs/handoffs/
+   casazero-casa-manutenzioni-mockup-v6.html, righe 3-19). Valori copiati dal
+   mockup; globals.css non si tocca. Le variabili vivono solo sotto .home. */
+.home {
+  --petrol: #0b5149;
+  --ink: #1c312d;
+  --red: #b34b40;
+  --red-bg: #fcebe6;
+  --amber: #98621e;
+  --amber-bg: #fff3df;
+  --green: #32765e;
+  --green-bg: #e7f2ea;
+  --serif: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+  color: var(--ink);
+  font-family: var(--font-inter), 'Aptos', 'Segoe UI', system-ui, sans-serif;
+  font-size: 14px;
+  padding: 23px 20px 34px;
+  overflow-wrap: anywhere;
+}
+.home :is(a, button):focus-visible { outline: 3px solid #a3c9b9; outline-offset: 3px; }
+
+.eyebrow { color: var(--petrol); font-weight: 780; font-size: 10px; letter-spacing: .15em; text-transform: uppercase; }
+.pageTitle { font: normal 40px/1.08 var(--serif); letter-spacing: -.045em; color: #183d36; margin: 8px 0 10px; }
+.pageTitle span { color: var(--petrol); }
+.lead { line-height: 1.6; color: #62766e; font-size: 13px; margin: 0 0 21px; }
+
+/* Chip */
+.pillRow { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 5px; border-radius: 100px; padding: 6px 10px; font-size: 10px; font-weight: 750; line-height: 1.3; background: #eaf0e9; color: #405e53; max-width: 100%; }
+.chip svg { flex-shrink: 0; }
+.chipOverdue { background: var(--red-bg); color: var(--red); }
+.chipSoon { background: var(--amber-bg); color: var(--amber); }
+.chipDone { background: var(--green-bg); color: var(--green); }
+.chipNeutral { background: #edf2ef; color: #526b61; }
+
+/* Card residenza */
+.resCard { border: 1px solid #e0e7e0; border-radius: 20px; overflow: hidden; background: #fff; box-shadow: 0 3px 13px #294b301f; margin: 0 0 14px; }
+.resVisual { height: 138px; position: relative; overflow: hidden; background: linear-gradient(135deg, #deebe4 0%, #c9ddd2 55%, #b5cfc2 100%); display: flex; align-items: flex-end; padding: 14px 16px; }
+.resVisual::before { content: ''; position: absolute; width: 220px; height: 220px; border: 1px solid #0b514914; border-radius: 50%; right: -60px; top: -90px; box-shadow: 0 0 0 34px #ffffff26, 0 0 0 70px #ffffff18; }
+.resInitials { position: relative; width: 46px; height: 46px; border-radius: 14px; background: var(--petrol); color: #fff; display: grid; place-items: center; font-weight: 760; font-size: 15px; letter-spacing: -.04em; box-shadow: 0 6px 16px #0b514930; }
+.resIco { position: absolute; right: 18px; bottom: 14px; color: #0b514966; }
+.resBody { padding: 14px 16px 15px; }
+.resName { font: normal 23px/1.15 var(--serif); letter-spacing: -.035em; color: #183d36; margin: 0; }
+.resAddr { font-size: 12px; color: #6f817b; margin: 5px 0 12px; }
+
+/* Card verde */
+.overview { background: var(--petrol); color: #fff; padding: 20px; border-radius: 20px; position: relative; overflow: hidden; box-shadow: 0 8px 22px #14564915; }
+.overview::after { content: ''; position: absolute; width: 170px; height: 170px; border: 1px solid #ffffff20; border-radius: 50%; right: -75px; top: -70px; box-shadow: 0 0 0 32px #ffffff09, 0 0 0 65px #ffffff06; pointer-events: none; }
+.overview p { font-size: 11px; color: #cce1d9; margin: 0 0 5px; }
+.overview h2 { font: normal 25px/1.23 var(--serif); margin: 0 0 14px; max-width: 225px; }
+.counts { display: flex; flex-wrap: wrap; gap: 9px; position: relative; z-index: 1; }
+.counts span { padding: 8px 12px; border-radius: 12px; background: #ffffff19; font-size: 11px; }
+.counts strong { font-size: 17px; margin-right: 4px; }
+.okPill { display: inline-flex; align-items: center; gap: 6px; background: #ffffff19; border-radius: 12px; padding: 8px 12px; font-size: 11px; position: relative; z-index: 1; }
+.ovNext { position: relative; z-index: 1; margin-top: 15px; width: 100%; text-align: left; border-radius: 14px; background: #fff; color: var(--ink); padding: 13px 13px 13px 14px; display: flex; gap: 11px; align-items: center; }
+.ovLabel { font-size: 9px; letter-spacing: .13em; text-transform: uppercase; font-weight: 800; color: var(--red); margin-bottom: 3px; }
+.ovTitle { font-weight: 780; font-size: 13px; line-height: 1.3; }
+.ovSub { font-size: 11px; color: #6f817b; margin-top: 3px; }
+.ovNext .symbol { width: 36px; height: 36px; flex: 0 0 36px; background: var(--red-bg); color: var(--red); }
+.ovBody { flex: 1; min-width: 0; }
+.ovLink { position: relative; z-index: 1; margin-top: 9px; color: #d9ebe3; font-weight: 750; font-size: 12px; display: inline-flex; align-items: center; gap: 5px; padding: 4px 0; min-height: 44px; }
+.arrow { color: #9caea2; flex-shrink: 0; }
+
+/* Sezioni e liste */
+.sectionHeader { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 25px 0 12px; }
+.sectionTitle { font: normal 23px/1.15 var(--serif); letter-spacing: -.035em; color: #1e413b; margin: 0; }
+.sectionCount { font-size: 11px; color: #7d8c83; flex-shrink: 0; }
+.symbol { border-radius: 13px; background: #eaf2ec; color: var(--petrol); display: grid; place-items: center; width: 40px; height: 40px; flex: 0 0 40px; }
+.listCard { border: 1px solid #e0e7e0; border-radius: 17px; background: #fff; box-shadow: 0 3px 13px #294b301f; overflow: hidden; }
+.listRow { width: 100%; text-align: left; display: flex; align-items: center; gap: 12px; padding: 13px 14px; border-bottom: 1px solid #edf0eb; color: var(--ink); background: #fff; }
+.listRow .symbol { width: 36px; height: 36px; flex: 0 0 36px; }
+.lrBody { flex: 1; min-width: 0; }
+.lrTitle { font-weight: 760; font-size: 13px; line-height: 1.3; }
+.lrSub { font-size: 11px; color: #78887f; margin-top: 3px; }
+.lrEnd { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; flex-shrink: 0; }
+.docIco { background: #f1f4f0; color: #526b61; }
+.docType { font-size: 9px; font-weight: 800; letter-spacing: .08em; color: #7d8c83; background: #f1f4f0; border-radius: 6px; padding: 3px 6px; }
+.listFoot { display: flex; justify-content: center; }
+.ghostLink { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; width: 100%; padding: 11px 16px; font-weight: 750; font-size: 12px; color: var(--petrol); }
+
+/* Stato vuoto */
+.empty { border: 1px dashed #ccd9cf; text-align: center; border-radius: 16px; padding: 22px 17px; color: #789088; line-height: 1.5; font-size: 12px; }
+.empty strong { display: block; color: var(--ink); margin-bottom: 5px; font-size: 13px; }
+
+/* Contatti */
+.contactCard { border: 1px solid #e0e7e0; border-radius: 17px; background: #fff; padding: 14px; display: flex; align-items: center; gap: 12px; margin-bottom: 9px; box-shadow: 0 3px 13px #294b3014; }
+.contactCard .symbol { width: 38px; height: 38px; flex: 0 0 38px; }
+.ccBody { flex: 1; min-width: 0; }
+.ccRole { font-size: 10px; text-transform: uppercase; letter-spacing: .12em; font-weight: 800; color: #78897e; }
+.ccName { font-weight: 780; font-size: 13px; margin-top: 3px; }
+.ccNote { font-size: 11px; color: #78887f; margin-top: 2px; }
+.ccActions { display: flex; gap: 6px; }
+.iconBtn { border: 1px solid #e0e7e2; width: 44px; height: 44px; border-radius: 11px; background: #fff; display: grid; place-items: center; color: var(--petrol); }
+
+@media (max-width: 400px) {
+  .home { padding-left: 18px; padding-right: 18px; }
+  .pageTitle { font-size: 34px; }
+}
