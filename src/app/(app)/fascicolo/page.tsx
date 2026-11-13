@@ -1,17 +1,14 @@
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
-import { FileDown } from 'lucide-react'
+import { BookOpen, LockKeyhole } from 'lucide-react'
 import { createServiceClient } from '@/lib/supabase/admin'
 import { requireProfile } from '@/lib/auth'
 import type { CompletionMode } from '@/types/database'
-import { buttonVariants } from '@/components/ui/Button'
 import { formatRegisteredBy } from '@/lib/formatRegisteredBy'
-import {
-  isCountable, overdueLive, resolveCompletionMode, todayISO,
-  LIVE_STATUS_FIELDS, LIVE_STATUS_TEMPLATE_FIELDS,
-  type LiveStatusItem,
-} from '@/lib/maintenance-status'
 import { FascicoloList, type FascicoloEntry } from './FascicoloList'
+import { MaintenanceHeader } from '../manutenzioni/MaintenanceHeader'
+import maintenanceStyles from '../manutenzioni/maintenance-v5.module.css'
+import styles from './fascicolo.module.css'
 
 export const metadata: Metadata = { title: 'Fascicolo' }
 
@@ -33,10 +30,6 @@ export default async function FascicoloPage() {
   const profile = await requireProfile()
   const adminClient = createServiceClient()
 
-  // ── Determina scope primario: usato sia per reportHref sia per conformità ──
-  // Scopo: schermo e PDF mostrano ESATTAMENTE lo stesso perimetro e gli stessi numeri.
-  // Definizione uniforme: scaduta live da next_due_date via helper maintenance-status
-  // (la stessa di /api/report), mai dal campo status salvato.
   // Shell (app) solo per il residente: (app)/layout.tsx:12 rimanda gli altri
   // ruoli a /admin. Ripetuto qui perché layout e pagina vengono renderizzati
   // in parallelo e la pagina usa il service client.
@@ -44,7 +37,7 @@ export default async function FascicoloPage() {
 
   const { data: mem, error: memError } = await adminClient
     .from('unit_members')
-    .select('unit_id, units(id, residence_id)')
+    .select('unit_id, units(id, residence_id, label, residences(name))')
     .eq('profile_id', profile.id)
     .is('ended_at', null)
     .limit(1)
@@ -53,7 +46,9 @@ export default async function FascicoloPage() {
     console.error('[fascicolo] lettura unit_members fallita', { profileId: profile.id, memError })
     return <FascicoloMessage text="Errore tecnico nel caricamento del fascicolo, riprova." />
   }
-  const unitRow = mem?.units as unknown as { id: string; residence_id: string } | null
+  const unitRow = mem?.units as unknown as {
+    id: string; residence_id: string; label: string; residences: { name: string } | null
+  } | null
   // Senza unità attiva nessuna query: col service client e senza filtro si
   // leggerebbero voci e completamenti di tutte le residenze.
   if (!unitRow) return <FascicoloMessage text="Nessuna unità collegata al tuo account." />
@@ -61,17 +56,9 @@ export default async function FascicoloPage() {
   const primaryResidenceId = unitRow.residence_id
   const reportHref = `/api/report?scope=unit&id=${primaryUnitId}`
 
-  // ── Conformità: stesso scope e stessa definizione live del PDF ───────────
-  const itemsQuery = adminClient
-    .from('maintenance_items')
-    .select(`${LIVE_STATUS_FIELDS}, maintenance_templates!inner(${LIVE_STATUS_TEMPLATE_FIELDS})`)
-    .neq('status', 'completata')
-    .eq('residence_id', primaryResidenceId)
-    .or(`unit_id.eq.${primaryUnitId},unit_id.is.null`)
-
   // ── Completions ──────────────────────────────────────────────────────────
   // Usa adminClient per evitare dipendenza da RLS e applicare esplicitamente
-  // lo stesso perimetro usato per conformità e PDF (residence_id + unit_id).
+  // lo stesso perimetro usato per il PDF (residence_id + unit_id).
   // Si carica sempre lo scope "Tutti": Unità e Condominio sono una partizione
   // su unit_id e li filtra FascicoloList in memoria, senza tornare al server.
   const completionsQuery = adminClient
@@ -89,51 +76,29 @@ export default async function FascicoloPage() {
     .or(`unit_id.eq.${primaryUnitId},unit_id.is.null`)
     .order('completed_at', { ascending: false })
 
-  // In parallelo: conformità e completions dipendono solo dal perimetro già
-  // risolto sopra, non l'una dall'altra.
-  const [itemsRes, completionsRes] = await Promise.all([
-    itemsQuery,
-    completionsQuery,
-  ])
-  if (itemsRes.error || completionsRes.error) {
-    console.error('[fascicolo] lettura voci/completamenti fallita', {
+  const completionsRes = await completionsQuery
+  if (completionsRes.error) {
+    console.error('[fascicolo] lettura completamenti fallita', {
       residenceId: primaryResidenceId,
       unitId: primaryUnitId,
-      itemsError: itemsRes.error,
       completionsError: completionsRes.error,
     })
     return <FascicoloMessage text="Errore tecnico nel caricamento del fascicolo, riprova." />
   }
-  const rawItems = itemsRes.data
   const rawCompletions = completionsRes.data
-
-  const allItems = (rawItems ?? []) as unknown as LiveStatusItem[]
-  const counted = allItems.filter(i => isCountable(i) && resolveCompletionMode(i) !== 'promemoria')
-  const scaduteCount = overdueLive(counted, todayISO()).length
-  const conformita = counted.length > 0
-    ? Math.round(((counted.length - scaduteCount) / counted.length) * 100)
-    : 100
 
   const completions = (rawCompletions ?? []) as unknown as CompletionRow[]
 
-  const thisYear = new Date().getFullYear()
-
-  // Date, anno e colore del punto calcolati qui sul server e passati come
+  // Date e anno calcolati qui sul server e passati come
   // valori già pronti: calcolarli nel client darebbe testo diverso fra Node e
   // Safari e un mismatch di hydration.
   const entries: FascicoloEntry[] = completions.map(c => {
     const tpl = c.maintenance_items?.maintenance_templates
-    // Colore del punto per modalità (voce ?? template), come dotColor nel PDF
-    // (ReportDocument.tsx): residente blu, amministratore verde, altro neutro.
-    const mode = c.maintenance_items?.completion_mode ?? tpl?.completion_mode ?? null
     return {
       id: c.id,
       title: tpl?.title ?? 'Intervento',
       category: tpl?.category ?? null,
       isCondominium: c.unit_id === null,
-      dotClass: mode === 'amministratore' ? 'bg-brand-medium'
-        : mode === 'residente' ? 'bg-semantic-blue'
-        : 'bg-text-secondary',
       dateStr: new Date(c.completed_at).toLocaleDateString('it-IT', {
         day: 'numeric', month: 'long', year: 'numeric',
       }),
@@ -148,53 +113,33 @@ export default async function FascicoloPage() {
         id: att.id,
         file_name: att.file_name,
         storage_path: att.storage_path,
+        mime_type: att.mime_type,
       })),
     }
   })
 
   return (
-    <div className="p-4 space-y-6 pb-safe">
-      <header className="flex flex-col items-start gap-3 sm:flex-row sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="font-serif text-[22px] font-semibold text-text-primary">Fascicolo</h1>
-          <p className="text-sm text-text-secondary mt-0.5">Registro permanente degli interventi</p>
-        </div>
-        {reportHref && (
-          <a href={reportHref} download className={buttonVariants('primary', 'default', 'w-full sm:w-auto gap-2')}>
-            <FileDown className="w-5 h-5 flex-shrink-0" strokeWidth={1.8} aria-hidden="true" />
-            Scarica report PDF
-          </a>
-        )}
-      </header>
-
-      {/* Conformità */}
-      <div className="bg-surface rounded-xl border border-border p-4">
-        <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-3">Conformità</p>
-        <div className="flex flex-wrap items-end gap-4">
-          <div>
-            <span className={`text-4xl font-medium ${
-              conformita >= 80 ? 'text-brand-dark' : conformita >= 60 ? 'text-semantic-amber' : 'text-semantic-red'
-            }`}>{conformita}%</span>
-            <p className="text-sm text-text-secondary mt-1">delle manutenzioni monitorate in regola</p>
+    <div className={styles.page}>
+      <MaintenanceHeader residenceName={unitRow.residences?.name ?? 'La tua residenza'} unitLabel={unitRow.label ?? ''} />
+      <div className={maintenanceStyles.view}>
+        <header>
+          <p className={maintenanceStyles.eyebrow}>La memoria della tua casa</p>
+          <h1 className={maintenanceStyles.pageTitle}>Fascicolo<span>.</span></h1>
+          <p className={maintenanceStyles.lead}>Tutti gli interventi registrati nel tempo, per il tuo appartamento e per le parti comuni.</p>
+        </header>
+        <section className={styles.register} aria-label="Riepilogo del registro">
+          <p className={styles.registerTop}><BookOpen size={14} aria-hidden="true" /> Il tuo registro degli interventi</p>
+          <div className={styles.registerBody}>
+            <div>
+              <p className={styles.registerValue}>{String(entries.length).padStart(2, '0')}</p>
+              <p className={styles.registerMeta}>{entries.length === 1 ? 'intervento conservato' : 'interventi conservati'}<br />nel fascicolo</p>
+            </div>
+            <span className={styles.seal}><LockKeyhole size={13} aria-hidden="true" /> Storico permanente</span>
           </div>
-          <div className="flex-1 min-w-16 bg-background rounded-full h-2 mb-1">
-            <div
-              className={`h-2 rounded-full transition-all ${
-                conformita >= 80 ? 'bg-brand-medium' : conformita >= 60 ? 'bg-semantic-amber' : 'bg-semantic-red'
-              }`}
-              style={{ width: `${conformita}%` }}
-            />
-          </div>
-        </div>
-        <p className="text-sm leading-relaxed text-text-secondary mt-4">La percentuale riguarda le manutenzioni monitorate e non certifica lo stato generale dell&apos;edificio.</p>
+        </section>
+        <FascicoloList entries={entries} reportHref={reportHref} />
+        <p className={styles.archiveNote}><LockKeyhole size={17} aria-hidden="true" /><span>Le registrazioni fanno parte dello storico permanente della casa. Non possono essere modificate da questa schermata.</span></p>
       </div>
-
-      <FascicoloList entries={entries} thisYear={thisYear} scaduteCount={scaduteCount} />
-
-      {/* Footer nota immutabilità */}
-      <p className="text-xs text-text-secondary text-center pb-2">
-        Il fascicolo è un registro permanente e non modificabile.
-      </p>
     </div>
   )
 }
@@ -203,13 +148,13 @@ export default async function FascicoloPage() {
 // della pagina, nessun dato mostrato.
 function FascicoloMessage({ text }: { text: string }) {
   return (
-    <div className="p-4 space-y-6 pb-safe">
+    <div className={styles.page}>
+      <div className={maintenanceStyles.view}>
       <header>
-        <h1 className="font-serif text-[22px] font-semibold text-text-primary">Fascicolo</h1>
-        <p className="text-sm text-text-secondary mt-0.5">Registro permanente degli interventi</p>
+        <p className={maintenanceStyles.eyebrow}>La memoria della tua casa</p>
+        <h1 className={maintenanceStyles.pageTitle}>Fascicolo<span>.</span></h1>
       </header>
-      <div className="bg-surface rounded-xl border border-border p-4">
-        <p className="text-sm text-text-secondary">{text}</p>
+      <p className={styles.empty} role="status">{text}</p>
       </div>
     </div>
   )
