@@ -38,6 +38,7 @@ export interface Unit {
   residence_id: string
   label: string
   floor: number | null
+  delivery_date: string | null
   created_at: string
 }
 
