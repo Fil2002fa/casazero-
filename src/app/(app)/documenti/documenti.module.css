@@ -7,7 +7,7 @@
 /* Filtri per categoria: una riga scorrevole */
 .filters { display: flex; gap: 7px; overflow-x: auto; padding: 18px 0 12px; scrollbar-width: none; }
 .filters::-webkit-scrollbar { display: none; }
-.filter { border: 1px solid #dde6dd; background: #fff; padding: 9px 13px; border-radius: 99px; font-size: 12px; font-weight: 700; white-space: nowrap; color: #65776f; min-height: 36px; flex-shrink: 0; }
+.filter { border: 1px solid #dde6dd; background: #fff; padding: 9px 13px; border-radius: 99px; font-size: 12px; font-weight: 700; white-space: nowrap; color: #65776f; min-height: 44px; flex-shrink: 0; }
 .filterActive { color: #fff; background: var(--petrol); border-color: var(--petrol); }
 
 /* Ricerca. 16px: sotto, Safari su iPhone ingrandisce la pagina alla messa a fuoco. */
@@ -27,7 +27,7 @@
 .docMain .rowSymbol { width: 36px; height: 36px; flex: 0 0 36px; }
 .docMeta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 5px; font-size: 11px; color: #78887f; }
 .ver { font-size: 10px; font-weight: 750; color: #405e53; background: #eaf0e9; border-radius: 100px; padding: 2px 8px; }
-.iconBtn { width: 40px; height: 40px; flex: 0 0 40px; border: 1px solid #d5e3d9; border-radius: 11px; background: #f4f9f5; display: grid; place-items: center; color: var(--petrol); }
+.iconBtn { width: 44px; height: 44px; flex: 0 0 44px; border: 1px solid #d5e3d9; border-radius: 11px; background: #f4f9f5; display: grid; place-items: center; color: var(--petrol); }
 
 /* Stato vuoto con icona e pulsante */
 .emptyIcon { display: grid; place-items: center; margin-bottom: 7px; color: #789088; }
@@ -46,8 +46,49 @@
 .verItem:last-child { border-bottom: 0; }
 .verItem span { flex: 1; }
 .verItem small { color: #809188; font-size: 11px; }
-.verItem a { color: var(--petrol); font-weight: 750; font-size: 11px; min-height: 36px; display: inline-flex; align-items: center; padding: 0 6px; }
+.verItem a { color: var(--petrol); font-weight: 750; font-size: 11px; min-height: 44px; display: inline-flex; align-items: center; padding: 0 6px; }
 .sheetActions { display: grid; gap: 8px; }
 .btn { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; width: 100%; padding: 11px 16px; border-radius: 12px; border: 1px solid transparent; font-weight: 750; font-size: 12px; }
 .btnPrimary { background: var(--petrol); color: #fff; }
 .btnSecondary { background: #fff; color: var(--petrol); border-color: #b6d0bc; }
+
+/* ===== Blocco 2: "I tuoi documenti" (mockup righe 23, 43-54) =====
+   Touch: ogni elemento toccabile nuovo ha almeno 44px. Input a 16px: sotto,
+   Safari su iPhone ingrandisce la pagina alla messa a fuoco. */
+
+/* Riga del lucchetto sotto il titolo di sezione */
+.privateLine { display: flex; align-items: flex-start; gap: 7px; font-size: 11px; line-height: 1.5; color: #60786d; margin: -4px 1px 12px; }
+.privateLine svg { flex-shrink: 0; margin-top: 2px; }
+
+/* CTA nella card verde: simbolo menta, non quello rosso di .ovNext .symbol */
+.ovAdd { min-height: 44px; }
+.addSymbol { border-radius: 13px; display: grid; place-items: center; width: 36px; height: 36px; flex: 0 0 36px; background: #deebe4; color: var(--petrol); }
+
+/* Righe dei documenti tuoi */
+.mineIco { background: #deebe4; color: var(--petrol); }
+.docType { font-size: 9px; font-weight: 800; letter-spacing: .08em; color: #7d8c83; background: #f1f4f0; border-radius: 6px; padding: 3px 6px; text-transform: uppercase; }
+.addRow { width: 100%; border-top: 1px solid #edf0eb; background: #fff; color: var(--petrol); font-weight: 750; font-size: 12px; min-height: 46px; display: flex; align-items: center; justify-content: center; gap: 7px; }
+
+/* Foglio di caricamento */
+.sheetDesc { font-size: 12px; color: #65786d; line-height: 1.6; margin: 0; }
+.lockSub { display: inline-flex; align-items: flex-start; gap: 7px; }
+.lockSub svg { flex-shrink: 0; margin-top: 3px; }
+.drop { position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; border: 1.5px dashed #b6d0bc; background: #f6faf6; border-radius: 16px; padding: 20px 14px; text-align: center; color: var(--petrol); cursor: pointer; min-height: 44px; }
+.drop strong { font-size: 13px; }
+.drop small { font-size: 11px; color: #71877b; }
+.drop input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.drop:focus-within { outline: 3px solid #a3c9b9; outline-offset: 3px; }
+.filePill { display: flex; align-items: center; gap: 11px; border: 1px solid #d5e3d9; background: #f6faf6; border-radius: 14px; padding: 11px 12px; }
+.filePill .pillSymbol { width: 36px; height: 36px; flex: 0 0 36px; }
+.fpName { font-weight: 750; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fpSize { font-size: 11px; color: #71877b; margin-top: 2px; }
+.fpChange { background: transparent; color: var(--petrol); font-weight: 750; font-size: 11px; padding: 0 8px; min-height: 44px; min-width: 44px; flex-shrink: 0; }
+.typeGrid { display: flex; flex-wrap: wrap; gap: 7px; }
+.textInput { width: 100%; padding: 12px 13px; border: 1px solid #e1e8e1; border-radius: 13px; background: #fff; color: #1c312d; min-height: 44px; font: inherit; font-size: 16px; }
+.textInput:focus-visible { outline: 3px solid #a3c9b9; outline-offset: 3px; }
+.err { display: flex; gap: 8px; align-items: flex-start; background: #fcebe6; color: #b34b40; border-radius: 10px; padding: 10px 12px; font-size: 12px; line-height: 1.5; margin-top: 9px; }
+.noteInfo { display: flex; gap: 9px; align-items: flex-start; border-left: 3px solid #97baaa; background: #edf4ef; color: #345b4b; border-radius: 8px; padding: 12px; font-size: 12px; line-height: 1.55; margin: 16px 0; }
+.btnGhost { background: transparent; color: var(--petrol); }
+.btnDanger { background: transparent; color: #b34b40; }
+.btnDangerSolid { background: #b34b40; color: #fff; }
+.btn:disabled { opacity: .5; cursor: default; }

@@ -4,6 +4,7 @@ import { requireProfile } from '@/lib/auth'
 import { UploadDocumentForm } from '@/components/UploadDocumentForm'
 import { loadResidenceDocumentRows } from '@/lib/document-rows.server'
 import { toResidentDocumentItems } from '@/lib/resident-documents-view'
+import { toOwnDocumentItems, type OwnDocItem, type OwnDocRow } from '@/lib/resident-own-documents-view'
 import type { Profile } from '@/types/database'
 import home from '../home.module.css'
 import { DocumentiList } from './DocumentiList'
@@ -83,9 +84,31 @@ export default async function DocumentiPage() {
   // (residentDocumentFacts).
   const items = toResidentDocumentItems(rows)
 
+  // "I tuoi documenti" solo per il residente. RLS (059) restituisce soltanto i
+  // documenti visibili: chi guarda e chi ha caricato membri attivi della stessa
+  // unità. Un errore qui non nasconde i documenti del costruttore: la sezione
+  // dice che i tuoi non sono disponibili.
+  let own: OwnDocItem[] | null = null
+  let ownError = false
+  if (profile.role === 'client') {
+    const { data: ownRows, error: ownReadError } = await supabase
+      .from('resident_documents')
+      .select('id, doc_kind, title, mime_type, size_bytes, created_at, uploaded_by')
+      .order('created_at', { ascending: false })
+    if (ownReadError) {
+      console.error('[documenti-pwa] lettura documenti del residente fallita', { profileId: profile.id, error: ownReadError })
+      ownError = true
+      own = []
+    } else {
+      own = toOwnDocumentItems((ownRows ?? []) as OwnDocRow[], profile.id)
+    }
+  }
+
   return (
     <DocumentiList
       items={items}
+      own={own}
+      ownError={ownError}
       uploadSlot={canUpload && residenceId ? <UploadDocumentForm residenceId={residenceId} /> : undefined}
     />
   )
