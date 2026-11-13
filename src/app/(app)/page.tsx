@@ -140,7 +140,7 @@ export default async function HomePage() {
   const delivery      = deliveryChip(unit?.delivery_date, today)
 
   return (
-    <div className={`${styles.home} space-y-6 pb-safe`}>
+    <div className={`${styles.home} pb-safe`}>
       <div>
         <div className={styles.eyebrow}>La tua casa</div>
         <h1 className={styles.pageTitle}>
@@ -310,22 +310,20 @@ export default async function HomePage() {
       </section>
 
       {/* Teaser fascicolo — intero blocco cliccabile, nessun interattivo annidato */}
-      <Link href="/fascicolo" className="block">
-        <div className="bg-surface rounded-xl border border-border p-4 flex items-center gap-3 active:bg-background">
-          <div className="w-10 h-10 rounded-lg bg-brand-light flex items-center justify-center flex-shrink-0">
-            <BookOpen className="w-5 h-5 text-brand-medium" strokeWidth={1.6} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-text-primary">Fascicolo</p>
-            <p className="text-xs text-text-secondary mt-0.5">
+      <div className={styles.listCard} style={{ marginTop: 25 }}>
+        <Link href="/fascicolo" className={styles.listRow} style={{ borderBottom: 0 }}>
+          <div className={styles.symbol} aria-hidden="true"><BookOpen size={19} /></div>
+          <div className={styles.lrBody}>
+            <div className={styles.lrTitle}>Fascicolo</div>
+            <div className={styles.lrSub}>
               {fascicoloCount > 0
                 ? `${pluralize(fascicoloCount, 'intervento registrato', 'interventi registrati')} · ultimo ${lastCompletedLabel}`
                 : 'Ancora nessun intervento registrato'}
-            </p>
+            </div>
           </div>
-          <ChevronRight className="w-4 h-4 text-text-secondary flex-shrink-0" strokeWidth={1.6} />
-        </div>
-      </Link>
+          <ChevronRight size={16} className={styles.arrow} aria-hidden="true" />
+        </Link>
+      </div>
     </div>
   )
 }
