@@ -1,0 +1,92 @@
+.listPage {
+  --petrol: #0b5149;
+  --serif: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+  color: #1c312d;
+  font-family: var(--font-inter), 'Aptos', 'Segoe UI', system-ui, sans-serif;
+  font-size: 14px;
+  background: #fff;
+  min-height: calc(100svh - 80px);
+  /* Copre anche i margini della shell, soltanto mentre la lista è montata. */
+  box-shadow: 0 0 0 100vmax #fff;
+  clip-path: inset(0 -100vmax -80px);
+}
+.listPage :is(button, input, a):focus-visible { outline: 3px solid #a3c9b9; outline-offset: 3px; }
+.appTop { position: sticky; top: 0; z-index: var(--z-index-sticky); background: #fff; display: flex; align-items: center; gap: 10px; padding: 20px 20px 11px; border-bottom: 1px solid #eef0eb; }
+.brandMark { flex: 0 0 31px; height: 31px; border-radius: 11px; background: var(--petrol); color: white; display: grid; place-items: center; font-weight: 750; font-size: 11px; letter-spacing: -.07em; }
+.brandName { font-weight: 740; letter-spacing: -.04em; font-size: 17px; }
+.brandSub { font-size: 10px; color: #6f817b; font-weight: 600; margin-top: 1px; overflow-wrap: anywhere; }
+.view { padding: 23px 20px 34px; }
+.eyebrow { color: var(--petrol); font-weight: 780; font-size: 10px; letter-spacing: .15em; text-transform: uppercase; }
+.pageTitle { font: normal 40px/1.08 var(--serif); letter-spacing: -.045em; color: #183d36; margin: 8px 0 10px; }
+.pageTitle span { color: var(--petrol); }
+.lead { line-height: 1.6; color: #62766e; font-size: 13px; margin: 0 0 21px; }
+.overview { background: var(--petrol); color: white; padding: 20px; border-radius: 20px; position: relative; overflow: hidden; box-shadow: 0 8px 22px #14564915; }
+.overview::after { content: ''; position: absolute; width: 170px; height: 170px; border: 1px solid #ffffff20; border-radius: 50%; right: -75px; top: -70px; box-shadow: 0 0 0 32px #ffffff09, 0 0 0 65px #ffffff06; pointer-events: none; }
+.overview p { font-size: 11px; color: #cce1d9; margin: 0 0 5px; }
+.overview h2 { font: normal 25px/1.23 var(--serif); margin: 0 0 14px; max-width: 225px; }
+.counts { display: flex; flex-wrap: wrap; gap: 9px; position: relative; z-index: 1; }
+.counts span { padding: 8px 12px; border-radius: 12px; background: #ffffff19; font-size: 11px; }
+.counts strong { font-size: 17px; margin-right: 4px; }
+.overview .deliveryNote { margin-top: 12px; line-height: 1.5; }
+.filters { display: flex; gap: 7px; overflow-x: auto; padding: 18px 0 12px; }
+.filter { border: 1px solid #dde6dd; background: white; padding: 9px 13px; border-radius: 99px; font-size: 12px; font-weight: 700; white-space: nowrap; color: #65776f; cursor: pointer; }
+.filter[aria-pressed='true'] { color: white; background: var(--petrol); border-color: var(--petrol); }
+.search { position: relative; }
+.search svg { position: absolute; top: 12px; left: 13px; color: #8ba098; pointer-events: none; }
+.search input { width: 100%; padding: 12px 12px 12px 37px; border: 1px solid #e1e8e1; border-radius: 13px; background: white; color: #1c312d; font: inherit; }
+.sectionHeader { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 25px 0 12px; }
+.sectionHeader h2 { font: normal 23px/1.15 var(--serif); letter-spacing: -.035em; color: #1e413b; }
+.sectionHeader span { font-size: 11px; color: #7d8c83; flex-shrink: 0; }
+.commonHint { font-size: 11px; color: #72857c; line-height: 1.5; margin: -5px 0 14px; }
+.groupLabel { font-size: 10px; text-transform: uppercase; letter-spacing: .13em; font-weight: 800; color: #78897e; margin: 16px 1px 9px; }
+.card { border: 1px solid #e0e7e0; background: white; border-radius: 17px; margin: 0 0 9px; box-shadow: 0 3px 13px #294b302a; }
+.cardLink { display: block; padding: 15px 15px 12px; border-radius: 17px; }
+.cardTop { display: flex; gap: 12px; align-items: flex-start; }
+.symbol { border-radius: 13px; background: #eaf2ec; color: var(--petrol); display: grid; place-items: center; width: 40px; height: 40px; flex: 0 0 40px; }
+.cardBody { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.cardBody h4 { font-weight: 790; line-height: 1.3; font-size: 14px; }
+.cardBody p { color: #78887f; font-size: 11px; margin-top: 4px; }
+.arrow { color: #9caea2; flex-shrink: 0; }
+.metadata { display: flex; flex-wrap: wrap; gap: 5px; margin: 12px 0 13px; }
+.chip { display: inline-flex; align-items: center; gap: 5px; border-radius: 100px; padding: 6px 10px; font-size: 10px; font-weight: 750; line-height: 1.3; background: #edf2ef; color: #526b61; max-width: 100%; }
+.chip svg { flex-shrink: 0; }
+.overdue { background: #fcebe6; color: #b34b40; }
+.soon, .progress { background: #fff3df; color: #98621e; }
+.legal { background: #153b36; color: white; }
+.recommended { background: #f6f8f5; border: 1px solid #e0e7e2; color: #496459; }
+.advice { background: #f1f4f0; color: #687a72; }
+.metadata .reminder { height: auto; font-size: 10px; font-weight: 750; line-height: 1.3; padding: 6px 10px; }
+.metaStrip { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 7px; border-top: 1px solid #edf0eb; padding-top: 12px; }
+.metaStrip dt { color: #84928a; font-size: 10px; margin-bottom: 4px; }
+.metaStrip dd { font-weight: 720; font-size: 12px; color: #34574c; overflow-wrap: anywhere; }
+.footHint { font-size: 11px; color: #72857c; line-height: 1.5; border-top: 1px solid #edf0eb; padding-top: 10px; }
+.registration { padding: 0 15px 12px; }
+.button { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; border-radius: 12px; padding: 11px 16px; font-weight: 750; font-size: 12px; width: 100%; background: var(--petrol); color: white; cursor: pointer; }
+.empty { margin-top: 24px; border: 1px dashed #ccd9cf; text-align: center; border-radius: 16px; padding: 28px 17px; color: #789088; line-height: 1.5; }
+.empty strong { display: block; color: #1c312d; margin: 7px 0; }
+.empty svg { margin: auto; }
+.empty .button { background: transparent; color: var(--petrol); margin-top: 12px; }
+.navigation { background: #fff; border-color: #e8ede7; font-family: var(--font-inter), 'Segoe UI', sans-serif; }
+.navigation > div { height: 67px; padding: 8px 10px; }
+.navItem { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-width: 0; flex: 1; min-height: 44px; font-size: 10px; font-weight: 700; color: #93a19a; }
+.navItem[aria-current='page'] { color: #0b5149; }
+.navItem:focus-visible { outline: 3px solid #a3c9b9; outline-offset: 2px; border-radius: 8px; }
+/* Nella v5 questi elementi usano normal, non l'interlinea base di Tailwind.
+   Restano esplicite le interlinee di titoli, lead, badge, note e stato vuoto. */
+.appTop,
+.eyebrow,
+.overview > p:not(.deliveryNote),
+.counts,
+.filter,
+.search input,
+.sectionHeader span,
+.groupLabel,
+.cardBody p,
+.metaStrip,
+.registration .button,
+.navItem { line-height: normal; }
+@media (max-width: 400px) {
+  .view { padding-left: 18px; padding-right: 18px; }
+  .appTop { padding: 15px 18px 10px; }
+  .metaStrip dd { font-size: 11px; }
+}

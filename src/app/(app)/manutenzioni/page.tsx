@@ -9,6 +9,8 @@ import {
 } from '@/lib/maintenance-status'
 import { ManutenzioniList, type ListItem } from './ManutenzioniList'
 import type { ObligationType } from '@/types/database'
+import { MaintenanceHeader } from './MaintenanceHeader'
+import styles from './maintenance-v5.module.css'
 
 export const metadata: Metadata = { title: 'Manutenzioni' }
 
@@ -57,19 +59,23 @@ export default async function ManutenzioniPage() {
   if (membershipError || itemsError) {
     console.error('[manutenzioni] Errore caricamento lista', { membershipError, itemsError })
     return (
-      <div className="p-5 space-y-4">
-        <h1 className="font-serif text-3xl text-text-primary">Manutenzioni</h1>
-        <p role="alert" className="text-text-secondary">Non è stato possibile caricare il piano. Riprova ricaricando la pagina.</p>
+      <div className={styles.listPage}>
+        <MaintenanceHeader residenceName="Residenza non disponibile" unitLabel="" />
+        <div className={styles.view}>
+          <h1 className={styles.pageTitle}>Manutenzioni<span>.</span></h1>
+          <p role="alert" className={styles.lead}>Non è stato possibile caricare il piano. Riprova ricaricando la pagina.</p>
+        </div>
       </div>
     )
   }
 
   if (!membership) {
     return (
-      <div className="p-4 space-y-4">
-        <h1 className="font-serif text-[22px] font-semibold text-text-primary">Manutenzioni</h1>
-        <div className="bg-surface rounded-xl border border-border p-4 text-center">
-          <p className="text-base text-text-secondary">
+      <div className={styles.listPage}>
+        <MaintenanceHeader residenceName="Nessuna unità associata" unitLabel="" />
+        <div className={styles.view}>
+          <h1 className={styles.pageTitle}>Manutenzioni<span>.</span></h1>
+          <p className={styles.lead}>
             Non sei ancora associato a nessuna unità. Contatta il costruttore.
           </p>
         </div>
@@ -84,6 +90,19 @@ export default async function ManutenzioniPage() {
   const items = ((rawItems ?? []) as unknown as ItemRow[]).filter(isCountable)
   const today = todayISO()
 
+  // Un solo round-trip, un solo completamento per voce: niente N+1 né
+  // caricamento dell'intero fascicolo. Entrambe le relazioni rispettano RLS.
+  const datedIds = items.filter(i => resolveCompletionMode(i) !== 'promemoria').map(i => i.id)
+  const { data: history, error: historyError } = datedIds.length
+    ? await supabase.from('maintenance_items')
+      .select('id, completions(completed_at)')
+      .in('id', datedIds)
+      .order('completed_at', { referencedTable: 'completions', ascending: false })
+      .limit(1, { referencedTable: 'completions' })
+    : { data: [], error: null }
+  if (historyError) console.error('[manutenzioni] Errore lettura ultime esecuzioni', historyError)
+  const lastExecution = new Map((history ?? []).map(row => [row.id, row.completions[0]?.completed_at ?? null]))
+
   const toListItem = (i: ItemRow): ListItem => ({
     id: i.id,
     title: i.maintenance_templates?.title ?? '—',
@@ -96,25 +115,27 @@ export default async function ManutenzioniPage() {
     unitId: i.unit_id,
     residenceId: i.residence_id,
     nextDueDate: resolveCompletionMode(i) === 'promemoria' ? null : i.next_due_date,
+    lastCompletedAt: lastExecution.get(i.id) ?? null,
+    historyUnavailable: Boolean(historyError) || (resolveCompletionMode(i) !== 'promemoria' && !lastExecution.has(i.id)),
   })
 
   return (
-    <div className="px-5 pt-6 pb-8 space-y-5">
-      <header className="space-y-2">
-        <p className="text-xs font-medium uppercase tracking-widest text-brand-medium">Il tuo piano casa</p>
-        <h1 className="font-serif text-[36px] leading-tight tracking-tight text-brand-dark">Manutenzioni.</h1>
-        <p className="text-sm text-text-secondary">
-          {unit?.residences?.name ?? 'La tua residenza'} · {unit?.label ?? ''}
-        </p>
-        <p className="text-sm leading-relaxed text-text-secondary">Le cose da fare, quelle in arrivo e gli interventi del condominio. Tutto in un posto.</p>
-      </header>
+    <div className={styles.listPage}>
+      <MaintenanceHeader residenceName={unit?.residences?.name ?? 'La tua residenza'} unitLabel={unit?.label ?? ''} />
+      <div className={styles.view}>
+        <header>
+          <p className={styles.eyebrow}>Il tuo piano casa</p>
+          <h1 className={styles.pageTitle}>Manutenzioni<span>.</span></h1>
+          <p className={styles.lead}>Le cose da fare, quelle in arrivo e gli interventi del condominio. Tutto in un posto.</p>
+        </header>
 
-      <ManutenzioniList
-        items={items.map(toListItem)}
-        today={today}
-        residenceName={unit?.residences?.name ?? 'La tua residenza'}
-        unitLabel={unit?.label ?? ''}
-      />
+        <ManutenzioniList
+          items={items.map(toListItem)}
+          today={today}
+          residenceName={unit?.residences?.name ?? 'La tua residenza'}
+          unitLabel={unit?.label ?? ''}
+        />
+      </div>
     </div>
   )
 }
