@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import Image from 'next/image'
-import { ArrowRight, BookOpen, CalendarClock, ChevronRight, FileText, Home as HomeIcon, Check } from 'lucide-react'
+import { ArrowRight, BookOpen, Building2, CalendarClock, ChevronRight, FileText, Mail, Phone, Home as HomeIcon, Check } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireProfile, getUser } from '@/lib/auth'
 import type { ObligationType } from '@/types/database'
@@ -103,6 +103,13 @@ export default async function HomePage() {
     ? await loadResidenceDocumentRows(supabase, unit.residence_id)
     : { docs: [], units: [], error: null }
   const recentDocs = docsResult.docs.slice(0, 3)
+
+  // Contatto del costruttore: client di sessione, la RLS "builders: members can read
+  // own" lascia al residente solo il proprio (verificato con simulazione RLS).
+  // L'amministratore non è leggibile dal residente con le policy attuali: non c'è.
+  const { data: builder } = profile.builder_id
+    ? await supabase.from('builders').select('name, contact_email, contact_phone').eq('id', profile.builder_id).maybeSingle()
+    : { data: null }
 
   // Teaser fascicolo. Perimetro IDENTICO a /fascicolo tab "Tutti" per un client
   // (unità + parti condominiali): residence_id = mia residenza AND (unit_id = mia
@@ -268,6 +275,36 @@ export default async function HomePage() {
             <div className={styles.listFoot}>
               <Link href="/documenti" className={styles.ghostLink}>Apri l&apos;archivio documenti <ArrowRight size={15} aria-hidden="true" /></Link>
             </div>
+          </div>
+        )}
+      </section>
+
+      {/* Contatti utili */}
+      <section aria-label="Contatti utili">
+        <div className={styles.sectionHeader}>
+          <h2 className={styles.sectionTitle}>Contatti utili</h2>
+        </div>
+        {builder ? (
+          <div className={styles.contactCard}>
+            <div className={styles.symbol} aria-hidden="true"><Building2 size={19} /></div>
+            <div className={styles.ccBody}>
+              <div className={styles.ccRole}>Costruttore</div>
+              <div className={styles.ccName}>{builder.name}</div>
+              {!builder.contact_email && !builder.contact_phone && <div className={styles.ccNote}>Contatti non indicati</div>}
+            </div>
+            <div className={styles.ccActions}>
+              {builder.contact_phone && (
+                <a href={`tel:${builder.contact_phone.replace(/[^d+]/g, '')}`} className={styles.iconBtn} aria-label={`Chiama ${builder.name}`}><Phone size={16} aria-hidden="true" /></a>
+              )}
+              {builder.contact_email && (
+                <a href={`mailto:${builder.contact_email}`} className={styles.iconBtn} aria-label={`Scrivi a ${builder.name}`}><Mail size={16} aria-hidden="true" /></a>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className={styles.empty}>
+            <strong>Contatti non disponibili</strong>
+            I riferimenti del costruttore non sono ancora indicati.
           </div>
         )}
       </section>
