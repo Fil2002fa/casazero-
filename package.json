@@ -50,7 +50,8 @@
     "verify:saluto": "node --experimental-strip-types --no-warnings scripts/verify-greeting.mjs",
     "verify:homesummary": "node --experimental-strip-types --no-warnings scripts/verify-home-summary.mjs",
     "verify:topbar": "node --experimental-strip-types --no-warnings scripts/verify-resident-top-bar.mjs",
-    "verify:resdocs": "node --experimental-strip-types --no-warnings scripts/verify-resident-documents.mjs"
+    "verify:resdocs": "node --experimental-strip-types --no-warnings scripts/verify-resident-documents.mjs",
+    "verify:download": "node --experimental-strip-types --no-warnings scripts/verify-download-disposition.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.4",

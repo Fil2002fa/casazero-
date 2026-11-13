@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { signedUrlOptions } from '@/lib/download-disposition'
 
-// GET /api/download?bucket=attachments&path=xxx
-// Genera un URL firmato (1 ora) e redirige → download sicuro senza esporre il percorso Storage
+// GET /api/download?bucket=attachments&path=xxx[&inline=1]
+// Genera un URL firmato (1 ora) e redirige → download sicuro senza esporre il percorso Storage.
+// Predefinito: scaricamento. Con inline=1 il file si apre nel browser (stessa autorizzazione,
+// stesso client di sessione: cambia solo l'intestazione Content-Disposition).
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -18,7 +21,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await supabase.storage
     .from(bucket)
-    .createSignedUrl(path, 3600, { download: true })
+    .createSignedUrl(path, 3600, signedUrlOptions(req.nextUrl.searchParams.get('inline')))
 
   if (error || !data) {
     return NextResponse.json({ error: error?.message ?? 'Errore generazione URL' }, { status: 500 })
