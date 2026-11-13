@@ -53,5 +53,16 @@ eq('upcoming: senza data = in attesa di consegna', up([it('d', null)]), [['d', '
 eq('upcoming: in corso, promemoria e completate', up([it('a', '2026-06-01', { status: 'in_corso' }), it('b', '2026-06-01', { mode: 'promemoria' }), it('c', '2026-06-01', { status: 'completata' })]), [['a', 'in_corso']])
 eq('upcoming: estremo +30 dentro, +31 fuori', up([it('a', '2026-07-15'), it('b', '2026-07-16')]), [['a', 'entro_30'], ['b', 'piu_avanti']])
 
+const D = await import(new URL('../src/lib/home-documents.ts', import.meta.url).href)
+const doc = (id, file, type, created, o = {}) => ({ id, file_name: file, doc_type: type, title: o.title ?? file.replace(/.pdf$/, ''), created_at: created, file_date: null, extraction: null, overrides: [] })
+const g = D.groupHomeDocuments([
+  doc('1', 'a.pdf', 'dico', '2026-10-01T10:00:00Z'), doc('2', 'a.pdf', 'dico', '2026-10-05T10:00:00Z'),
+  doc('3', 'a.pdf', 'ape', '2026-09-01T10:00:00Z'), doc('4', 'b.pdf', 'dico', '2026-10-03T10:00:00Z'),
+])
+eq('gruppi: stessa chiave file+tipo, più recente in testa', g.map(x => [x.latest.id, x.extra]), [['2', 1], ['4', 0], ['3', 0]])
+eq('titolo: etichetta del tipo', D.homeDocumentTitle({ doc_type: 'ape', title: 'x', file_name: 'x.pdf' }), 'Attestato di prestazione energetica')
+eq('titolo: senza tipo, title umanizzato', D.homeDocumentTitle({ doc_type: null, title: 'libretto_uso', file_name: 'x.pdf' }), 'Libretto uso')
+eq('titolo: ultima riserva, file senza estensione', D.homeDocumentTitle({ doc_type: null, title: '', file_name: 'nome_file.pdf' }), 'nome_file')
+
 if (failed) { console.error(`\n${failed} casi divergenti`); process.exit(1) }
 console.log('\nTutti i casi ok')

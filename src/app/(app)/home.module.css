@@ -71,6 +71,7 @@
 .listRow .symbol { width: 36px; height: 36px; flex: 0 0 36px; }
 .lrBody { flex: 1; min-width: 0; }
 .lrTitle { font-weight: 760; font-size: 13px; line-height: 1.3; }
+.lrClamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: break-word; }
 .lrSub { font-size: 11px; color: #78887f; margin-top: 3px; }
 .lrEnd { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; flex-shrink: 0; }
 .docIco { background: #f1f4f0; color: #526b61; }

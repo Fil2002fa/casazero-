@@ -12,6 +12,7 @@ import { HomeRiepilogo } from './HomeRiepilogo'
 import { buildGreeting } from '@/lib/greeting'
 import { summarizeHome, upcomingItems } from '@/lib/home-summary'
 import { loadResidenceDocumentRows } from '@/lib/document-rows.server'
+import { groupHomeDocuments, homeDocumentTitle, displayDate } from '@/lib/home-documents'
 import { SISTEMA_LABELS } from '@/lib/document-classification'
 import { deliveryChip, fileTypeLabel, residenceInitials, usablePhotoUrl } from '@/lib/home-card'
 import styles from './home.module.css'
@@ -102,7 +103,8 @@ export default async function HomePage() {
   const docsResult = unit
     ? await loadResidenceDocumentRows(supabase, unit.residence_id)
     : { docs: [], units: [], error: null }
-  const recentDocs = docsResult.docs.slice(0, 3)
+  const docGroups = groupHomeDocuments(docsResult.docs)
+  const recentDocs = docGroups.slice(0, 3)
 
   // Contatto del costruttore: client di sessione, la RLS "builders: members can read
   // own" lascia al residente solo il proprio (verificato con simulazione RLS).
@@ -244,7 +246,7 @@ export default async function HomePage() {
       <section aria-label="Documenti della casa">
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>Documenti della casa</h2>
-          {docsResult.docs.length > 0 && <span className={styles.sectionCount}>{pluralize(docsResult.docs.length, 'documento', 'documenti')}</span>}
+          {docGroups.length > 0 && <span className={styles.sectionCount}>{pluralize(docGroups.length, 'documento', 'documenti')}</span>}
         </div>
         {docsResult.error ? (
           <div className={styles.empty}>
@@ -258,13 +260,13 @@ export default async function HomePage() {
           </div>
         ) : (
           <div className={styles.listCard}>
-            {recentDocs.map(d => (
-              <Link key={d.id} href="/documenti" className={styles.listRow}>
+            {recentDocs.map(({ key, latest: d, extra }) => (
+              <Link key={key} href="/documenti" className={styles.listRow}>
                 <div className={`${styles.symbol} ${styles.docIco}`} aria-hidden="true"><FileText size={19} /></div>
                 <div className={styles.lrBody}>
-                  <div className={styles.lrTitle}>{d.title}</div>
+                  <div className={`${styles.lrTitle} ${styles.lrClamp}`} title={d.file_name}>{homeDocumentTitle(d)}</div>
                   <div className={styles.lrSub}>
-                    {[d.sistema ? SISTEMA_LABELS[d.sistema] : null, formatDateIT(d.file_date ?? d.created_at)].filter(Boolean).join(' · ')}
+                    {[d.sistema ? SISTEMA_LABELS[d.sistema] : null, formatDateIT(displayDate(d)), extra > 0 ? `+${pluralize(extra, 'versione', 'versioni')}` : null].filter(Boolean).join(' · ')}
                   </div>
                 </div>
                 {fileTypeLabel(d.file_name) && (
