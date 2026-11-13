@@ -52,7 +52,7 @@ export function GuideExperience({ content, stepIllustrations, detailHref }: Prop
             <aside className={styles.note}>
               <AlertTriangle aria-hidden="true" className={styles.warningIcon} />
               <div>
-                <p className={styles.noteTitle}>Chi può intervenire</p>
+                <p className={styles.noteTitle}>{content.noticeTitle ?? 'Chi può intervenire'}</p>
                 <p className={styles.noteText}>{whoCanIntervene}</p>
               </div>
             </aside>
@@ -66,7 +66,7 @@ export function GuideExperience({ content, stepIllustrations, detailHref }: Prop
         <section className={styles.finished}>
           <span className={styles.finishedIcon}><BookOpen aria-hidden="true" size={24} /></span>
           <h1 className={styles.title}>Hai terminato la lettura</h1>
-          <p className={styles.text}>La lettura non conferma l’esecuzione di una manutenzione e non registra alcun intervento.</p>
+          <p className={styles.text}>{content.closingMessage ?? 'La lettura non conferma l’esecuzione di una manutenzione e non registra alcun intervento.'}</p>
           <Link href={detailHref} className={styles.start}>Torna al dettaglio</Link>
         </section>
       ) : (
