@@ -67,5 +67,5 @@ export default async function ResidentMaintenanceGuidePage({ params }: { params:
 
   const illustrations = resolveMaintenanceIllustrations(item.template_id, template.title, template.how_to)
 
-  return <GuideExperience title={template.title} description={template.description} whoDoesIt={template.who_does_it!} steps={template.how_to} stepIllustrations={illustrations?.steps.map(step => step.illustration ?? null)} detailHref={`/manutenzioni/${id}`} />
+  return <GuideExperience title={template.title} description={template.description} whoDoesIt={template.who_does_it!} steps={template.how_to} stepIllustrations={illustrations?.steps.map(step => [step.illustration, ...(step.additionalIllustrations ?? [])].filter((asset): asset is NonNullable<typeof asset> => Boolean(asset)))} detailHref={`/manutenzioni/${id}`} />
 }

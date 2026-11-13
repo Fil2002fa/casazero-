@@ -11,7 +11,7 @@ type Props = {
   description: string | null
   whoDoesIt: string
   steps: string[]
-  stepIllustrations?: readonly (MaintenanceIllustrationAsset | null)[]
+  stepIllustrations?: readonly (readonly MaintenanceIllustrationAsset[])[]
   detailHref: string
 }
 
@@ -69,7 +69,7 @@ export function GuideExperience({ title, description, whoDoesIt, steps, stepIllu
           <div aria-live="polite" className="rounded-2xl border border-border bg-surface p-5">
             <p className="mb-4 text-[11px] font-medium uppercase tracking-[0.12em] text-brand-medium">Passaggio {stepIndex + 1}</p>
             <p className="font-serif text-[25px] leading-[1.4] text-brand-dark">{steps[stepIndex]}</p>
-            <MaintenanceIllustration key={stepIndex} asset={stepIllustrations?.[stepIndex] ?? undefined} />
+            {stepIllustrations?.[stepIndex]?.map(asset => <MaintenanceIllustration key={`${stepIndex}-${asset.src}`} asset={asset} />)}
           </div>
           <aside className="flex items-start gap-3 rounded-xl border border-semantic-amber/25 bg-semantic-amber/10 px-4 py-3">
             <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-semantic-amber" />
