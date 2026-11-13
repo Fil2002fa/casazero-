@@ -11,16 +11,23 @@
  *    dominio (CLAUDE.md).
  * Regole di tipo, dimensione, titolo e path: src/lib/resident-document-upload.ts.
  */
+import { revalidatePath } from 'next/cache'
 import type { ResidentDocMime } from '@/types/database'
 import { createClient } from '@/lib/supabase/server'
 import { requireCaller } from '@/lib/require-caller'
 import { getActiveUnitId } from '@/lib/resident-active-unit.server'
 import {
+  MAGIC_BYTES_NEEDED,
   RESIDENT_DOC_BUCKET,
+  RESIDENT_DOC_MAX_BYTES,
   RESIDENT_DOC_MAX_PER_UNIT,
+  RESIDENT_DOC_TYPE_ERROR,
   isResidentDocKind,
+  isResidentDocPathFor,
+  matchesMagicBytes,
   residentDocDeclaredError,
   residentDocPath,
+  sanitizeResidentDocTitle,
 } from '@/lib/resident-document-upload'
 
 type Fail = { ok: false; error: string }
@@ -84,4 +91,103 @@ export async function createResidentUploadUrl(input: {
     return { ok: false, error: RETRY }
   }
   return { ok: true, path, token: data.token }
+}
+
+/**
+ * Passo 3 del caricamento (il 2 è uploadToSignedUrl dal browser): INSERT della
+ * riga, poi controllo del file VERO nello storage, dimensione e magic bytes.
+ * La lettura dell'oggetto è ammessa solo perché la riga ora esiste (policy
+ * SELECT del bucket). Se il file non torna si rimuovono oggetto e riga, in
+ * quest'ordine (la policy DELETE del bucket richiede la riga), e si esce con
+ * un errore chiaro.
+ */
+export async function confirmResidentDocument(input: {
+  path: unknown
+  docKind: unknown
+  title: unknown
+  mimeType: unknown
+  sizeBytes: unknown
+}): Promise<{ ok: true; id: string } | Fail> {
+  const action = 'confirmResidentDocument'
+  const caller = await requireCaller(action, ['client'])
+  if ('error' in caller) return { ok: false, error: caller.error }
+
+  if (!isResidentDocKind(input.docKind)) return { ok: false, error: 'Scegli che tipo di documento è.' }
+  const title = typeof input.title === 'string' ? sanitizeResidentDocTitle(input.title) : ''
+  if (!title) return { ok: false, error: 'Scrivi un titolo per il documento.' }
+  const mime = typeof input.mimeType === 'string' ? input.mimeType : null
+  const size = typeof input.sizeBytes === 'number' ? input.sizeBytes : NaN
+  const declaredError = residentDocDeclaredError(mime, size)
+  if (declaredError) return { ok: false, error: declaredError }
+  const mimeType = mime as ResidentDocMime
+
+  const supabase = await createClient()
+  const unit = await getActiveUnitId(supabase, caller.userId, action)
+  if ('error' in unit) return { ok: false, error: unit.error }
+
+  const path = typeof input.path === 'string' ? input.path : ''
+  if (!isResidentDocPathFor(path, unit.unitId, mimeType)) {
+    console.warn(`${action}: path non della propria unità`, { userId: caller.userId, unitId: unit.unitId, path })
+    return { ok: false, error: RETRY }
+  }
+
+  // uploaded_by ha default auth.uid(); la policy INSERT lo pretende uguale a chi chiama.
+  const { data: row, error: insertError } = await supabase
+    .from('resident_documents')
+    .insert({ unit_id: unit.unitId, doc_kind: input.docKind, title, storage_path: path, mime_type: mimeType, size_bytes: size })
+    .select('id')
+    .single()
+  if (insertError || !row) {
+    // Senza riga la policy DELETE del bucket non lascia rimuovere l'oggetto:
+    // resta orfano (pulizia con service role, in backlog dalla 059).
+    console.error(`${action}: INSERT fallito, oggetto lasciato orfano`, { userId: caller.userId, path, error: insertError })
+    return {
+      ok: false,
+      error: insertError?.code === '23505' ? 'Questo documento è già stato salvato.' : RETRY,
+    }
+  }
+  const id = row.id as string
+
+  const { data: blob, error: downloadError } = await supabase.storage.from(RESIDENT_DOC_BUCKET).download(path)
+  if (downloadError || !blob) {
+    console.error(`${action}: file non leggibile dopo l'upload`, { userId: caller.userId, id, path, error: downloadError })
+    return discardWith(supabase, action, id, path, 'Il file non è arrivato. Riprova a caricarlo.')
+  }
+
+  if (blob.size !== size || blob.size > RESIDENT_DOC_MAX_BYTES) {
+    console.warn(`${action}: dimensione reale diversa`, { userId: caller.userId, id, declared: size, real: blob.size })
+    return discardWith(supabase, action, id, path, 'Il file caricato non corrisponde a quello scelto. Riprova a caricarlo.')
+  }
+
+  const head = new Uint8Array(await blob.slice(0, MAGIC_BYTES_NEEDED).arrayBuffer())
+  if (!matchesMagicBytes(mimeType, head)) {
+    console.warn(`${action}: magic bytes non corrispondenti`, { userId: caller.userId, id, mimeType })
+    return discardWith(supabase, action, id, path, `${RESIDENT_DOC_TYPE_ERROR} Il contenuto del file non corrisponde al suo tipo.`)
+  }
+
+  revalidatePath('/documenti')
+  return { ok: true, id }
+}
+
+type ServerClient = Awaited<ReturnType<typeof createClient>>
+
+/**
+ * Toglie oggetto e riga di un caricamento rifiutato: prima l'oggetto (la
+ * policy DELETE del bucket richiede che la riga esista), poi la riga. Ogni
+ * errore è loggato; se la pulizia non riesce, il messaggio lo dice.
+ */
+async function discardWith(supabase: ServerClient, action: string, id: string, path: string, message: string): Promise<Fail> {
+  const { error: removeError } = await supabase.storage.from(RESIDENT_DOC_BUCKET).remove([path])
+  if (removeError) console.error(`${action}: rimozione oggetto fallita`, { id, path, error: removeError })
+
+  // Una DELETE negata da RLS non dà errore ma 0 righe: si contano.
+  const { data: deleted, error: deleteError } = await supabase.from('resident_documents').delete().eq('id', id).select('id')
+  const rowLeft = Boolean(deleteError) || !deleted || deleted.length !== 1
+  if (rowLeft) console.error(`${action}: rimozione riga fallita`, { id, deleted: deleted?.length ?? null, error: deleteError })
+
+  revalidatePath('/documenti')
+  if (removeError || rowLeft) {
+    return { ok: false, error: `${message} Il documento potrebbe comparire nell’elenco: eliminalo da lì.` }
+  }
+  return { ok: false, error: message }
 }
