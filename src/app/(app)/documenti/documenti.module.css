@@ -32,3 +32,22 @@
 /* Stato vuoto con icona e pulsante */
 .emptyIcon { display: grid; place-items: center; margin-bottom: 7px; color: #789088; }
 .emptyBtn { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; width: 100%; margin-top: 15px; padding: 11px 16px; border-radius: 12px; border: 1px solid #b6d0bc; background: #fff; color: var(--petrol); font-weight: 750; font-size: 12px; }
+
+/* Foglio di dettaglio. BottomSheet è montato in un portale fuori da .home: i token
+   (--petrol, --ink) e l'anello di focus si ridefiniscono qui. */
+.sheetBody { --petrol: #0b5149; color: #1c312d; font-size: 14px; }
+.sheetBody :is(a, button):focus-visible { outline: 3px solid #a3c9b9; outline-offset: 3px; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 7px 14px; font-size: 12px; margin: 4px 0 16px; }
+.kv dt { color: #82918a; }
+.kv dd { margin: 0; font-weight: 650; color: #34574c; overflow-wrap: anywhere; }
+.fieldLabel { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .13em; font-weight: 800; color: #70857a; margin: 18px 0 8px; }
+.verList { border: 1px solid #e0e7e2; border-radius: 14px; overflow: hidden; margin-bottom: 16px; }
+.verItem { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid #edf0eb; font-size: 12px; }
+.verItem:last-child { border-bottom: 0; }
+.verItem span { flex: 1; }
+.verItem small { color: #809188; font-size: 11px; }
+.verItem a { color: var(--petrol); font-weight: 750; font-size: 11px; min-height: 36px; display: inline-flex; align-items: center; padding: 0 6px; }
+.sheetActions { display: grid; gap: 8px; }
+.btn { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; width: 100%; padding: 11px 16px; border-radius: 12px; border: 1px solid transparent; font-weight: 750; font-size: 12px; }
+.btnPrimary { background: var(--petrol); color: #fff; }
+.btnSecondary { background: #fff; color: var(--petrol); border-color: #b6d0bc; }

@@ -106,6 +106,31 @@ export function residentDocumentUrl(storagePath: string, inline = false): string
   return `/api/download?bucket=documents&path=${encodeURIComponent(storagePath)}${inline ? '&inline=1' : ''}`
 }
 
+/**
+ * Contenuto del foglio di dettaglio di un documento: righe etichetta/valore
+ * (solo quelle con un valore), titolo dell'elenco versioni (solo se ce n'è più
+ * di una) ed etichetta del pulsante "Apri". Il componente non compone testo.
+ */
+export type ResidentDocSheet = {
+  rows: { label: string; value: string }[]
+  versionsTitle: string | null
+  openLabel: string
+}
+
+export function residentDocumentSheet(item: ResidentDocItem): ResidentDocSheet {
+  const rows: { label: string; value: string }[] = [{ label: 'Riguarda', value: item.scopeLabel }]
+  if (item.sistemaLabel) rows.push({ label: 'Impianto', value: item.sistemaLabel })
+  if (item.facts.length > 0) rows.push({ label: 'Dettagli', value: item.facts.join(' · ') })
+  rows.push({ label: 'File', value: item.fileName })
+  if (item.dateLabel) rows.push({ label: 'Data', value: item.dateLabel })
+  const n = item.versions.length
+  return {
+    rows,
+    versionsTitle: n > 1 ? `Versioni (${n})` : null,
+    openLabel: n > 1 ? 'Apri la più recente' : 'Apri',
+  }
+}
+
 export type CategoryFilter = DocumentCategory | 'all'
 
 export type ResidentDocFilters = { category: CategoryFilter; search: string }

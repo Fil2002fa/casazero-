@@ -1,12 +1,14 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Download, FileText, Search } from 'lucide-react'
+import { Download, Eye, FileText, Search } from 'lucide-react'
+import { BottomSheet } from '@/components/ui/BottomSheet'
 import { pluralize } from '@/lib/pluralize'
 import {
   EMPTY_RESIDENT_DOC_FILTERS,
   RESIDENT_DOC_CATEGORIES,
   filterResidentDocuments,
+  residentDocumentSheet,
   residentDocumentUrl,
   type CategoryFilter,
   type ResidentDocItem,
@@ -19,6 +21,9 @@ import styles from './documenti.module.css'
 export function DocumentiList({ items, uploadSlot }: { items: ResidentDocItem[]; uploadSlot?: React.ReactNode }) {
   const [category, setCategory] = useState<CategoryFilter>(EMPTY_RESIDENT_DOC_FILTERS.category)
   const [search, setSearch] = useState(EMPTY_RESIDENT_DOC_FILTERS.search)
+  // Si tiene la chiave, non la voce: il foglio legge sempre dall'elenco corrente.
+  const [openKey, setOpenKey] = useState<string | null>(null)
+  const openItem = openKey === null ? null : items.find(i => i.key === openKey) ?? null
 
   // Card verde, titolo di sezione e righe: un solo calcolo, un solo elenco.
   const view = useMemo(() => filterResidentDocuments(items, { category, search }), [items, category, search])
@@ -103,29 +108,30 @@ export function DocumentiList({ items, uploadSlot }: { items: ResidentDocItem[];
             <div key={section.category}>
               <div className={styles.groupLabel}>{section.label}</div>
               <div className={home.listCard}>
-                {section.items.map(item => <DocRow key={item.key} item={item} />)}
+                {section.items.map(item => <DocRow key={item.key} item={item} onOpen={() => setOpenKey(item.key)} />)}
               </div>
             </div>
           ))}
         </section>
       )}
+
+      {openItem && <DetailSheet item={openItem} onClose={() => setOpenKey(null)} />}
     </div>
   )
 }
 
-// Area principale e scarico sono due link fratelli, mai uno dentro l'altro.
-// L'area principale apre nel browser la versione più recente; il dettaglio con
-// l'elenco delle versioni arriva con il foglio (commit successivo).
-function DocRow({ item }: { item: ResidentDocItem }) {
+// Area principale (apre il foglio) e scarico sono due elementi fratelli, mai
+// uno dentro l'altro. L'icona scarica la versione più recente.
+function DocRow({ item, onOpen }: { item: ResidentDocItem; onOpen: () => void }) {
   const latest = item.versions[0]
   return (
     <div className={styles.docRow}>
-      <a
+      <button
+        type="button"
         className={styles.docMain}
-        href={residentDocumentUrl(latest.storagePath, true)}
-        target="_blank"
-        rel="noopener"
-        aria-label={`Apri ${item.title}`}
+        aria-haspopup="dialog"
+        aria-label={`Dettagli di ${item.title}`}
+        onClick={onOpen}
       >
         <div className={`${home.symbol} ${home.docIco} ${styles.rowSymbol}`} aria-hidden="true"><FileText size={19} /></div>
         <div className={home.lrBody}>
@@ -134,12 +140,60 @@ function DocRow({ item }: { item: ResidentDocItem }) {
             <span>{item.subtitle}</span>
             {item.versionsLabel && <span className={styles.ver}>{item.versionsLabel}</span>}
           </div>
-          {item.facts.length > 0 && <div className={home.lrSub}>{item.facts.join(' · ')}</div>}
         </div>
-      </a>
+      </button>
       <a className={styles.iconBtn} href={residentDocumentUrl(latest.storagePath)} aria-label={`Scarica ${item.title}`}>
         <Download size={18} aria-hidden="true" />
       </a>
     </div>
+  )
+}
+
+// Foglio di dettaglio: i testi vengono tutti da residentDocumentSheet.
+// BottomSheet gestisce portale, focus, Escape e ritorno del focus alla riga.
+function DetailSheet({ item, onClose }: { item: ResidentDocItem; onClose: () => void }) {
+  const sheet = residentDocumentSheet(item)
+  const latest = item.versions[0]
+  return (
+    <BottomSheet open onClose={onClose} title={item.title} subtitle="Caricato dal costruttore.">
+      <div className={styles.sheetBody}>
+        <dl className={styles.kv}>
+          {sheet.rows.map(r => (
+            <div key={r.label} style={{ display: 'contents' }}>
+              <dt>{r.label}</dt>
+              <dd>{r.value}</dd>
+            </div>
+          ))}
+        </dl>
+
+        {sheet.versionsTitle && (
+          <>
+            <span className={styles.fieldLabel} style={{ marginTop: 0 }}>{sheet.versionsTitle}</span>
+            <ul className={styles.verList} style={{ listStyle: 'none', padding: 0 }}>
+              {item.versions.map(v => (
+                <li key={v.id} className={styles.verItem}>
+                  <span>{v.dateLabel}{v.isLatest && <> <small>· più recente</small></>}</span>
+                  <a href={residentDocumentUrl(v.storagePath)} aria-label={`Scarica la versione del ${v.dateLabel}`}>Scarica</a>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+
+        <div className={styles.sheetActions}>
+          <a
+            className={`${styles.btn} ${styles.btnPrimary}`}
+            href={residentDocumentUrl(latest.storagePath, true)}
+            target="_blank"
+            rel="noopener"
+          >
+            <Eye size={15} aria-hidden="true" /> {sheet.openLabel}
+          </a>
+          <a className={`${styles.btn} ${styles.btnSecondary}`} href={residentDocumentUrl(latest.storagePath)}>
+            <Download size={15} aria-hidden="true" /> Scarica
+          </a>
+        </div>
+      </div>
+    </BottomSheet>
   )
 }

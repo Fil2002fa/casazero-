@@ -139,6 +139,22 @@ eq('nessun risultato', [none.visible, none.empty, none.filtering, none.total], [
 eq('url: scaricamento (come prima)', V.residentDocumentUrl('res/conformita/17_DiCo termico.pdf'), '/api/download?bucket=documents&path=res%2Fconformita%2F17_DiCo%20termico.pdf')
 eq('url: apertura in linea', V.residentDocumentUrl('res/a.pdf', true), '/api/download?bucket=documents&path=res%2Fa.pdf&inline=1')
 
+// --- Foglio di dettaglio ----------------------------------------------------------
+const sheetDico = V.residentDocumentSheet(byFile['07_DiCo_termico.pdf'])
+eq('foglio DiCo: righe', sheetDico.rows, [
+  { label: 'Riguarda', value: 'Residenza' },
+  { label: 'Impianto', value: 'Impianto termico' },
+  { label: 'Dettagli', value: 'Installatore: Termotecnica Colli S.r.l.' },
+  { label: 'File', value: '07_DiCo_termico.pdf' },
+  { label: 'Data', value: '21 mag 2026' },
+])
+eq('foglio DiCo: una versione, "Apri", nessun elenco', [sheetDico.openLabel, sheetDico.versionsTitle], ['Apri', null])
+const sheetAg = V.residentDocumentSheet(byFile['12_Agibilita.pdf'])
+eq('foglio senza impianto né dettagli: solo righe con valore', sheetAg.rows.map(r => r.label), ['Riguarda', 'File', 'Data'])
+const sheetLib = V.residentDocumentSheet(byFile['09_Libretto.pdf'])
+eq('foglio con tre versioni', [sheetLib.openLabel, sheetLib.versionsTitle], ['Apri la più recente', 'Versioni (3)'])
+eq('foglio due versioni', V.residentDocumentSheet(byFile['12_Agibilita.pdf']).versionsTitle, 'Versioni (2)')
+
 // --- Nessun documento -----------------------------------------------------------
 const nothing = V.filterResidentDocuments(V.toResidentDocumentItems([]), V.EMPTY_RESIDENT_DOC_FILTERS)
 eq('nessun documento: stato vuoto', [nothing.total, nothing.visible, nothing.empty, nothing.sections], [0, 0, 'none', []])
