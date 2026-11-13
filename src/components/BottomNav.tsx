@@ -15,12 +15,12 @@ const NAV_ITEMS = [
 
 export default function BottomNav() {
   const pathname = usePathname()
-  // Il dettaglio e le guide saranno adattati nei rispettivi interventi.
-  const maintenanceList = pathname === '/manutenzioni'
+  // Le guide conservano la presentazione attuale fino al loro intervento.
+  const maintenanceV5 = pathname === '/manutenzioni' || /^\/manutenzioni\/[^/]+\/?$/.test(pathname)
 
   return (
     <nav
-      className={`fixed bottom-0 inset-x-0 bg-surface border-t border-border pb-safe z-sticky${maintenanceList ? ` ${maintenanceStyles.navigation}` : ''}`}
+      className={`fixed bottom-0 inset-x-0 bg-surface border-t border-border pb-safe z-sticky${maintenanceV5 ? ` ${maintenanceStyles.navigation}` : ''}`}
       aria-label="Navigazione principale"
     >
       <div className="flex items-center justify-around h-16 px-2 max-w-lg mx-auto">
@@ -32,15 +32,15 @@ export default function BottomNav() {
               key={href}
               href={href}
               aria-label={label}
-              aria-current={maintenanceList && isActive ? 'page' : undefined}
-              className={maintenanceList ? maintenanceStyles.navItem : `flex items-center justify-center w-12 h-12 rounded-xl transition-colors ${
+              aria-current={maintenanceV5 && isActive ? 'page' : undefined}
+              className={maintenanceV5 ? maintenanceStyles.navItem : `flex items-center justify-center w-12 h-12 rounded-xl transition-colors ${
                 isActive
                   ? 'text-brand-dark bg-brand-light'
                   : 'text-text-secondary hover:text-brand-medium hover:bg-background'
               }`}
             >
-              <Icon size={maintenanceList ? 20 : 22} strokeWidth={maintenanceList ? 1.8 : isActive ? 2.2 : 1.6} />
-              {maintenanceList && <span>{label}</span>}
+              <Icon size={maintenanceV5 ? 20 : 22} strokeWidth={maintenanceV5 ? 1.8 : isActive ? 2.2 : 1.6} />
+              {maintenanceV5 && <span>{label}</span>}
             </Link>
           )
         })}
