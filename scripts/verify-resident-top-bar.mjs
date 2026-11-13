@@ -1,8 +1,8 @@
 // ============================================================
 // CasaZero — verifica della barra in alto del residente.
 // Uso:  npm run verify:topbar
-// COSA GARANTISCE: la barra compare solo su /, /documenti, /fascicolo, /profilo
-// (anche con slash finale) e mai sulle manutenzioni, sulla guida e su
+// COSA GARANTISCE: la barra del layout compare solo su / e /documenti
+// (anche con slash finale) e mai su fascicolo, profilo, manutenzioni, guida e
 // /profilo/dati-personali; il sottotitolo "residenza · interno" e i testi degli
 // stati degradati (errore, nessuna unità, residenza senza nome).
 // exit 0 = ok; 1 = caso divergente; 2 = import fallito.
@@ -25,10 +25,11 @@ function eq(label, got, want) {
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${label}${ok ? '' : ` — got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`}`)
 }
 
-for (const p of ['/', '/documenti', '/fascicolo', '/profilo', '/documenti/', '/profilo/']) {
+for (const p of ['/', '/documenti', '/documenti/']) {
   eq(`visibile su ${p}`, T.showsResidentTopBar(p), true)
 }
 for (const p of [
+  '/fascicolo', '/profilo', '/fascicolo/', '/profilo/',
   '/manutenzioni', '/manutenzioni/abc', '/manutenzioni/abc/guida',
   '/profilo/dati-personali', '/documenti/xyz', '/admin', '/auth/login', '',
 ]) {

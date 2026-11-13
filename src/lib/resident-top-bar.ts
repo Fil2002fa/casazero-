@@ -7,9 +7,10 @@
  * (manutenzioni/page.tsx), così le due barre dicono la stessa cosa.
  */
 
-// Solo queste route, a percorso esatto: le manutenzioni tengono la loro barra
-// (MaintenanceHeader) e /profilo/dati-personali ha un header proprio.
-const TOP_BAR_PATHS = new Set(['/', '/documenti', '/fascicolo', '/profilo'])
+// Solo queste route, a percorso esatto. Manutenzioni, fascicolo e profilo montano
+// la loro barra nella pagina (MaintenanceHeader); la guida e
+// /profilo/dati-personali hanno un header proprio. Una barra sola per route.
+const TOP_BAR_PATHS = new Set(['/', '/documenti'])
 
 export function showsResidentTopBar(pathname: string): boolean {
   const normalized = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname
