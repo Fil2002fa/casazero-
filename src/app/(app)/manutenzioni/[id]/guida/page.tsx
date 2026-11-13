@@ -22,7 +22,7 @@ export default async function ResidentMaintenanceGuidePage({ params }: { params:
   const supabase = await createClient()
   const { data: item, error: itemError } = await supabase
     .from('maintenance_items')
-    .select('id, template_id, unit_id, completion_mode, activation_status, maintenance_templates!inner(completion_mode, is_active)')
+    .select('id, template_id, unit_id, residence_id, completion_mode, activation_status, maintenance_templates!inner(completion_mode, is_active, scope)')
     .eq('id', id)
     .maybeSingle()
 
@@ -34,7 +34,7 @@ export default async function ResidentMaintenanceGuidePage({ params }: { params:
 
   const { data: membership, error: membershipError } = await supabase
     .from('unit_members')
-    .select('unit_id')
+    .select('unit_id, units(residence_id)')
     .eq('profile_id', profile.id)
     .is('ended_at', null)
     .maybeSingle()
@@ -47,13 +47,17 @@ export default async function ResidentMaintenanceGuidePage({ params }: { params:
   const template = item.maintenance_templates as unknown as {
     completion_mode: 'residente' | 'amministratore' | 'promemoria' | null
     is_active: boolean
+    scope: string
   } | null
+  const membershipUnit = membership?.units as unknown as { residence_id: string } | null
   const liveItem = item as unknown as LiveStatusItem
   const eligible = isResidentGuideAvailable({
     templateId: item.template_id,
     isClient: profile.role === 'client',
     isOwnUnit: Boolean(item.unit_id && membership?.unit_id === item.unit_id),
     isApartmentItem: item.unit_id !== null,
+    isCommonItem: item.unit_id === null && template?.scope === 'condominium',
+    isOwnResidence: Boolean(membership?.unit_id && membershipUnit?.residence_id === item.residence_id),
     completionMode: resolveCompletionMode(liveItem),
     activationStatus: item.activation_status,
     templateActive: template?.is_active === true,

@@ -133,7 +133,7 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
   // Unità attiva del client per il form di completamento residente
   const { data: membership, error: membershipError } = await supabase
     .from('unit_members')
-    .select('unit_id')
+    .select('unit_id, units(residence_id)')
     .eq('profile_id', profile.id)
     .is('ended_at', null)
     .maybeSingle()
@@ -148,11 +148,14 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
     !membershipError &&
     membership?.unit_id === item.unit_id
 
+  const membershipUnit = membership?.units as unknown as { residence_id: string } | null
   const canStartGuide = isResidentGuideAvailable({
     templateId: item.template_id,
     isClient: profile.role === 'client',
     isOwnUnit: Boolean(item.unit_id && !membershipError && membership?.unit_id === item.unit_id),
     isApartmentItem: item.unit_id !== null,
+    isCommonItem: isCommon && tpl?.scope === 'condominium',
+    isOwnResidence: Boolean(!membershipError && membership?.unit_id && membershipUnit?.residence_id === item.residence_id),
     completionMode: mode,
     activationStatus: item.activation_status,
     templateActive: tpl?.is_active === true,
