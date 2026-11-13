@@ -135,6 +135,10 @@ coherent('ricerca "a"', searched)
 const none = V.filterResidentDocuments(items, { category: 'all', search: 'zzzz' })
 eq('nessun risultato', [none.visible, none.empty, none.filtering, none.total], [0, 'no-results', true, 5])
 
+// --- Indirizzo del file ---------------------------------------------------------
+eq('url: scaricamento (come prima)', V.residentDocumentUrl('res/conformita/17_DiCo termico.pdf'), '/api/download?bucket=documents&path=res%2Fconformita%2F17_DiCo%20termico.pdf')
+eq('url: apertura in linea', V.residentDocumentUrl('res/a.pdf', true), '/api/download?bucket=documents&path=res%2Fa.pdf&inline=1')
+
 // --- Nessun documento -----------------------------------------------------------
 const nothing = V.filterResidentDocuments(V.toResidentDocumentItems([]), V.EMPTY_RESIDENT_DOC_FILTERS)
 eq('nessun documento: stato vuoto', [nothing.total, nothing.visible, nothing.empty, nothing.sections], [0, 0, 'none', []])

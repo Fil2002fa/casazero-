@@ -2,11 +2,11 @@ import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import { requireProfile } from '@/lib/auth'
 import { UploadDocumentForm } from '@/components/UploadDocumentForm'
-import { displayDate } from '@/lib/document-rows'
 import { loadResidenceDocumentRows } from '@/lib/document-rows.server'
-import { residentDocumentFacts } from '@/lib/resident-document-facts'
+import { toResidentDocumentItems } from '@/lib/resident-documents-view'
 import type { Profile } from '@/types/database'
-import { DocumentiList, type DocItem } from './DocumentiList'
+import home from '../home.module.css'
+import { DocumentiList } from './DocumentiList'
 
 export const metadata: Metadata = { title: 'Documenti' }
 
@@ -65,41 +65,28 @@ export default async function DocumentiPage() {
 
   if (residenceError || docsError) {
     return (
-      <div className="p-4 space-y-6 pb-safe">
-        <h1 className="font-serif text-[22px] font-semibold text-text-primary">Documenti</h1>
-        <div className="bg-surface rounded-xl border border-border p-8 text-center">
-          <p className="text-base text-text-secondary">
-            Non è stato possibile caricare i documenti. Riprova tra poco.
-          </p>
+      <div className={`${home.home} pb-safe`}>
+        <div className={home.eyebrow}>La tua casa</div>
+        <h1 className={home.pageTitle}>Documenti<span>.</span></h1>
+        <div className={home.empty}>
+          <strong>Documenti non disponibili</strong>
+          Non è stato possibile caricarli. Riprova tra poco.
         </div>
       </div>
     )
   }
 
-  // Data in riga da displayDate, lo stesso helper della dashboard: data del
-  // documento estratta, altrimenti quella inserita all'upload, altrimenti il
-  // caricamento. Formattata qui sul server e passata come stringa:
-  // formattarla nel client darebbe testo diverso fra Node e Safari e un
-  // mismatch di hydration. I dati estratti arrivano già composti, e solo
-  // quelli che il residente deve vedere (residentDocumentFacts).
-  const docs: DocItem[] = rows.map(doc => ({
-    id: doc.id,
-    title: doc.title,
-    category: doc.category,
-    file_name: doc.file_name,
-    storage_path: doc.storage_path,
-    formattedDate: new Date(displayDate(doc)).toLocaleDateString('it-IT', {
-      day: 'numeric', month: 'short', year: 'numeric',
-    }),
-    facts: residentDocumentFacts(doc),
-  }))
+  // Una voce per file+tipo (versioni raggruppate, come nella home), con titolo,
+  // data, riga sotto e dati estratti già composti sul server: la data passa da
+  // formatDateIT, identica in Node e in Safari, quindi niente mismatch di
+  // hydration. I dati estratti sono solo quelli che il residente deve vedere
+  // (residentDocumentFacts).
+  const items = toResidentDocumentItems(rows)
 
   return (
-    <div className="p-4 space-y-6 pb-safe">
-      <DocumentiList
-        docs={docs}
-        uploadSlot={canUpload && residenceId ? <UploadDocumentForm residenceId={residenceId} /> : undefined}
-      />
-    </div>
+    <DocumentiList
+      items={items}
+      uploadSlot={canUpload && residenceId ? <UploadDocumentForm residenceId={residenceId} /> : undefined}
+    />
   )
 }

@@ -101,6 +101,11 @@ export function toResidentDocumentItems(docs: readonly DocRow[]): ResidentDocIte
   })
 }
 
+/** Indirizzo del file via /api/download: scaricamento, oppure apertura in linea con inline=1. */
+export function residentDocumentUrl(storagePath: string, inline = false): string {
+  return `/api/download?bucket=documents&path=${encodeURIComponent(storagePath)}${inline ? '&inline=1' : ''}`
+}
+
 export type CategoryFilter = DocumentCategory | 'all'
 
 export type ResidentDocFilters = { category: CategoryFilter; search: string }

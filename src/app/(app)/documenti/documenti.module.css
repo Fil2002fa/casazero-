@@ -1,0 +1,34 @@
+/* Pagina Documenti del residente — blocchi che la home non ha, dal mockup
+   docs/handoffs/casazero-documenti-mockup-v1.html (righe 17-27 e 38-45).
+   Token, titoli, card verde, sezioni, lista e stato vuoto vengono da
+   ../home.module.css (la pagina è avvolta in .home, da cui ereditano --petrol
+   e --ink). globals.css non si tocca. */
+
+/* Filtri per categoria: una riga scorrevole */
+.filters { display: flex; gap: 7px; overflow-x: auto; padding: 18px 0 12px; scrollbar-width: none; }
+.filters::-webkit-scrollbar { display: none; }
+.filter { border: 1px solid #dde6dd; background: #fff; padding: 9px 13px; border-radius: 99px; font-size: 12px; font-weight: 700; white-space: nowrap; color: #65776f; min-height: 36px; flex-shrink: 0; }
+.filterActive { color: #fff; background: var(--petrol); border-color: var(--petrol); }
+
+/* Ricerca. 16px: sotto, Safari su iPhone ingrandisce la pagina alla messa a fuoco. */
+.searchWrap { position: relative; }
+.searchWrap input { width: 100%; padding: 12px 12px 12px 37px; border: 1px solid #e1e8e1; border-radius: 13px; background: #fff; color: var(--ink); font: inherit; font-size: 16px; min-height: 44px; }
+.searchWrap input:focus-visible { outline: 3px solid #a3c9b9; outline-offset: 3px; }
+.searchIcon { position: absolute; top: 14px; left: 13px; color: #8ba098; display: grid; place-items: center; pointer-events: none; }
+
+/* Gruppi per categoria dentro "Dal costruttore" */
+.groupLabel { font-size: 10px; text-transform: uppercase; letter-spacing: .13em; font-weight: 800; color: #78897e; margin: 16px 1px 9px; }
+
+/* Riga documento: area principale + azione di scarico, mai uno dentro l'altra */
+.docRow { display: flex; align-items: center; gap: 6px; border-bottom: 1px solid #edf0eb; padding-right: 10px; }
+.docRow:last-child { border-bottom: 0; }
+.docMain { flex: 1; min-width: 0; background: #fff; text-align: left; display: flex; align-items: center; gap: 12px; padding: 13px 6px 13px 14px; color: var(--ink); min-height: 62px; }
+/* Specificità doppia: batte .symbol (40px) di home.module.css qualunque sia l'ordine dei fogli. */
+.docMain .rowSymbol { width: 36px; height: 36px; flex: 0 0 36px; }
+.docMeta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 5px; font-size: 11px; color: #78887f; }
+.ver { font-size: 10px; font-weight: 750; color: #405e53; background: #eaf0e9; border-radius: 100px; padding: 2px 8px; }
+.iconBtn { width: 40px; height: 40px; flex: 0 0 40px; border: 1px solid #d5e3d9; border-radius: 11px; background: #f4f9f5; display: grid; place-items: center; color: var(--petrol); }
+
+/* Stato vuoto con icona e pulsante */
+.emptyIcon { display: grid; place-items: center; margin-bottom: 7px; color: #789088; }
+.emptyBtn { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; width: 100%; margin-top: 15px; padding: 11px 16px; border-radius: 12px; border: 1px solid #b6d0bc; background: #fff; color: var(--petrol); font-weight: 750; font-size: 12px; }

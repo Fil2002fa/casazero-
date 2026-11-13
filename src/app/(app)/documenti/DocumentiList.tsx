@@ -1,197 +1,145 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { FileText, Download } from 'lucide-react'
-import { Input, Label } from '@/components/ui/Input'
-import { buttonVariants } from '@/components/ui/Button'
+import { Download, FileText, Search } from 'lucide-react'
 import { pluralize } from '@/lib/pluralize'
-import { humanizeDocumentTitle } from '@/lib/documentTitle'
-import type { DocumentCategory } from '@/types/database'
+import {
+  EMPTY_RESIDENT_DOC_FILTERS,
+  RESIDENT_DOC_CATEGORIES,
+  filterResidentDocuments,
+  residentDocumentUrl,
+  type CategoryFilter,
+  type ResidentDocItem,
+} from '@/lib/resident-documents-view'
+import home from '../home.module.css'
+import styles from './documenti.module.css'
 
-const CATEGORIES: { value: DocumentCategory; label: string; icon: string }[] = [
-  { value: 'proprieta',      label: 'Proprietà',     icon: '🏠' },
-  { value: 'tecnici',        label: 'Tecnici',        icon: '⚙️' },
-  { value: 'energetici',     label: 'Energetici',     icon: '⚡' },
-  { value: 'conformita',     label: 'Conformità',     icon: '✅' },
-  { value: 'amministrativi', label: 'Amministrativi', icon: '📋' },
-]
+// Tutti i documenti sono già in memoria (le stringhe sono composte sul server,
+// vedi toResidentDocumentItems): filtri e ricerca non passano dal server.
+export function DocumentiList({ items, uploadSlot }: { items: ResidentDocItem[]; uploadSlot?: React.ReactNode }) {
+  const [category, setCategory] = useState<CategoryFilter>(EMPTY_RESIDENT_DOC_FILTERS.category)
+  const [search, setSearch] = useState(EMPTY_RESIDENT_DOC_FILTERS.search)
 
-// La data arriva già formattata dal server: formattarla qui darebbe testo
-// diverso fra Node e Safari (ICU e fuso) e quindi un mismatch di hydration.
-export type DocItem = {
-  id: string
-  title: string
-  category: DocumentCategory
-  file_name: string
-  storage_path: string
-  formattedDate: string
-  // Dati estratti già scelti e composti sul server: validità, classe,
-  // oggetto, chi rilascia la garanzia, installatore, compagnia. Vuoto se non
-  // ce ne sono.
-  facts: string[]
-}
+  // Card verde, titolo di sezione e righe: un solo calcolo, un solo elenco.
+  const view = useMemo(() => filterResidentDocuments(items, { category, search }), [items, category, search])
 
-type CategoryFilter = DocumentCategory | 'all'
+  function clearFilters() {
+    setCategory('all')
+    setSearch('')
+  }
 
-// Tutti i documenti sono già in memoria: filtri e ricerca non passano dal server.
-export function DocumentiList({ docs, uploadSlot }: { docs: DocItem[]; uploadSlot?: React.ReactNode }) {
-  const [category, setCategory] = useState<CategoryFilter>('all')
-  const [search, setSearch] = useState('')
-
-  const term = search.trim().toLocaleLowerCase('it')
-
-  const visible = useMemo(
-    () => docs.filter(d =>
-      (category === 'all' || d.category === category) &&
-      (!term || searchText(d).includes(term))
-    ),
-    [docs, category, term]
-  )
-
-  const grouped = useMemo(() => {
-    const map = new Map<DocumentCategory, DocItem[]>()
-    for (const cat of CATEGORIES) map.set(cat.value, [])
-    for (const doc of visible) map.get(doc.category)?.push(doc)
-    return map
-  }, [visible])
-
-  const hasFilter = search !== '' || category !== 'all'
+  const filters: { value: CategoryFilter; label: string }[] = [
+    { value: 'all', label: 'Tutti' },
+    ...RESIDENT_DOC_CATEGORIES,
+  ]
 
   return (
-    <>
-      <header>
-        <h1 className="font-serif text-[22px] font-semibold text-text-primary">Documenti</h1>
-        <p className="text-sm text-text-secondary mt-0.5">{pluralize(visible.length, 'documento', 'documenti')}</p>
-      </header>
+    <div className={`${home.home} pb-safe`}>
+      <div>
+        <div className={home.eyebrow}>La tua casa</div>
+        <h1 className={home.pageTitle}>Documenti<span>.</span></h1>
+        <p className={home.lead}>Quello che ti ha consegnato il costruttore. Tutto in un posto.</p>
+      </div>
 
       {uploadSlot}
 
-      {/* Ricerca */}
-      <form role="search" onSubmit={e => e.preventDefault()} className="flex gap-2">
-        <Label htmlFor="doc-search" className="sr-only">Cerca documento</Label>
-        <Input
-          id="doc-search"
-          type="search"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Cerca documento…"
-          className="flex-1"
-        />
-        {hasFilter && (
-          <button
-            type="button"
-            onClick={() => { setSearch(''); setCategory('all') }}
-            className={buttonVariants('secondary', 'default', 'px-3')}
-            aria-label="Cancella ricerca"
-          >
-            ✕
-          </button>
-        )}
-      </form>
+      <section className={home.overview} aria-label="Riepilogo documenti">
+        <p>L&apos;archivio della tua casa</p>
+        <h2>Tutte le carte, quando ti servono.</h2>
+        <div className={home.counts}>
+          <span><strong>{view.total}</strong> dal costruttore</span>
+        </div>
+      </section>
 
-      {/* Filtri categoria: una riga scorrevole, con spazio per il focus. */}
-      <div className="flex flex-nowrap gap-2 overflow-x-auto -mx-4 px-4 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <Chip label="Tutti" active={category === 'all'} onClick={() => setCategory('all')} />
-        {CATEGORIES.map(c => (
-          <Chip key={c.value} label={c.label} active={category === c.value} onClick={() => setCategory(c.value)} />
+      <div className={styles.filters} role="group" aria-label="Filtra i documenti">
+        {filters.map(f => (
+          <button
+            key={f.value}
+            type="button"
+            className={`${styles.filter}${category === f.value ? ` ${styles.filterActive}` : ''}`}
+            aria-pressed={category === f.value}
+            onClick={() => setCategory(f.value)}
+          >
+            {f.label}
+          </button>
         ))}
       </div>
 
-      {/* Lista */}
-      {visible.length === 0 ? (
-        <div className="bg-surface rounded-xl border border-border p-8 text-center">
-          <p className="text-base text-text-secondary break-words">
-            {term ? `Nessun risultato per "${search.trim()}".` : category !== 'all' ? 'Nessun documento in questa categoria' : 'Nessun documento caricato.'}
-          </p>
-          {category !== 'all' && (
-            <button
-              type="button"
-              onClick={() => setCategory('all')}
-              className="inline-flex items-center min-h-11 text-sm text-brand-medium underline rounded-lg focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20"
-            >
-              Mostra tutti
-            </button>
+      <div className={styles.searchWrap}>
+        <span className={styles.searchIcon} aria-hidden="true"><Search size={17} /></span>
+        <input
+          type="search"
+          aria-label="Cerca documento"
+          placeholder="Cerca un documento"
+          autoComplete="off"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+      </div>
+
+      {view.empty === 'none' ? (
+        <section aria-label="Dal costruttore" style={{ marginTop: 25 }}>
+          <div className={home.empty}>
+            <strong>Nessun documento</strong>
+            I documenti della tua casa compariranno qui appena caricati.
+          </div>
+        </section>
+      ) : view.empty === 'no-results' ? (
+        <div className={home.empty} style={{ marginTop: 22 }}>
+          <span className={styles.emptyIcon} aria-hidden="true"><Search size={22} /></span>
+          <strong>Nessun documento trovato</strong>
+          Prova con un&apos;altra parola o togli i filtri.
+          {view.filtering && (
+            <button type="button" className={styles.emptyBtn} onClick={clearFilters}>Mostra tutti i documenti</button>
           )}
         </div>
-      ) : category !== 'all' ? (
-        <div className="space-y-2">
-          {visible.map(doc => <DocCard key={doc.id} doc={doc} />)}
-        </div>
       ) : (
-        <div className="space-y-6">
-          {CATEGORIES.map(cat => {
-            const list = grouped.get(cat.value) ?? []
-            if (!list.length) return null
-            return (
-              <section key={cat.value} className="space-y-2">
-                <h2 className="text-[13px] font-medium text-neutral-500 flex items-center gap-1.5">
-                  {cat.icon} {cat.label}
-                  <span className="font-normal">({list.length})</span>
-                </h2>
-                <div className="space-y-2">
-                  {list.map(doc => <DocCard key={doc.id} doc={doc} />)}
-                </div>
-              </section>
-            )
-          })}
-        </div>
+        <section aria-label="Dal costruttore">
+          <div className={home.sectionHeader}>
+            <h2 className={home.sectionTitle}>Dal costruttore</h2>
+            <span className={home.sectionCount}>{pluralize(view.visible, 'documento', 'documenti')}</span>
+          </div>
+          {view.sections.map(section => (
+            <div key={section.category}>
+              <div className={styles.groupLabel}>{section.label}</div>
+              <div className={home.listCard}>
+                {section.items.map(item => <DocRow key={item.key} item={item} />)}
+              </div>
+            </div>
+          ))}
+        </section>
       )}
-    </>
+    </div>
   )
 }
 
-// Testo in cui cerca la ricerca, come nell'archivio della dashboard: il
-// titolo com'è salvato, la sua forma leggibile ("garanzia caldaia" trova
-// "certificato_garanzia_caldaia") e i dati estratti mostrati in riga. Solo
-// doc.facts, già filtrati per il residente, mai tutti i dati estratti:
-// cercando una P.IVA o un numero di polizza si scoprirebbe quale documento
-// li contiene.
-function searchText(doc: DocItem): string {
-  return [doc.title, humanizeDocumentTitle(doc.title), ...doc.facts].join(' ').toLocaleLowerCase('it')
-}
-
-function DocCard({ doc }: { doc: DocItem }) {
+// Area principale e scarico sono due link fratelli, mai uno dentro l'altro.
+// L'area principale apre nel browser la versione più recente; il dettaglio con
+// l'elenco delle versioni arriva con il foglio (commit successivo).
+function DocRow({ item }: { item: ResidentDocItem }) {
+  const latest = item.versions[0]
   return (
-    <a
-      href={`/api/download?bucket=documents&path=${encodeURIComponent(doc.storage_path)}`}
-      aria-label={`Scarica ${humanizeDocumentTitle(doc.title)}`}
-      className="flex flex-wrap items-start gap-3 p-4 bg-surface rounded-xl border border-border focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20"
-    >
-      <FileText className="w-5 h-5 mt-1 text-neutral-400 flex-shrink-0" strokeWidth={1.6} aria-hidden="true" />
-      <div className="flex-1 min-w-0">
-        <p className="text-base leading-snug font-semibold text-text-primary break-words">{humanizeDocumentTitle(doc.title)}</p>
-        {doc.facts.length > 0 && (
-          <p className="text-sm leading-relaxed text-text-secondary mt-1 [overflow-wrap:anywhere]">{doc.facts.join(' · ')}</p>
-        )}
-        {/* Nome file e data su righe distinte, leggibili anche su mobile. */}
-        <p className="flex flex-col gap-1 mt-2 text-xs leading-relaxed text-text-secondary">
-          <span className="min-w-0 max-w-full leading-snug break-words" title={doc.file_name}>
-            {doc.file_name.split(/(?<=[_.-])/).map((part, index) => (
-              <span key={index}>{part}<wbr /></span>
-            ))}
-          </span>
-          <span className="flex-shrink-0 whitespace-nowrap">· {doc.formattedDate}</span>
-        </p>
-      </div>
-      <span className="ml-8 inline-flex min-h-11 items-center gap-2 rounded-lg bg-brand-light px-3 text-sm font-medium text-brand-dark">
-        <Download className="w-4 h-4 flex-shrink-0" strokeWidth={1.6} aria-hidden="true" />
-        Scarica
-      </span>
-    </a>
-  )
-}
-
-function Chip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`flex-shrink-0 flex items-center h-11 px-4 rounded-full text-sm font-medium focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20 ${
-        active ? 'bg-brand-dark text-white' : 'bg-surface border border-border text-text-secondary'
-      }`}
-    >
-      {label}
-    </button>
+    <div className={styles.docRow}>
+      <a
+        className={styles.docMain}
+        href={residentDocumentUrl(latest.storagePath, true)}
+        target="_blank"
+        rel="noopener"
+        aria-label={`Apri ${item.title}`}
+      >
+        <div className={`${home.symbol} ${home.docIco} ${styles.rowSymbol}`} aria-hidden="true"><FileText size={19} /></div>
+        <div className={home.lrBody}>
+          <div className={`${home.lrTitle} ${home.lrClamp}`} title={item.fileName}>{item.title}</div>
+          <div className={styles.docMeta}>
+            <span>{item.subtitle}</span>
+            {item.versionsLabel && <span className={styles.ver}>{item.versionsLabel}</span>}
+          </div>
+          {item.facts.length > 0 && <div className={home.lrSub}>{item.facts.join(' · ')}</div>}
+        </div>
+      </a>
+      <a className={styles.iconBtn} href={residentDocumentUrl(latest.storagePath)} aria-label={`Scarica ${item.title}`}>
+        <Download size={18} aria-hidden="true" />
+      </a>
+    </div>
   )
 }
