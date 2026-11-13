@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0b5149"><title>CasaZero · Documenti residente · Studio UX v1</title><style>
+/* ===== Token e componenti ripresi dal mockup v6 (non modificati) ===== */
+:root{--petrol:#0b5149;--deep:#153b36;--ink:#1c312d;--muted:#6f817b;--line:#e0e7e2;--paper:#ffffff;--canvas:#f0f3ee;--cream:#f4f7f0;--mint:#deebe4;--amber:#98621e;--amber-bg:#fff3df;--red:#b34b40;--red-bg:#fcebe6;--green:#32765e;--green-bg:#e7f2ea;--white:#fff;--serif:Georgia,'Iowan Old Style','Times New Roman',serif;--sans:'Inter','Aptos','Segoe UI',system-ui,-apple-system,sans-serif}
+*{box-sizing:border-box}body{margin:0;color:var(--ink);font-family:var(--sans);font-size:14px;background:#ffffff;-webkit-font-smoothing:antialiased}button,input{font:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible,label:focus-within{outline:3px solid #a3c9b9;outline-offset:3px}button:disabled{opacity:.5;cursor:default}
+.stage{min-height:100dvh;display:flex;justify-content:center;align-items:center;gap:46px;padding:24px}
+.phone{width:390px;max-width:100%;height:min(840px,calc(100dvh - 48px));min-height:580px;background:var(--paper);border:6px solid #1c3430;box-shadow:0 30px 65px #133f3330,0 2px 7px #0000001f;border-radius:36px;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.app-top{padding:20px 20px 11px;background:var(--paper);border-bottom:1px solid #eef0eb;flex-shrink:0;z-index:3}
+.brand-row{display:flex;align-items:center;justify-content:space-between}.brand-left{display:flex;align-items:center;gap:10px}.brand-mark{width:31px;height:31px;border-radius:11px;background:var(--petrol);display:grid;place-items:center;color:white;font-weight:750;font-size:11px;letter-spacing:-.07em}.brand-name{font-weight:740;letter-spacing:-.04em;font-size:17px}.brand-sub{font-size:10px;color:var(--muted);font-weight:600;margin-top:1px}
+.icon-btn{border:1px solid var(--line);width:34px;height:34px;border-radius:11px;background:white;display:grid;place-items:center;color:var(--deep)}
+.screen{flex:1;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#c5d5c9 transparent}.view{padding:23px 20px 34px}
+.eyebrow{color:var(--petrol);font-weight:780;font-size:10px;letter-spacing:.15em;text-transform:uppercase}.demo-label{font-size:10px;color:#7a8a80;background:#eaf0e9;border-radius:6px;padding:3px 7px;margin-left:3px;letter-spacing:0}
+.page-title{font:normal 40px/1.08 var(--serif);letter-spacing:-.045em;color:#183d36;margin:8px 0 10px}.lead{line-height:1.6;color:#62766e;font-size:13px;margin:0 0 21px}
+.chip{display:inline-flex;align-items:center;gap:5px;border-radius:100px;padding:6px 10px;font-size:10px;font-weight:750;line-height:1.3;background:#eaf0e9;color:#405e53;white-space:nowrap}.chip.neutral{background:#edf2ef;color:#526b61}
+.overview{background:var(--petrol);color:white;padding:20px;border-radius:20px;position:relative;overflow:hidden;box-shadow:0 8px 22px #14564915}.overview:after{content:'';position:absolute;width:170px;height:170px;border:1px solid #ffffff20;border-radius:50%;right:-75px;top:-70px;box-shadow:0 0 0 32px #ffffff09,0 0 0 65px #ffffff06}.overview p{font-size:11px;color:#cce1d9;margin:0 0 5px}.overview h2{font:normal 25px/1.23 var(--serif);margin:0 0 14px;max-width:245px}.overview .counts{display:flex;gap:9px;position:relative;z-index:1}.overview .count{padding:8px 12px;border-radius:12px;background:#ffffff19;font-size:11px}.overview .count strong{font-size:17px;margin-right:4px}
+.overview .ov-next{position:relative;z-index:1;margin-top:15px;width:100%;text-align:left;border:0;border-radius:14px;background:#ffffff;color:var(--ink);padding:13px 13px 13px 14px;display:flex;gap:11px;align-items:center}.ov-next .ov-title{font-weight:780;font-size:13px;line-height:1.3}.ov-next .ov-sub{font-size:11px;color:#6f817b;margin-top:3px}.ov-next .ov-body{flex:1;min-width:0}
+.filters{display:flex;gap:7px;overflow-x:auto;padding:18px 0 12px;scrollbar-width:none}.filters::-webkit-scrollbar{display:none}.filter{border:1px solid #dde6dd;background:white;padding:9px 13px;border-radius:99px;font-size:12px;font-weight:700;white-space:nowrap;color:#65776f;min-height:36px}.filter.active{color:white;background:var(--petrol);border-color:var(--petrol)}
+.search-wrap{position:relative}.search-wrap input{width:100%;padding:12px 12px 12px 37px;border:1px solid #e1e8e1;border-radius:13px;background:white;color:var(--ink)}.search-wrap span{position:absolute;top:12px;left:13px;color:#8ba098}
+.section-header{display:flex;justify-content:space-between;align-items:center;margin:25px 0 12px}.section-title{font:normal 23px/1.15 var(--serif);letter-spacing:-.035em;color:#1e413b;margin:0}.section-count{font-size:11px;color:#7d8c83}
+.group-label{font-size:10px;text-transform:uppercase;letter-spacing:.13em;font-weight:800;color:#78897e;margin:16px 1px 9px}
+.maint-symbol{border-radius:13px;background:#eaf2ec;color:var(--petrol);display:grid;place-items:center;width:36px;height:36px;flex:0 0 36px}.maint-arrow{color:#9caea2;flex-shrink:0}
+.list-card{border:1px solid #e0e7e0;border-radius:17px;background:white;box-shadow:0 3px 13px #294b301f;overflow:hidden}.lr-body{flex:1;min-width:0}.lr-title{font-weight:760;font-size:13px;line-height:1.3}.lr-sub{font-size:11px;color:#78887f;margin-top:3px}
+.doc-ico{background:#f1f4f0!important;color:#526b61!important}.doc-type{font-size:9px;font-weight:800;letter-spacing:.08em;color:#7d8c83;background:#f1f4f0;border-radius:6px;padding:3px 6px;text-transform:uppercase}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;border-radius:12px;padding:11px 16px;border:1px solid transparent;font-weight:750;font-size:12px;width:100%}.btn.primary{background:var(--petrol);color:white}.btn.secondary{background:white;color:var(--petrol);border:1px solid #b6d0bc}.btn.ghost{background:transparent;color:var(--petrol)}
+.note{border-left:3px solid #d5ad61;background:#fff6e8;border-radius:8px;padding:12px;color:#85662d;font-size:12px;line-height:1.55;margin:16px 0}.note.info{border-color:#97baaa;background:#edf4ef;color:#345b4b}
+.empty{border:1px dashed #ccd9cf;text-align:center;border-radius:16px;padding:28px 17px;color:#789088;line-height:1.5}.empty strong{display:block;color:var(--ink);margin:7px 0}
+.foot-hint{font-size:11px;color:#72857c;line-height:1.5;margin-top:6px}
+.bottom-nav{height:67px;padding:8px 6px calc(8px + env(safe-area-inset-bottom,0px));border-top:1px solid #e8ede7;background:white;display:flex;justify-content:space-around;flex-shrink:0}.nav-item{min-width:58px;border:0;background:transparent;color:#93a19a;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10px;font-weight:700}.nav-item.active{color:var(--petrol)}
+.overlay{position:absolute;inset:0;background:#143f3773;z-index:8;display:flex;align-items:end}.sheet{position:relative;background:#fff;width:100%;max-height:92%;overflow:auto;border-radius:25px 25px 0 0;padding:18px 22px 25px;box-shadow:0 -10px 30px #12372d24}.sheet-handle{width:40px;height:4px;background:#cddbd1;border-radius:10px;margin:0 auto 15px}.sheet-title{font:normal 27px/1.2 var(--serif);margin:0 44px 8px 0}.sheet-desc{font-size:12px;color:#65786d;line-height:1.6;margin:0 0 17px}.sheet-actions{display:grid;gap:8px}.sheet-close{position:absolute;right:19px;top:14px;border:0;background:#f0f4f0;color:#385747;border-radius:10px;width:36px;height:36px;font-size:18px}
+.toast{position:absolute;left:14px;right:14px;bottom:76px;background:#133f36;color:white;border-radius:12px;padding:12px 15px;font-size:12px;line-height:1.45;z-index:12;display:none;box-shadow:0 5px 22px #123b2e36}.toast.show{display:block}
+.info-pane{max-width:330px;padding:10px}.info-pane h1{font:normal 42px/1.1 var(--serif);letter-spacing:-.03em;color:#183b33;margin:8px 0 12px}.info-pane p{line-height:1.7;color:#576e62}.info-pane ul{line-height:1.7;color:#456055;padding-left:19px}.info-pane .quiet{font-size:11px;color:#81958a}.info-pane .sm-label{font-size:11px;letter-spacing:.14em;color:#436e5c;font-weight:800;text-transform:uppercase}.switcher{display:flex;gap:8px;flex-wrap:wrap;margin:15px 0}.switcher button{border:1px solid #b6d0bc;border-radius:10px;background:#fff;color:var(--petrol);font-weight:800;padding:11px 12px;min-height:42px}.switcher button.selected{background:var(--petrol);color:white}
+@media(max-width:830px){html,body{height:100%;overflow:hidden}.stage{padding:0;align-items:stretch;gap:0;height:100dvh;min-height:0;overflow:hidden;background:var(--paper)}.phone{flex:1;height:100dvh;min-height:0;width:100%;max-width:100%;border-radius:0;border:0;box-shadow:none}.info-pane{display:none}.app-top{padding-top:calc(15px + env(safe-area-inset-top,0px))}}
+@media(max-width:400px){.view{padding-left:18px;padding-right:18px}.app-top{padding:15px 18px 10px}}
+@media(prefers-reduced-motion:no-preference){.view{animation:appear .17s ease-out}@keyframes appear{from{opacity:.6;transform:translateY(3px)}to{opacity:1;transform:none}}}
+
+/* ===== Nuovo: pagina Documenti ===== */
+.ov-next .maint-symbol{background:var(--mint);color:var(--petrol)}
+.doc-row{display:flex;align-items:center;gap:6px;border-bottom:1px solid #edf0eb;padding-right:10px}.doc-row:last-child{border-bottom:0}
+.doc-main{flex:1;min-width:0;border:0;background:white;text-align:left;display:flex;align-items:center;gap:12px;padding:13px 6px 13px 14px;color:var(--ink);min-height:62px}
+.doc-row .icon-btn{width:40px;height:40px;flex:0 0 40px;color:var(--petrol);border-color:#d5e3d9;background:#f4f9f5}
+.doc-meta{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:5px;font-size:11px;color:#78887f}
+.ver{font-size:10px;font-weight:750;color:#405e53;background:#eaf0e9;border-radius:100px;padding:2px 8px}
+.mine-ico{background:var(--mint)!important;color:var(--petrol)!important}
+.private-line{display:flex;align-items:flex-start;gap:7px;font-size:11px;line-height:1.5;color:#60786d;margin:-4px 1px 12px}
+.add-row{width:100%;border:0;border-top:1px solid #edf0eb;background:white;color:var(--petrol);font-weight:750;font-size:12px;min-height:46px;display:flex;align-items:center;justify-content:center;gap:7px}
+.field-label{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.13em;font-weight:800;color:#70857a;margin:18px 0 8px}
+.drop{display:flex;flex-direction:column;align-items:center;gap:5px;border:1.5px dashed #b6d0bc;background:#f6faf6;border-radius:16px;padding:20px 14px;text-align:center;color:var(--petrol);cursor:pointer}.drop strong{font-size:13px}.drop small{font-size:11px;color:#71877b}.drop input{position:absolute;opacity:0;width:1px;height:1px}
+.file-pill{display:flex;align-items:center;gap:11px;border:1px solid #d5e3d9;background:#f6faf6;border-radius:14px;padding:11px 12px}.file-pill .fp-name{font-weight:750;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file-pill .fp-size{font-size:11px;color:#71877b;margin-top:2px}.file-pill button{border:0;background:transparent;color:var(--petrol);font-weight:750;font-size:11px;padding:8px 4px;flex-shrink:0}
+.type-grid{display:flex;flex-wrap:wrap;gap:7px}.type-grid .filter{min-height:40px}
+.text-input{width:100%;padding:12px 13px;border:1px solid #e1e8e1;border-radius:13px;background:white;color:var(--ink);min-height:44px}
+.err{display:flex;gap:8px;align-items:flex-start;background:var(--red-bg);color:var(--red);border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.5;margin-top:9px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:7px 14px;font-size:12px;margin:4px 0 16px}.kv dt{color:#82918a}.kv dd{margin:0;font-weight:650;color:#34574c;overflow-wrap:anywhere}
+.ver-list{border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:16px}.ver-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #edf0eb;font-size:12px}.ver-item:last-child{border-bottom:0}.ver-item span{flex:1}.ver-item small{color:#809188;font-size:11px}.ver-item button{border:0;background:transparent;color:var(--petrol);font-weight:750;font-size:11px;min-height:36px;padding:0 6px}
+.btn.danger{background:transparent;color:var(--red)}.btn.danger-solid{background:var(--red);color:white}
+</style></head>
+<body><div class="stage"><div class="phone" aria-label="Mockup mobile CasaZero"><header class="app-top" id="top"></header><main class="screen" id="screen" tabindex="-1"></main><nav class="bottom-nav" id="nav" aria-label="Navigazione applicazione"></nav><div id="modalHost"></div><div id="toast" class="toast" role="status" aria-live="polite"></div></div>
+<aside class="info-pane"><span class="sm-label">CasaZero / Studio UX</span><h1>I documenti della casa, e i tuoi.</h1><p>Pagina <strong>Documenti del residente</strong> nello stile del mockup v6, con il <strong>caricamento dei documenti personali</strong>.</p><div class="switcher"><button type="button" id="swFull" data-action="demo" data-value="full">Con documenti tuoi</button><button type="button" id="swEmpty" data-action="demo" data-value="empty">Primo accesso (nessuno)</button></div><p class="sm-label">Cosa valutare</p><ul><li>Due sezioni separate: cosa arriva dal costruttore, cosa aggiungi tu.</li><li>Versioni dello stesso documento raggruppate in una riga.</li><li>Caricamento in un foglio solo: file, tipo, titolo.</li><li>La riga sulla riservatezza è chiara senza spaventare?</li><li>Eliminazione con conferma, solo sui documenti tuoi.</li></ul><p class="quiet">Anteprima autonoma: dati dimostrativi, nessuna connessione a CasaZero. Il file che scegli viene solo letto dal browser per nome e dimensione, non viene inviato da nessuna parte.</p></aside></div>
+<script>
+'use strict';
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const icon=(name,sz=17)=>{const d={left:'<path d="m15 18-6-6 6-6"/>',arrow:'<path d="m9 18 6-6-6-6"/>',home:'<path d="m3 10 9-7 9 7v11h-7v-7h-4v7H3z"/>',file:'<path d="M6 2h8l4 4v16H6zM14 2v5h5M9 12h6m-6 4h6"/>',user:'<circle cx="12" cy="7" r="4"/><path d="M4 22v-2c0-4 4-6 8-6s8 2 8 6v2"/>',search:'<circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/>',alert:'<path d="m12 3 10 18H2zM12 9v5m0 3v.1"/>',check:'<path d="m4 12 5 5L20 6"/>',book:'<path d="M12 6c-3-3-7-3-10-2v15c4-1 7 0 10 2 3-2 6-3 10-2V4c-3-1-7-1-10 2zm0 0v15"/>',tool:'<path d="M21 6a6 6 0 0 1-8 6L6 19a2 2 0 0 1-3-3l7-7a6 6 0 0 1 6-8l-3 4 4 4z"/>',help:'<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 2-2.5 2-2.5 4m0 4v.1"/>',lock:'<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 1 1 8 0v3"/>',download:'<path d="M12 3v12m-5-5 5 5 5-5M4 20h16"/>',upload:'<path d="M12 16V4m-5 5 5-5 5 5M4 20h16"/>',plus:'<path d="M12 5v14M5 12h14"/>',trash:'<path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13"/>',image:'<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>',eye:'<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'};return `<svg xmlns="http://www.w3.org/2000/svg" width="${sz}" height="${sz}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0">${d[name]||''}</svg>`};
+
+/* ----- Dati dimostrativi ----- */
+const CATS=[['proprieta','Proprietà'],['tecnici','Tecnici'],['energetici','Energetici'],['conformita','Conformità'],['garanzie','Garanzie']];
+const BUILDER_DOCS=[
+{id:'b1',cat:'proprieta',title:'Libretto d’uso e manutenzione',scope:'Residenza',file:'09_Libretto_uso_manutenzione.pdf',versions:['25 ott 2026','1 giu 2026','1 giu 2026']},
+{id:'b2',cat:'proprieta',title:'Agibilità',scope:'Residenza',file:'12_Agibilita.pdf',versions:['28 mag 2026']},
+{id:'b3',cat:'tecnici',title:'Planimetria catastale',scope:'Il tuo appartamento',file:'03_Planimetria_B12.pdf',versions:['14 mag 2026']},
+{id:'b4',cat:'energetici',title:'Attestato di prestazione energetica (APE)',scope:'Il tuo appartamento',file:'05_APE_B12.pdf',versions:['20 mag 2026']},
+{id:'b5',cat:'conformita',title:'Dichiarazione di conformità impianto termico',scope:'Residenza',extra:'Installatore: Termotecnica Colli S.r.l.',file:'07_DiCo_impianto_termico.pdf',versions:['21 mag 2026']},
+{id:'b6',cat:'conformita',title:'Dichiarazione di conformità impianto elettrico',scope:'Il tuo appartamento',extra:'Installatore: Elettro Piave S.n.c.',file:'06_DiCo_impianto_elettrico_B12.pdf',versions:['19 mag 2026']},
+{id:'b7',cat:'garanzie',title:'Garanzia serramenti',scope:'Residenza',file:'14_Garanzia_serramenti.pdf',versions:['2 giu 2026']}
+];
+const TYPES=[['ricevuta','Ricevuta'],['rapporto','Rapporto del tecnico'],['garanzia','Garanzia'],['manuale','Manuale'],['foto','Foto'],['altro','Altro']];
+const typeLabel=t=>(TYPES.find(x=>x[0]===t)||['',''])[1];
+const MY_SEED=[
+{id:'m1',type:'ricevuta',title:'Sostituzione filtri VMC',file:'ricevuta-filtri-vmc.pdf',size:'214 KB',date:'12 mar 2026',by:'te'},
+{id:'m2',type:'garanzia',title:'Garanzia lavastoviglie',file:'garanzia-lavastoviglie.pdf',size:'1,1 MB',date:'3 feb 2026',by:'Giulia'},
+{id:'m3',type:'foto',title:'Contatore acqua alla consegna',file:'IMG_2291.jpg',size:'2,4 MB',date:'18 giu 2026',by:'te'}
+];
+const MAX_BYTES=5*1024*1024, OK_TYPES=['application/pdf','image/jpeg','image/png','image/webp'];
+const state={filter:'all',search:'',mine:MY_SEED.slice(),sheet:null,docId:null,confirm:false,up:null,busy:false};
+const newUp=()=>({file:null,type:null,title:'',error:''});
+const fmtSize=b=>b<1024*1024?Math.max(1,Math.round(b/1024))+' KB':(b/1024/1024).toFixed(1).replace('.',',')+' MB';
+const today=()=>new Date().toLocaleDateString('it-IT',{day:'numeric',month:'short',year:'numeric'}).replace('.','');
+
+/* ----- Shell ----- */
+function header(){return `<div class="brand-row"><div class="brand-left"><span class="brand-mark">CZ</span><div><div class="brand-name">CasaZero</div><div class="brand-sub">Residenza Magnolia · Interno B12</div></div></div><button type="button" class="icon-btn" data-action="info" aria-label="Informazioni sul mockup">${icon('help',18)}</button></div>`}
+function nav(){return [['home','Casa'],['file','Documenti'],['tool','Manutenzioni'],['book','Fascicolo'],['user','Profilo']].map(([ic,label])=>`<button type="button" class="nav-item ${label==='Documenti'?'active':''}" data-action="nav" data-value="${label}" ${label==='Documenti'?'aria-current="page"':''}>${icon(ic,20)}<span>${label}</span></button>`).join('')}
+
+/* ----- Pagina ----- */
+function matches(text){return text.toLocaleLowerCase('it').includes(state.search.trim().toLocaleLowerCase('it'))}
+function builderRow(d){const n=d.versions.length;return `<div class="doc-row"><button type="button" class="doc-main" data-action="openBuilder" data-value="${d.id}"><div class="maint-symbol doc-ico">${icon('file',19)}</div><div class="lr-body"><div class="lr-title">${esc(d.title)}</div><div class="doc-meta"><span>${esc(d.scope)} · ${d.versions[0]}</span>${n>1?`<span class="ver">+${n-1} ${n-1===1?'versione':'versioni'}</span>`:''}</div></div></button><button type="button" class="icon-btn" data-action="download" aria-label="Scarica ${esc(d.title)}">${icon('download',18)}</button></div>`}
+function myRow(d){return `<div class="doc-row"><button type="button" class="doc-main" data-action="openMine" data-value="${d.id}"><div class="maint-symbol mine-ico">${icon(d.type==='foto'?'image':'file',19)}</div><div class="lr-body"><div class="lr-title">${esc(d.title)}</div><div class="doc-meta"><span class="doc-type">${esc(typeLabel(d.type))}</span><span>${esc(d.date)}${d.by==='te'?'':' · da '+esc(d.by)}</span></div></div></button><button type="button" class="icon-btn" data-action="download" aria-label="Scarica ${esc(d.title)}">${icon('download',18)}</button></div>`}
+function page(){
+const f=state.filter;
+// Conteggi e liste derivano dagli stessi array (mai query separate).
+const builder=BUILDER_DOCS.filter(d=>(f==='all'||f===d.cat)&&matches([d.title,d.file,d.extra||'',d.scope].join(' ')));
+const mine=state.mine.filter(d=>(f==='all'||f==='mine')&&matches([d.title,d.file,typeLabel(d.type)].join(' ')));
+const showBuilder=f!=='mine', showMine=f==='all'||f==='mine';
+const filtering=f!=='all'||state.search.trim()!=='';
+const overview=`<div class="overview"><p>L’archivio della tua casa</p><h2>Tutte le carte, quando ti servono.</h2><div class="counts"><span class="count"><strong>${BUILDER_DOCS.length}</strong> dal costruttore</span><span class="count"><strong>${state.mine.length}</strong> ${state.mine.length===1?'tuo':'tuoi'}</span></div><button type="button" class="ov-next" data-action="add"><div class="maint-symbol">${icon('plus',19)}</div><div class="ov-body"><div class="ov-title">Aggiungi un documento tuo</div><div class="ov-sub">Ricevute, garanzie, rapporti del tecnico</div></div><span class="maint-arrow">${icon('arrow')}</span></button></div>`;
+const filters=`<div class="filters" role="group" aria-label="Filtra i documenti">${[['all','Tutti'],['mine','I tuoi']].concat(CATS).map(([v,n])=>`<button type="button" class="filter ${f===v?'active':''}" data-action="filter" data-value="${v}" aria-pressed="${f===v}">${n}</button>`).join('')}</div>`;
+const builderBlock=showBuilder&&builder.length?`<div class="section-header"><h2 class="section-title">Dal costruttore</h2><span class="section-count">${builder.length} ${builder.length===1?'documento':'documenti'}</span></div>${CATS.map(([key,label])=>{const rows=builder.filter(d=>d.cat===key);return rows.length?`<div class="group-label">${label}</div><div class="list-card">${rows.map(builderRow).join('')}</div>`:''}).join('')}`:'';
+const privateLine=`<div class="private-line">${icon('lock',14)}<span>Li vedete solo tu e chi vive con te. Non il costruttore, non l’amministratore.</span></div>`;
+let mineBlock='';
+if(showMine){
+if(mine.length)mineBlock=`<div class="section-header"><h2 class="section-title">I tuoi documenti</h2><span class="section-count">${mine.length} ${mine.length===1?'documento':'documenti'}</span></div>${privateLine}<div class="list-card">${mine.map(myRow).join('')}<button type="button" class="add-row" data-action="add">${icon('plus',15)} Aggiungi un documento</button></div>`;
+else if(!state.mine.length&&!state.search.trim())mineBlock=`<div class="section-header"><h2 class="section-title">I tuoi documenti</h2></div><div class="empty">${icon('upload',22)}<strong>Qui puoi tenere le tue carte</strong>Ricevute degli interventi, garanzie degli elettrodomestici, rapporti del tecnico. Li vedete solo tu e chi vive con te.<button type="button" class="btn primary" style="margin-top:15px" data-action="add">${icon('plus',15)} Aggiungi il primo documento</button></div>`;
+}
+const nothing=!builderBlock&&!mineBlock?`<div class="empty" style="margin-top:22px">${icon('search',22)}<strong>Nessun documento trovato</strong>Prova con un’altra parola o togli i filtri.${filtering?`<button type="button" class="btn secondary" style="margin-top:15px" data-action="clear">Mostra tutti i documenti</button>`:''}</div>`:'';
+return `<div class="view"><div class="eyebrow">La tua casa <span class="demo-label">DATI DEMO</span></div><h1 class="page-title">Documenti<span style="color:var(--petrol)">.</span></h1><p class="lead">Quello che ti ha consegnato il costruttore e quello che aggiungi tu. Tutto in un posto.</p>${overview}${filters}<div class="search-wrap"><span aria-hidden="true">${icon('search')}</span><input id="search" aria-label="Cerca documento" placeholder="Cerca un documento" autocomplete="off" value="${esc(state.search)}"></div><div id="results">${builderBlock}${mineBlock}${nothing}</div><p class="foot-hint" style="margin-top:22px">Documenti dimostrativi. Niente è collegato al database.</p></div>`}
+
+/* ----- Fogli ----- */
+function sheetWrap(label,inner){return `<div class="overlay" data-action="dismiss"><div class="sheet" role="dialog" aria-modal="true" aria-label="${label}"><div class="sheet-handle"></div><button type="button" class="sheet-close" data-action="dismiss" aria-label="Chiudi">×</button>${inner}</div></div>`}
+function uploadSheet(){const u=state.up,ready=u.file&&u.type&&u.title.trim()&&!state.busy;
+const fileBlock=u.file?`<div class="file-pill"><div class="maint-symbol mine-ico">${icon(u.file.type.startsWith('image/')?'image':'file',19)}</div><div class="lr-body"><div class="fp-name">${esc(u.file.name)}</div><div class="fp-size">${fmtSize(u.file.size)}</div></div><button type="button" data-action="clearFile">Cambia</button></div>`:`<label class="drop">${icon('upload',22)}<strong>Scegli un file o scatta una foto</strong><small>PDF, JPG, PNG o WEBP · massimo 5 MB</small><input type="file" id="fileInput" accept="application/pdf,image/jpeg,image/png,image/webp"></label>`;
+return sheetWrap('Aggiungi un documento',`<h2 class="sheet-title">Aggiungi un documento</h2><p class="sheet-desc">Resta nel tuo archivio personale, accanto ai documenti del costruttore.</p>
+<span class="field-label" style="margin-top:0">File</span>${fileBlock}${u.error?`<div class="err" role="alert">${icon('alert',15)}<span>${esc(u.error)}</span></div>`:''}
+<span class="field-label" id="typeLabel">Che cos’è</span><div class="type-grid" role="group" aria-labelledby="typeLabel">${TYPES.map(([v,n])=>`<button type="button" class="filter ${u.type===v?'active':''}" data-action="pickType" data-value="${v}" aria-pressed="${u.type===v}">${n}</button>`).join('')}</div>
+<label class="field-label" for="upTitle">Titolo</label><input class="text-input" id="upTitle" maxlength="80" placeholder="Es. Ricevuta controllo caldaia" autocomplete="off" value="${esc(u.title)}">
+<div class="note info" style="display:flex;gap:9px;align-items:flex-start">${icon('lock',15)}<span>Lo vedete solo tu e chi vive con te. Il costruttore e l’amministratore non lo vedono.</span></div>
+<div class="sheet-actions"><button type="button" class="btn primary" id="upGo" data-action="upload" ${ready?'':'disabled'}>${state.busy?'Caricamento in corso…':icon('upload',15)+' Carica documento'}</button><button type="button" class="btn ghost" data-action="dismiss" data-force="1">Annulla</button></div>`)}
+function builderSheet(){const d=BUILDER_DOCS.find(x=>x.id===state.docId);if(!d)return'';const n=d.versions.length;
+return sheetWrap(esc(d.title),`<h2 class="sheet-title">${esc(d.title)}</h2><p class="sheet-desc">Caricato dal costruttore.</p><dl class="kv"><dt>Riguarda</dt><dd>${esc(d.scope)}</dd>${d.extra?`<dt>Dettagli</dt><dd>${esc(d.extra)}</dd>`:''}<dt>File</dt><dd>${esc(d.file)}</dd><dt>Data</dt><dd>${d.versions[0]}</dd></dl>
+${n>1?`<span class="field-label" style="margin-top:0">Versioni (${n})</span><div class="ver-list">${d.versions.map((v,i)=>`<div class="ver-item"><span>${v}${i===0?' <small>· più recente</small>':''}</span><button type="button" data-action="download">Scarica</button></div>`).join('')}</div>`:''}
+<div class="sheet-actions"><button type="button" class="btn primary" data-action="open">${icon('eye',15)} Apri${n>1?' la più recente':''}</button><button type="button" class="btn secondary" data-action="download">${icon('download',15)} Scarica</button></div>`)}
+function mineSheet(){const d=state.mine.find(x=>x.id===state.docId);if(!d)return'';
+if(state.confirm)return sheetWrap('Conferma eliminazione',`<h2 class="sheet-title">Eliminare questo documento?</h2><p class="sheet-desc">«${esc(d.title)}» verrà tolto dall’archivio per te e per chi vive con te. Non si può recuperare.</p><div class="sheet-actions"><button type="button" class="btn danger-solid" data-action="deleteYes">${icon('trash',15)} Elimina</button><button type="button" class="btn secondary" data-action="deleteNo">Tienilo</button></div>`);
+return sheetWrap(esc(d.title),`<h2 class="sheet-title">${esc(d.title)}</h2><p class="sheet-desc" style="display:flex;gap:7px;align-items:flex-start">${icon('lock',14)}<span>Documento tuo. Lo vedete solo tu e chi vive con te.</span></p><dl class="kv"><dt>Tipo</dt><dd>${esc(typeLabel(d.type))}</dd><dt>File</dt><dd>${esc(d.file)} · ${esc(d.size)}</dd><dt>Aggiunto</dt><dd>${esc(d.date)}${d.by==='te'?' · da te':' · da '+esc(d.by)}</dd></dl>
+<div class="sheet-actions"><button type="button" class="btn primary" data-action="open">${icon('eye',15)} Apri</button><button type="button" class="btn secondary" data-action="download">${icon('download',15)} Scarica</button><button type="button" class="btn danger" data-action="deleteAsk">${icon('trash',15)} Elimina</button></div>`)}
+function infoSheet(){return sheetWrap('Informazioni sul mockup',`<h2 class="sheet-title">Studio UX Documenti</h2><p class="sheet-desc">Dati dimostrativi. Il file che scegli viene letto solo dal browser (nome e dimensione) e non viene inviato. Qui puoi vedere la pagina con o senza documenti personali.</p><div class="sheet-actions"><button type="button" class="btn secondary" data-action="demo" data-value="full">Mostra con documenti tuoi</button><button type="button" class="btn secondary" data-action="demo" data-value="empty">Mostra il primo accesso</button></div>`)}
+function renderSheet(){const h=document.getElementById('modalHost');h.innerHTML=state.sheet==='upload'?uploadSheet():state.sheet==='builder'?builderSheet():state.sheet==='mine'?mineSheet():state.sheet==='info'?infoSheet():'';const s=h.querySelector('.sheet');if(s)s.querySelector('.sheet-close').focus({preventScroll:true})}
+function closeSheet(){if(state.busy)return;state.sheet=null;state.docId=null;state.confirm=false;state.up=null;renderSheet()}
+function toast(message){const t=document.getElementById('toast');t.textContent=message;t.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.classList.remove('show'),3300)}
+function render(){document.getElementById('top').innerHTML=header();document.getElementById('nav').innerHTML=nav();document.getElementById('screen').innerHTML=page();document.getElementById('swFull').classList.toggle('selected',state.mine.length>0);document.getElementById('swEmpty').classList.toggle('selected',state.mine.length===0)}
+
+/* ----- Eventi ----- */
+document.addEventListener('click',e=>{const b=e.target.closest('[data-action]');if(!b)return;const a=b.dataset.action,v=b.dataset.value;
+if(a==='dismiss'){if(e.target===b||b.classList.contains('sheet-close')||b.dataset.force)closeSheet();return}
+if(a==='filter'){state.filter=v;render();return}
+if(a==='clear'){state.filter='all';state.search='';render();return}
+if(a==='add'){state.up=newUp();state.sheet='upload';renderSheet();return}
+if(a==='openBuilder'){state.docId=v;state.sheet='builder';renderSheet();return}
+if(a==='openMine'){state.docId=v;state.confirm=false;state.sheet='mine';renderSheet();return}
+if(a==='pickType'){state.up.type=v;renderSheet();return}
+if(a==='clearFile'){state.up.file=null;state.up.error='';renderSheet();return}
+if(a==='upload'){const u=state.up;if(!u.file||!u.type||!u.title.trim())return;state.busy=true;renderSheet();setTimeout(()=>{state.mine.unshift({id:'m'+Date.now(),type:u.type,title:u.title.trim(),file:u.file.name,size:fmtSize(u.file.size),date:today(),by:'te'});state.busy=false;closeSheet();state.filter='all';state.search='';render();toast('Documento aggiunto. Lo vedete solo tu e chi vive con te.')},900);return}
+if(a==='deleteAsk'){state.confirm=true;renderSheet();return}
+if(a==='deleteNo'){state.confirm=false;renderSheet();return}
+if(a==='deleteYes'){state.mine=state.mine.filter(x=>x.id!==state.docId);closeSheet();render();toast('Documento eliminato.');return}
+if(a==='open'||a==='download'){toast('Mockup: nessun file viene '+(a==='open'?'aperto':'scaricato')+'.');return}
+if(a==='info'){state.sheet='info';renderSheet();return}
+if(a==='demo'){state.mine=v==='empty'?[]:MY_SEED.slice();state.filter='all';state.search='';state.busy=false;closeSheet();render();document.getElementById('screen').scrollTop=0;return}
+if(a==='nav'){if(v!=='Documenti')toast('Sezione '+v+' non inclusa in questo mockup.');return}
+});
+document.addEventListener('change',e=>{if(e.target.id!=='fileInput')return;const file=e.target.files[0],u=state.up;if(!file||!u)return;
+if(!OK_TYPES.includes(file.type)){u.error='Questo tipo di file non si può caricare. Usa un PDF oppure una foto JPG, PNG o WEBP.';u.file=null}
+else if(file.size>MAX_BYTES){u.error='Il file pesa '+fmtSize(file.size)+'. Il massimo è 5 MB: prova con una foto più leggera o un PDF compresso.';u.file=null}
+else{u.error='';u.file=file;if(!u.title.trim())u.title=file.name.replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ').trim().replace(/^./,c=>c.toLocaleUpperCase('it')).slice(0,80)}
+renderSheet()});
+document.addEventListener('input',e=>{
+if(e.target.id==='upTitle'){state.up.title=e.target.value;const u=state.up;document.getElementById('upGo').disabled=!(u.file&&u.type&&u.title.trim());return}
+if(e.target.id==='search'){state.search=e.target.value;const tmp=document.createElement('div');tmp.innerHTML=page();document.getElementById('results').innerHTML=tmp.querySelector('#results').innerHTML}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&state.sheet)closeSheet()});
+render();
+</script></body></html>

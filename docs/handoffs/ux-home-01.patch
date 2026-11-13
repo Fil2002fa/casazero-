@@ -1,0 +1,82 @@
+diff --git a/src/app/(app)/HomeRiepilogo.tsx b/src/app/(app)/HomeRiepilogo.tsx
+index b2dc618..df259db 100644
+--- a/src/app/(app)/HomeRiepilogo.tsx
++++ b/src/app/(app)/HomeRiepilogo.tsx
+@@ -7,11 +7,7 @@ type RiepilogoItem = LiveStatusItem & {
+   maintenance_templates: (NonNullable<LiveStatusItem['maintenance_templates']> & { title: string }) | null
+ }
+ 
+-export function HomeRiepilogo({ items, today, awaitingDelivery }: {
+-  items: RiepilogoItem[]
+-  today: string
+-  awaitingDelivery: boolean
+-}) {
++export function selectHomeRiepilogo(items: RiepilogoItem[], today: string) {
+   const dated = items
+     .filter(i => isCountable(i) && resolveCompletionMode(i) !== 'promemoria' && i.status !== 'completata' && i.next_due_date)
+     .sort((a, b) => a.next_due_date!.localeCompare(b.next_due_date!))
+@@ -23,6 +19,16 @@ export function HomeRiepilogo({ items, today, awaitingDelivery }: {
+   const next = dated.find(i => i.next_due_date! >= today)
+   const shown = first ?? next
+ 
++  return { first, shown, actions }
++}
++
++export function HomeRiepilogo({ items, today, awaitingDelivery }: {
++  items: RiepilogoItem[]
++  today: string
++  awaitingDelivery: boolean
++}) {
++  const { first, shown, actions } = selectHomeRiepilogo(items, today)
++
+   return (
+     <section className="bg-surface rounded-xl border border-border p-4 space-y-2 [overflow-wrap:anywhere]">
+       <h2 className="font-serif text-lg font-semibold text-text-primary">Cosa fare adesso</h2>
+diff --git a/src/app/(app)/page.tsx b/src/app/(app)/page.tsx
+index 162c2b4..85a9b9e 100644
+--- a/src/app/(app)/page.tsx
++++ b/src/app/(app)/page.tsx
+@@ -9,7 +9,7 @@ import { OBLIGATION_LABELS } from '@/components/MaintenanceBadge'
+ import type { ObligationType } from '@/types/database'
+ import { formatUnitLabel } from '@/lib/formatUnitLabel'
+ import { pluralize } from '@/lib/pluralize'
+-import { HomeRiepilogo } from './HomeRiepilogo'
++import { HomeRiepilogo, selectHomeRiepilogo } from './HomeRiepilogo'
+ import {
+   isCountable, isInCorso, isOverdueLive, isAwaitingDelivery, resolveCompletionMode,
+   resolveFrequencyMonths, resolveLiveStatus, resolveObligationType, formatRelativeDue, todayISO,
+@@ -106,7 +106,6 @@ export default async function HomePage() {
+   const urgent = ((rawUrgent ?? []) as unknown as ItemRow[])
+     .filter(i => isOverdueLive(i, today) || isInCorso(i))
+   const urgentCount = urgent.length
+-  const urgentItems = urgent.slice(0, 3)
+ 
+   // Prossimo item DATATO futuro, escluse le promemoria: prima riga countable non-promemoria.
+   const nextItem =
+@@ -126,6 +125,14 @@ export default async function HomePage() {
+     awaitingDelivery.some(i => resolveCompletionMode(i) === 'residente') &&
+     !((rawUrgent ?? []) as unknown as ItemRow[]).some(i => isCountable(i) && resolveCompletionMode(i) === 'residente' && i.next_due_date !== null)
+ 
++  // Condivisa con la card: si confrontano gli ID delle voci effettivamente mostrate.
++  const riepilogoItem = riepilogoAwaiting
++    ? null
++    : selectHomeRiepilogo((rawUrgent ?? []) as unknown as ItemRow[], today).shown
++  const urgentItems = urgent.filter(i => i.id !== riepilogoItem?.id).slice(0, 3)
++  const showNextItem = nextItem && nextItem.id !== riepilogoItem?.id &&
++    !urgentItems.some(i => i.id === nextItem.id)
++
+   const nextObligation =
+     (nextItem?.obligation_type ?? nextItem?.maintenance_templates?.obligation_type ?? null) as ObligationType | null
+ 
+@@ -242,9 +249,9 @@ export default async function HomePage() {
+       )}
+ 
+       {/* Prossima manutenzione — informativa, non un'azione di completamento */}
+-      {nextItem && (
++      {nextItem && showNextItem && (
+         <section className="space-y-2">
+-          <h2 className="text-sm font-medium text-text-primary">Prossima manutenzione</h2>
++          <h2 className="text-sm font-medium text-text-primary">{riepilogoItem ? 'Più avanti' : 'Prossima manutenzione'}</h2>
+           <Link href={`/manutenzioni/${nextItem.id}`} className="block">
+             <div className="bg-surface rounded-xl border border-border p-4 flex items-center gap-3 active:bg-background">
+               <div className="w-10 h-10 rounded-lg bg-background flex items-center justify-center flex-shrink-0">

@@ -1,0 +1,625 @@
+[
+  {
+    "id": "d9b03bd4",
+    "descrizione": "Le grondaie raccolgono l’acqua che scende dal tetto. Foglie e detriti possono ostruirle.",
+    "perche_conta": "Una grondaia libera fa defluire la pioggia e limita infiltrazioni e danni alle facciate.",
+    "chi_la_fa": "Impresa specializzata in coperture. Tu non devi intervenire: se noti perdite o traboccamenti, avvisa l’amministratore.",
+    "cosa_conservare": "Rapporto di pulizia delle grondaie, con eventuali fotografie.",
+    "come_si_fa": null,
+    "fonti": [],
+    "da_verificare": [
+      "La frequenza di 12 mesi va adattata a alberi vicini, clima e stato del tetto."
+    ]
+  },
+  {
+    "id": "f0c52720",
+    "descrizione": "Il manto di copertura è la parte esterna del tetto che ferma la pioggia. Si cercano tegole o elementi danneggiati e spostati.",
+    "perche_conta": "Individuare piccoli problemi sul tetto aiuta a prevenire infiltrazioni più costose.",
+    "chi_la_fa": "Coperturista o impresa edile attrezzata per lavorare in quota. Tu segnala all’amministratore macchie d’umidità e perdite.",
+    "cosa_conservare": "Rapporto di ispezione del tetto, con fotografie.",
+    "come_si_fa": null,
+    "fonti": [],
+    "da_verificare": [
+      "Il controllo nel mese di giugno non risulta imposto da una norma generale."
+    ]
+  },
+  {
+    "id": "b95a07e2",
+    "descrizione": "I lucernari sono finestre inserite nel tetto. Si controllano apertura, guarnizioni e tenuta all’acqua.",
+    "perche_conta": "Un controllo tempestivo può evitare infiltrazioni, spifferi e difficoltà di apertura.",
+    "chi_la_fa": "Serramentista o tecnico delle coperture. Tu avvisa l’amministratore se noti infiltrazioni o blocchi.",
+    "cosa_conservare": "Rapporto di verifica dei lucernari.",
+    "come_si_fa": null,
+    "fonti": [],
+    "da_verificare": [
+      "Confermare se i lucernari sono comuni o appartengono alle singole unità."
+    ]
+  },
+  {
+    "id": "3fb467a8",
+    "descrizione": "L’antenna o parabola riceve il segnale televisivo. Si controllano fissaggi, collegamenti e ricezione.",
+    "perche_conta": "Riduce il rischio di distacchi col vento e di interruzioni del segnale.",
+    "chi_la_fa": "Antennista o impresa abilitata per gli impianti radiotelevisivi. Tu segnala all’amministratore perdite di segnale.",
+    "cosa_conservare": "Rapporto di verifica dell’impianto antenna.",
+    "come_si_fa": null,
+    "fonti": [
+      {
+        "norma": "DM 37/2008",
+        "articolo": "1 e 3",
+        "url": "https://www.normattiva.it/atto/caricaDettaglioAtto?atto.codiceRedazionale=008G0060&atto.dataPubblicazioneGazzetta=2008-03-12&tipoDettaglio=vigente"
+      }
+    ],
+    "da_verificare": [
+      "Accertare che l’antenna sia centralizzata e non privata."
+    ]
+  },
+  {
+    "id": "1059026c",
+    "descrizione": "La cappa aspira vapori e grassi mentre cucini. Filtri e condotti possono sporcarsi e ridurre l’aspirazione.",
+    "perche_conta": "Una pulizia corretta migliora il funzionamento e limita i depositi di grasso.",
+    "chi_la_fa": "Tu pulisci solo i filtri accessibili secondo il manuale. Per i condotti interni chiama una ditta specializzata.",
+    "cosa_conservare": "Ricevuta o rapporto di pulizia dei condotti; annotazione della pulizia dei filtri.",
+    "come_si_fa": [
+      "Spegni la cappa e attendi che sia fredda.",
+      "Rimuovi e pulisci solo i filtri previsti dal manuale.",
+      "Rimontali asciutti; per i condotti chiama un tecnico."
+    ],
+    "fonti": [],
+    "da_verificare": [
+      "Confermare se la cappa è filtrante o collegata a un condotto di espulsione."
+    ]
+  },
+  {
+    "id": "010214e7",
+    "descrizione": "La ventilazione meccanica rinnova l’aria della casa. I filtri trattengono polvere e particelle.",
+    "perche_conta": "Filtri puliti aiutano a mantenere il ricambio d’aria e riducono gli sforzi della macchina.",
+    "chi_la_fa": "Tu puoi sostituire i filtri accessibili se il manuale lo permette. Altrimenti chiama un tecnico della ventilazione.",
+    "cosa_conservare": "Annotazione della sostituzione e ricevuta dei filtri.",
+    "come_si_fa": [
+      "Spegni l’unità come indicato nel manuale.",
+      "Estrai i filtri e inserisci quelli compatibili.",
+      "Richiudi lo sportello e annota la data."
+    ],
+    "fonti": [],
+    "da_verificare": [
+      "La periodicità di 12 mesi va confrontata con filtri e manuale dello specifico impianto."
+    ]
+  },
+  {
+    "id": "70b3f1dd",
+    "descrizione": "I condotti della ventilazione distribuiscono l’aria nelle stanze. Possono raccogliere polvere e depositi nel tempo.",
+    "perche_conta": "La pulizia professionale aiuta a conservare un buon flusso d’aria.",
+    "chi_la_fa": "La esegue una ditta specializzata in ventilazione. Tu prenota l’intervento e conserva il rapporto: non smontare i condotti.",
+    "cosa_conservare": "Rapporto di ispezione e pulizia dei condotti VMC.",
+    "come_si_fa": null,
+    "fonti": [],
+    "da_verificare": [
+      "La necessità e la frequenza dipendono da progetto, uso e manuale dell’impianto."
+    ]
+  },
+  {
+    "id": "13a27be8",
+    "descrizione": "I filtri del climatizzatore trattengono parte della polvere nell’aria. Se si sporcano, l’aria passa con più difficoltà.",
+    "perche_conta": "Pulirli aiuta il climatizzatore a funzionare bene e a non sprecare energia.",
+    "chi_la_fa": "Puoi farlo tu seguendo il manuale, oppure chiedere a un tecnico della climatizzazione.",
+    "cosa_conservare": "Annotazione facoltativa della pulizia.",
+    "come_si_fa": [
+      "Spegni il climatizzatore.",
+      "Estrai e pulisci i filtri come indicato dal manuale.",
+      "Rimontali solo quando sono asciutti."
+    ],
+    "fonti": [],
+    "da_verificare": [
+      "Verificare se il modello prevede lavaggio o sola sostituzione dei filtri."
+    ]
+  },
+  {
+    "id": "d6e71a15",
+    "descrizione": "Il differenziale è una protezione del quadro elettrico. Il tasto T serve a controllare che il meccanismo scatti.",
+    "perche_conta": "La prova può far emergere un guasto della protezione. Non sostituisce una verifica completa dell’impianto.",
+    "chi_la_fa": "Puoi premere il tasto di prova seguendo il manuale. Se non scatta o non si riarma, chiama un elettricista.",
+    "cosa_conservare": "Annotazione facoltativa del test; rapporto dell’elettricista se interviene.",
+    "come_si_fa": [
+      "Avvisa chi è in casa: la corrente potrebbe interrompersi.",
+      "Premi solo il tasto T, senza aprire il quadro.",
+      "Se scatta, riarmalo; se non scatta, chiama un elettricista."
+    ],
+    "fonti": [],
+    "da_verificare": [
+      "La cadenza del test va confrontata con le istruzioni del dispositivo."
+    ]
+  },
+  {
+    "id": "4a74e428",
+    "descrizione": "La messa a terra aiuta a proteggere dalle dispersioni elettriche. Una verifica strumentale controlla l’impianto.",
+    "perche_conta": "Il DPR 462/2001, art. 4, vale nei casi soggetti alla disciplina dei luoghi di lavoro. La frequenza dipende dall’impianto: te la conferma il responsabile.",
+    "chi_la_fa": "Organismo abilitato o ente competente nei casi previsti. Tu non devi fare nulla: se applicabile, organizza l’amministratore.",
+    "cosa_conservare": "Verbale di verifica periodica dell’impianto di terra.",
+    "come_si_fa": null,
+    "fonti": [
+      {
+        "norma": "DPR 462/2001",
+        "articolo": "4",
+        "url": "https://www.normattiva.it/eli/id/2002/01/08/001G0521/CONSOLIDATED"
+      }
+    ],
+    "da_verificare": [
+      "Confermare se il condominio ricade nel DPR 462/2001 e se il periodo è quinquennale o biennale."
+    ]
+  },
+  {
+    "id": "26be7f69",
+    "descrizione": "Imbiancare significa rinnovare la pittura delle pareti. Puoi scegliere un prodotto adatto al tipo di superficie.",
+    "perche_conta": "Mantiene gli ambienti curati e protegge le finiture dal normale deterioramento.",
+    "chi_la_fa": "Puoi farlo tu se lavori in sicurezza, oppure rivolgerti a un imbianchino.",
+    "cosa_conservare": "Codice della pittura e ricevuta dei materiali, facoltativi.",
+    "come_si_fa": [
+      "Proteggi mobili e pavimenti e pulisci il muro.",
+      "Ripara i piccoli segni e applica la pittura indicata.",
+      "Rispetta i tempi di asciugatura e arieggia."
+    ],
+    "fonti": [],
+    "da_verificare": [
+      "La necessità dipende dallo stato delle pareti, non da una scadenza fissa."
+    ]
+  },
+  {
+    "id": "b91b78f3",
+    "descrizione": "È la rimozione dello sporco dalla facciata. Il metodo cambia a seconda di intonaco, pittura e rivestimento.",
+    "perche_conta": "Una pulizia compatibile con i materiali conserva l’aspetto dell’edificio e limita i depositi.",
+    "chi_la_fa": "Per le facciate chiama un’impresa specializzata tramite l’amministratore. Non usare scale o getti in pressione da solo.",
+    "cosa_conservare": "Rapporto di pulizia e fotografie, se disponibili.",
+    "come_si_fa": null,
+    "fonti": [],
+    "da_verificare": [
+      "La facciata è parte comune: verificare se la modalità promemoria è appropriata."
+    ]
+  },
+  {
+    "id": "04768c36",
+    "descrizione": "È un prodotto applicato su alcune superfici esterne per ridurre l’assorbimento della pioggia. Non ripara infiltrazioni o crepe.",
+    "perche_conta": "Può limitare il degrado delle superfici compatibili, se scelto e applicato correttamente.",
+    "chi_la_fa": "Interviene un’impresa specializzata incaricata dall’amministratore. Tu segnala le zone umide, senza applicare prodotti da solo.",
+    "cosa_conservare": "Scheda tecnica del prodotto e rapporto di applicazione.",
+    "come_si_fa": null,
+    "fonti": [],
+    "da_verificare": [
+      "Verificare compatibilità del trattamento con la facciata e autorizzazione condominiale."
+    ]
+  },
+  {
+    "id": "132b0e68",
+    "descrizione": "Finestre e porte hanno cerniere, guarnizioni e meccanismi di chiusura. Il controllo individua attriti e usura.",
+    "perche_conta": "Aiuta a evitare blocchi, spifferi e deterioramento dei meccanismi.",
+    "chi_la_fa": "Tu puoi pulire le parti accessibili e lubrificare solo dove lo indica il manuale. Per le regolazioni chiama un serramentista.",
+    "cosa_conservare": "Annotazione dell’intervento; rapporto del serramentista se necessario.",
+    "come_si_fa": [
+      "Pulisci cerniere e guide accessibili.",
+      "Usa solo il lubrificante indicato dal produttore.",
+      "Apri e chiudi il serramento per verificarne il movimento."
+    ],
+    "fonti": [],
+    "da_verificare": [
+      "Il tipo di prodotto e i punti da lubrificare dipendono dal serramento."
+    ]
+  },
+  {
+    "id": "1fd67a1e",
+    "descrizione": "Le linee vita sono sistemi di ancoraggio usati dai tecnici che lavorano sul tetto. Devono essere in condizioni adatte prima dell’uso.",
+    "perche_conta": "In Veneto la LR 61/1985, art. 79-bis, disciplina le misure di sicurezza sulle coperture in determinati interventi edilizi. La frequenza di verifica dipende dal sistema e va confermata dal tecnico.",
+    "chi_la_fa": "Tecnico competente nei sistemi anticaduta incaricato dall’amministratore. Tu non accedere al tetto e segnala eventuali danni visibili.",
+    "cosa_conservare": "Rapporto di ispezione dei dispositivi anticaduta e manuale del sistema.",
+    "come_si_fa": null,
+    "fonti": [
+      {
+        "norma": "LR Veneto 61/1985, come sostituita dalla LR 29/2019",
+        "articolo": "79-bis (art. 1 LR 29/2019)",
+        "url": "https://bur.regione.veneto.it/BurvServices/pubblica/DettaglioLegge.aspx?id=399407"
+      }
+    ],
+    "da_verificare": [
+      "Non confermata una verifica obbligatoria ogni 12 mesi per tutte le linee vita.",
+      "Verificare manuale, progetto e disciplina regionale applicabile anche fuori dal Veneto."
+    ]
+  },
+  {
+    "id": "1e40bc1e",
+    "descrizione": "Le fosse raccolgono e trattano parte degli scarichi. I degrassatori trattengono i grassi prima che passino nelle tubazioni.",
+    "perche_conta": "La pulizia riduce cattivi odori, intasamenti e fuoriuscite.",
+    "chi_la_fa": "Ditta di spurghi autorizzata, incaricata dall’amministratore. Tu segnala odori persistenti e scarichi lenti.",
+    "cosa_conservare": "Rapporto di spurgo e formulario rifiuti, quando previsto.",
+    "come_si_fa": null,
+    "fonti": [],
+    "da_verificare": [
+      "Verificare presenza dell’impianto, autorizzazioni allo scarico e reale cadenza di pulizia."
+    ]
+  },
+  {
+    "id": "225cc536",
+    "descrizione": "I pozzetti permettono di controllare le tubazioni di scarico. Fanghi e detriti possono ostacolare il deflusso.",
+    "perche_conta": "Una pulizia periodica riduce il rischio di intasamenti e allagamenti.",
+    "chi_la_fa": "Ditta di spurghi incaricata dall’amministratore. Tu segnala rigurgiti, odori e ristagni.",
+    "cosa_conservare": "Rapporto di pulizia dei pozzetti e delle condotte.",
+    "come_si_fa": null,
+    "fonti": [],
+    "da_verificare": [
+      "Verificare se rete e pozzetti sono effettivamente comuni."
+    ]
+  },
+  {
+    "id": "fc529672",
+    "descrizione": "Il climatizzatore o la pompa di calore riscalda e, in molti casi, raffresca la casa. Il tecnico controlla il funzionamento dell’impianto.",
+    "perche_conta": "Aiuta a limitare guasti e consumi. Se l’apparecchio è un impianto termico soggetto al DPR 74/2013, art. 7, la frequenza dipende dalle istruzioni tecniche.",
+    "chi_la_fa": "Tecnico abilitato per la climatizzazione; certificazione F-gas se necessaria. Tu prenota il controllo e conserva il rapporto.",
+    "cosa_conservare": "Rapporto di manutenzione e libretto di impianto aggiornato, se previsto.",
+    "come_si_fa": null,
+    "fonti": [
+      {
+        "norma": "DPR 74/2013",
+        "articolo": "7",
+        "url": "https://www.normattiva.it/atto/caricaDettaglioAtto?atto.articolo.numero=7&atto.codiceRedazionale=13G00114&atto.dataPubblicazioneGazzetta=2013-06-27&tabID=0"
+      }
+    ],
+    "da_verificare": [
+      "Verificare caratteristiche, applicabilità della disciplina termica e requisiti F-gas dell’intervento."
+    ]
+  },
+  {
+    "id": "7296f859",
+    "descrizione": "I pannelli fotovoltaici producono energia dalla luce. Il tecnico controlla inverter, cavi e rendimento dell’impianto.",
+    "perche_conta": "Permette di individuare guasti e cali di produzione e di mantenere condizioni di sicurezza.",
+    "chi_la_fa": "Elettricista abilitato per impianti elettrici e personale formato per lavori sul tetto. Tu segnala anomalie all’amministratore.",
+    "cosa_conservare": "Rapporto di manutenzione dell’impianto fotovoltaico.",
+    "come_si_fa": null,
+    "fonti": [
+      {
+        "norma": "DM 37/2008",
+        "articolo": "1 e 3",
+        "url": "https://www.normattiva.it/atto/caricaDettaglioAtto?atto.codiceRedazionale=008G0060&atto.dataPubblicazioneGazzetta=2008-03-12&tipoDettaglio=vigente"
+      }
+    ],
+    "da_verificare": [
+      "Verificare se l’impianto serve parti comuni e quali controlli indica il costruttore."
+    ]
+  },
+  {
+    "id": "a47686ee",
+    "descrizione": "La manutenzione comprende interventi e controlli sui componenti dell’ascensore. I dispositivi di sicurezza richiedono verifiche specifiche.",
+    "perche_conta": "Il DPR 162/1999, art. 15, richiede controlli almeno semestrali su alcuni dispositivi di sicurezza. Il manutentore segnala i pericoli e, quando necessario, ferma l’impianto.",
+    "chi_la_fa": "Manutentore ascensorista abilitato, incaricato dall’amministratore. Tu non intervenire sui meccanismi e segnala rumori o blocchi.",
+    "cosa_conservare": "Annotazioni nel libretto dell’ascensore e rapporto di manutenzione.",
+    "come_si_fa": null,
+    "fonti": [
+      {
+        "norma": "DPR 162/1999",
+        "articolo": "15",
+        "url": "https://www.normattiva.it/atto/caricaDettaglioAtto?atto.codiceRedazionale=099G0240&atto.dataPubblicazioneGazzetta=1999-06-10&bloccoAggiornamentoBreadCrumb=true&classica=true&dataVigenza=19%2F03%2F2026&generaTabId=true&tipoDettaglio=singolavigenza&title=lbl.dettaglioAtto"
+      }
+    ],
+    "da_verificare": [
+      "Distinguere i controlli semestrali di sicurezza dagli altri interventi, la cui cadenza dipende dall’impianto."
+    ]
+  },
+  {
+    "id": "d582bfad",
+    "descrizione": "È un controllo indipendente dalla manutenzione ordinaria. Verifica le condizioni di sicurezza dell’ascensore.",
+    "perche_conta": "Il DPR 162/1999, art. 13, prevede una verifica ogni due anni. Un esito negativo è comunicato all’autorità competente per i provvedimenti previsti.",
+    "chi_la_fa": "Organismo di ispezione abilitato o ente competente, incaricato dall’amministratore. Tu non devi fare nulla.",
+    "cosa_conservare": "Verbale di verifica periodica biennale dell’ascensore.",
+    "come_si_fa": null,
+    "fonti": [
+      {
+        "norma": "DPR 162/1999",
+        "articolo": "13",
+        "url": "https://www.normattiva.it/atto/caricaDettaglioAtto?atto.codiceRedazionale=099G0240&atto.dataPubblicazioneGazzetta=1999-06-10&bloccoAggiornamentoBreadCrumb=true&classica=true&dataVigenza=19%2F03%2F2026&generaTabId=true&tipoDettaglio=singolavigenza&title=lbl.dettaglioAtto"
+      }
+    ],
+    "da_verificare": []
+  },
+  {
+    "id": "08d73253",
+    "descrizione": "Il controllo riguarda caldaia e componenti dell’impianto di riscaldamento. Il tecnico verifica le condizioni di funzionamento.",
+    "perche_conta": "Il DPR 74/2013, art. 7, richiede controlli secondo le istruzioni tecniche applicabili. La frequenza dipende dal tuo impianto: te la conferma il manutentore.",
+    "chi_la_fa": "Impresa abilitata per impianti termici, incaricata dall’amministratore. Tu segnala guasti o mancanza di riscaldamento.",
+    "cosa_conservare": "Rapporto di manutenzione e libretto di impianto aggiornato.",
+    "come_si_fa": null,
+    "fonti": [
+      {
+        "norma": "DPR 74/2013",
+        "articolo": "7",
+        "url": "https://www.normattiva.it/atto/caricaDettaglioAtto?atto.articolo.numero=7&atto.codiceRedazionale=13G00114&atto.dataPubblicazioneGazzetta=2013-06-27&tabID=0"
+      }
+    ],
+    "da_verificare": [
+      "Non confermata la scadenza universale di 12 mesi.",
+      "Confermare se si tratta di impianto centralizzato e chi ne è responsabile."
+    ]
+  },
+  {
+    "id": "55ed1153",
+    "descrizione": "È una verifica delle prestazioni energetiche della caldaia. Il tecnico misura i parametri e redige un rapporto.",
+    "perche_conta": "Il DPR 74/2013, art. 8, disciplina il controllo nei casi previsti. La frequenza dipende dal tuo impianto e dalla Regione: te la conferma il manutentore.",
+    "chi_la_fa": "Impresa abilitata per impianti termici, incaricata dall’amministratore. Tu non devi fare nulla.",
+    "cosa_conservare": "Rapporto di controllo di efficienza energetica (RCEE) e libretto aggiornato.",
+    "come_si_fa": null,
+    "fonti": [
+      {
+        "norma": "DPR 74/2013",
+        "articolo": "8",
+        "url": "https://www.normattiva.it/eli/id/2013/06/27/13G00114/CONSOLIDATED/"
+      },
+      {
+        "norma": "DGR Veneto 1363/2014",
+        "articolo": "Disposizioni attuative",
+        "url": "https://bur.regione.veneto.it/BurvServices/pubblica/DettaglioDgr.aspx?id=278968"
+      },
+      {
+        "norma": "Regione FVG, controllo impianti termici",
+        "articolo": "Periodicità dei controlli",
+        "url": "https://www.regione.fvg.it/rafvg/cms/RAFVG/ambiente-territorio/energia/FOGLIA117/articolo.html"
+      }
+    ],
+    "da_verificare": [
+      "I 48 mesi non sono universali: verificare potenza, combustibile, tipologia e regole regionali.",
+      "Verificare separatamente periodicità del controllo e trasmissione del rapporto."
+    ]
+  },
+  {
+    "id": "fc20e159",
+    "descrizione": "Gli estintori servono a intervenire su piccoli principi d’incendio, solo se puoi farlo in sicurezza. Il controllo verifica presenza ed efficienza.",
+    "perche_conta": "Per le attività soggette, il DPR 151/2011, art. 6, prevede il mantenimento dei presidi antincendio. La frequenza dipende dai dispositivi e dalle norme tecniche applicabili.",
+    "chi_la_fa": "Tecnico manutentore antincendio qualificato, incaricato dall’amministratore. Tu segnala estintori mancanti o danneggiati.",
+    "cosa_conservare": "Rapporto di controllo, cartellino degli estintori e registro antincendio, se previsto.",
+    "come_si_fa": null,
+    "fonti": [
+      {
+        "norma": "DPR 151/2011",
+        "articolo": "6",
+        "url": "https://www.gazzettaufficiale.it/eli/id/2011/09/22/011G0193/sg"
+      },
+      {
+        "norma": "DM 1 settembre 2021",
+        "articolo": "3",
+        "url": "https://www.gazzettaufficiale.it/atto/serie_generale/caricaArticolo?art.codiceRedazionale=21A05589&art.dataPubblicazioneGazzetta=2021-09-25&art.flagTipoArticolo=0&art.idArticolo=3&art.idGruppo=0&art.idSottoArticolo=1&art.idSottoArticolo1=10&art.progressivo=0&art.versione=1"
+      },
+      {
+        "norma": "DM 22 settembre 2026",
+        "articolo": "1, inserimento art. 6-bis nel DM 1 settembre 2021",
+        "url": "https://www.gazzettaufficiale.it/eli/id/2026/09/24/26A05078/sg"
+      }
+    ],
+    "da_verificare": [
+      "Applicabilità alla singola attività e frequenza effettiva da verificare su progetto, norme tecniche e manuali.",
+      "Verificare la qualificazione del manutentore e l’eventuale regime transitorio del DM 22/9/2026."
+    ]
+  },
+  {
+    "id": "b25e9c86",
+    "descrizione": "Idranti e naspi permettono di usare acqua contro un incendio. Il controllo verifica tubi, valvole e funzionamento.",
+    "perche_conta": "Per le attività soggette, il DPR 151/2011, art. 6, richiede sistemi antincendio efficienti. La frequenza dipende dall’impianto e dalle norme tecniche applicabili.",
+    "chi_la_fa": "Tecnico antincendio qualificato, incaricato dall’amministratore. Tu segnala perdite, danni o accessi ostruiti.",
+    "cosa_conservare": "Rapporto di controllo della rete idranti e naspi e registro antincendio, se previsto.",
+    "come_si_fa": null,
+    "fonti": [
+      {
+        "norma": "DPR 151/2011",
+        "articolo": "6",
+        "url": "https://www.gazzettaufficiale.it/eli/id/2011/09/22/011G0193/sg"
+      },
+      {
+        "norma": "DM 1 settembre 2021",
+        "articolo": "3",
+        "url": "https://www.gazzettaufficiale.it/atto/serie_generale/caricaArticolo?art.codiceRedazionale=21A05589&art.dataPubblicazioneGazzetta=2021-09-25&art.flagTipoArticolo=0&art.idArticolo=3&art.idGruppo=0&art.idSottoArticolo=1&art.idSottoArticolo1=10&art.progressivo=0&art.versione=1"
+      },
+      {
+        "norma": "DM 22 settembre 2026",
+        "articolo": "1, inserimento art. 6-bis nel DM 1 settembre 2021",
+        "url": "https://www.gazzettaufficiale.it/eli/id/2026/09/24/26A05078/sg"
+      }
+    ],
+    "da_verificare": [
+      "Applicabilità alla singola attività e frequenza effettiva da verificare su progetto, norme tecniche e manuali.",
+      "Verificare la qualificazione del manutentore e l’eventuale regime transitorio del DM 22/9/2026."
+    ]
+  },
+  {
+    "id": "18452296",
+    "descrizione": "Le porte tagliafuoco rallentano il passaggio di fumo e fiamme. I maniglioni facilitano l’uscita sulle vie di fuga.",
+    "perche_conta": "Per le attività soggette, il DPR 151/2011, art. 6, richiede la cura delle misure antincendio. La frequenza dipende dai dispositivi e dalle norme tecniche applicabili.",
+    "chi_la_fa": "Tecnico specializzato nelle chiusure antincendio, incaricato dall’amministratore. Tu non bloccare le porte e segnala difetti.",
+    "cosa_conservare": "Rapporto di manutenzione porte tagliafuoco e dispositivi di uscita; registro antincendio, se previsto.",
+    "come_si_fa": null,
+    "fonti": [
+      {
+        "norma": "DPR 151/2011",
+        "articolo": "6",
+        "url": "https://www.gazzettaufficiale.it/eli/id/2011/09/22/011G0193/sg"
+      },
+      {
+        "norma": "DM 1 settembre 2021",
+        "articolo": "3",
+        "url": "https://www.gazzettaufficiale.it/atto/serie_generale/caricaArticolo?art.codiceRedazionale=21A05589&art.dataPubblicazioneGazzetta=2021-09-25&art.flagTipoArticolo=0&art.idArticolo=3&art.idGruppo=0&art.idSottoArticolo=1&art.idSottoArticolo1=10&art.progressivo=0&art.versione=1"
+      },
+      {
+        "norma": "DM 22 settembre 2026",
+        "articolo": "1, inserimento art. 6-bis nel DM 1 settembre 2021",
+        "url": "https://www.gazzettaufficiale.it/eli/id/2026/09/24/26A05078/sg"
+      }
+    ],
+    "da_verificare": [
+      "Applicabilità alla singola attività e frequenza effettiva da verificare su progetto, norme tecniche e manuali.",
+      "Verificare la qualificazione del manutentore e l’eventuale regime transitorio del DM 22/9/2026."
+    ]
+  },
+  {
+    "id": "4390667e",
+    "descrizione": "Le lampade di emergenza si accendono quando manca la corrente. Aiutano a individuare le vie di uscita.",
+    "perche_conta": "Per le attività soggette, il DPR 151/2011, art. 6, richiede di mantenere efficienti i sistemi antincendio. La frequenza delle prove dipende dall’impianto e dalle norme tecniche applicabili.",
+    "chi_la_fa": "Tecnico specializzato in illuminazione di sicurezza, incaricato dall’amministratore. Tu segnala lampade guaste.",
+    "cosa_conservare": "Rapporto delle prove di funzionamento e autonomia; registro antincendio, se previsto.",
+    "come_si_fa": null,
+    "fonti": [
+      {
+        "norma": "DPR 151/2011",
+        "articolo": "6",
+        "url": "https://www.gazzettaufficiale.it/eli/id/2011/09/22/011G0193/sg"
+      },
+      {
+        "norma": "DM 1 settembre 2021",
+        "articolo": "3",
+        "url": "https://www.gazzettaufficiale.it/atto/serie_generale/caricaArticolo?art.codiceRedazionale=21A05589&art.dataPubblicazioneGazzetta=2021-09-25&art.flagTipoArticolo=0&art.idArticolo=3&art.idGruppo=0&art.idSottoArticolo=1&art.idSottoArticolo1=10&art.progressivo=0&art.versione=1"
+      },
+      {
+        "norma": "DM 22 settembre 2026",
+        "articolo": "1, inserimento art. 6-bis nel DM 1 settembre 2021",
+        "url": "https://www.gazzettaufficiale.it/eli/id/2026/09/24/26A05078/sg"
+      }
+    ],
+    "da_verificare": [
+      "Applicabilità alla singola attività e frequenza effettiva da verificare su progetto, norme tecniche e manuali.",
+      "Verificare la qualificazione del manutentore e l’eventuale regime transitorio del DM 22/9/2026."
+    ]
+  },
+  {
+    "id": "dbe47b50",
+    "descrizione": "Sensori e centralina riconoscono segnali di un possibile incendio. Il sistema può attivare un allarme.",
+    "perche_conta": "Per le attività soggette, il DPR 151/2011, art. 6, richiede sistemi di sicurezza efficienti. La frequenza dipende dal progetto e dalle norme tecniche applicabili.",
+    "chi_la_fa": "Tecnico qualificato per impianti di rivelazione, incaricato dall’amministratore. Tu segnala guasti o allarmi anomali.",
+    "cosa_conservare": "Rapporto di manutenzione del sistema di rivelazione incendi e registro antincendio, se previsto.",
+    "come_si_fa": null,
+    "fonti": [
+      {
+        "norma": "DPR 151/2011",
+        "articolo": "6",
+        "url": "https://www.gazzettaufficiale.it/eli/id/2011/09/22/011G0193/sg"
+      },
+      {
+        "norma": "DM 1 settembre 2021",
+        "articolo": "3",
+        "url": "https://www.gazzettaufficiale.it/atto/serie_generale/caricaArticolo?art.codiceRedazionale=21A05589&art.dataPubblicazioneGazzetta=2021-09-25&art.flagTipoArticolo=0&art.idArticolo=3&art.idGruppo=0&art.idSottoArticolo=1&art.idSottoArticolo1=10&art.progressivo=0&art.versione=1"
+      },
+      {
+        "norma": "DM 22 settembre 2026",
+        "articolo": "1, inserimento art. 6-bis nel DM 1 settembre 2021",
+        "url": "https://www.gazzettaufficiale.it/eli/id/2026/09/24/26A05078/sg"
+      }
+    ],
+    "da_verificare": [
+      "Applicabilità alla singola attività e frequenza effettiva da verificare su progetto, norme tecniche e manuali.",
+      "Verificare la qualificazione del manutentore e l’eventuale regime transitorio del DM 22/9/2026."
+    ]
+  },
+  {
+    "id": "8b0ca75c",
+    "descrizione": "Sono dispositivi che aiutano a far uscire fumo e calore durante un incendio. Possono essere aperture o sistemi azionati automaticamente.",
+    "perche_conta": "Per le attività soggette, il DPR 151/2011, art. 6, richiede misure antincendio efficienti. La frequenza dipende dal sistema e dalle norme tecniche applicabili.",
+    "chi_la_fa": "Tecnico qualificato per sistemi di evacuazione fumo, incaricato dall’amministratore. Tu non azionare i dispositivi per prova.",
+    "cosa_conservare": "Rapporto di manutenzione degli evacuatori di fumo e registro antincendio, se previsto.",
+    "come_si_fa": null,
+    "fonti": [
+      {
+        "norma": "DPR 151/2011",
+        "articolo": "6",
+        "url": "https://www.gazzettaufficiale.it/eli/id/2011/09/22/011G0193/sg"
+      },
+      {
+        "norma": "DM 1 settembre 2021",
+        "articolo": "3",
+        "url": "https://www.gazzettaufficiale.it/atto/serie_generale/caricaArticolo?art.codiceRedazionale=21A05589&art.dataPubblicazioneGazzetta=2021-09-25&art.flagTipoArticolo=0&art.idArticolo=3&art.idGruppo=0&art.idSottoArticolo=1&art.idSottoArticolo1=10&art.progressivo=0&art.versione=1"
+      },
+      {
+        "norma": "DM 22 settembre 2026",
+        "articolo": "1, inserimento art. 6-bis nel DM 1 settembre 2021",
+        "url": "https://www.gazzettaufficiale.it/eli/id/2026/09/24/26A05078/sg"
+      }
+    ],
+    "da_verificare": [
+      "Applicabilità alla singola attività e frequenza effettiva da verificare su progetto, norme tecniche e manuali.",
+      "Verificare la qualificazione del manutentore e l’eventuale regime transitorio del DM 22/9/2026."
+    ]
+  },
+  {
+    "id": "ad4d4154",
+    "descrizione": "I serbatoi accumulano acqua e l’autoclave aiuta a distribuirla. Pulizia e sanificazione eliminano depositi e riducono le contaminazioni.",
+    "perche_conta": "Aiuta a mantenere condizioni igieniche adeguate nell’impianto idrico.",
+    "chi_la_fa": "Impresa specializzata incaricata dall’amministratore. Tu segnala acqua con odore o aspetto insolito.",
+    "cosa_conservare": "Rapporto di pulizia e sanificazione; eventuali analisi dell’acqua.",
+    "come_si_fa": null,
+    "fonti": [],
+    "da_verificare": [
+      "Verificare piano igienico-sanitario, prodotti ammessi e frequenza adatta all’impianto."
+    ]
+  },
+  {
+    "id": "b6525a25",
+    "descrizione": "L’autoclave aiuta a mantenere una pressione regolare dell’acqua. Il tecnico controlla pompe, comandi e perdite.",
+    "perche_conta": "Può prevenire guasti e cali di pressione nei rubinetti.",
+    "chi_la_fa": "Idraulico o tecnico di pompe incaricato dall’amministratore. Tu segnala cali di pressione o rumori insoliti.",
+    "cosa_conservare": "Rapporto di verifica funzionale del gruppo autoclave.",
+    "come_si_fa": null,
+    "fonti": [],
+    "da_verificare": [
+      "Verificare configurazione dell’impianto e frequenza prevista dal fabbricante."
+    ]
+  },
+  {
+    "id": "c65893f9",
+    "descrizione": "La Legionella è un batterio che può svilupparsi in alcuni impianti idrici. La valutazione cerca situazioni a rischio e stabilisce eventuali controlli dell’acqua.",
+    "perche_conta": "Aiuta a ridurre il rischio sanitario. La necessità dei campionamenti dipende dall’edificio e dall’impianto: te la conferma il tecnico.",
+    "chi_la_fa": "Tecnico esperto di rischio legionella e laboratorio competente, incaricati dall’amministratore. Tu segnala anomalie dell’acqua.",
+    "cosa_conservare": "Valutazione del rischio legionella e rapporti di campionamento e analisi, se eseguiti.",
+    "come_si_fa": null,
+    "fonti": [
+      {
+        "norma": "DGR Veneto 1250/2015",
+        "articolo": "Recepimento linee guida legionellosi",
+        "url": "https://bur.regione.veneto.it/BurvServices/pubblica/DettaglioDgr.aspx?id=307550"
+      }
+    ],
+    "da_verificare": [
+      "Verificare se l’edificio rientra negli obblighi specifici e se i campionamenti annuali sono necessari."
+    ]
+  },
+  {
+    "id": "7ed48ab6",
+    "descrizione": "Il motore apre e chiude cancelli o portoni. Il tecnico controlla movimento, fotocellule e dispositivi di sicurezza.",
+    "perche_conta": "Riduce blocchi e rischi durante l’apertura e la chiusura.",
+    "chi_la_fa": "Tecnico di automazioni incaricato dall’amministratore. Tu segnala ostacoli, urti o aperture anomale.",
+    "cosa_conservare": "Rapporto di manutenzione del cancello o portone automatico.",
+    "come_si_fa": null,
+    "fonti": [
+      {
+        "norma": "DM 37/2008",
+        "articolo": "1 e 3",
+        "url": "https://www.normattiva.it/atto/caricaDettaglioAtto?atto.codiceRedazionale=008G0060&atto.dataPubblicazioneGazzetta=2008-03-12&tipoDettaglio=vigente"
+      }
+    ],
+    "da_verificare": [
+      "Verificare quanto indicato nel manuale dell’automazione e nella valutazione dei rischi."
+    ]
+  },
+  {
+    "id": "b5a0b565",
+    "descrizione": "Le pompe sollevano le acque di scarico quando non possono scorrere da sole. Il controllo riguarda pompe, galleggianti e allarmi.",
+    "perche_conta": "Riduce il rischio di blocchi, cattivi odori e allagamenti.",
+    "chi_la_fa": "Tecnico di elettropompe o impresa idraulica incaricata dall’amministratore. Tu segnala odori, allarmi o scarichi lenti.",
+    "cosa_conservare": "Rapporto di manutenzione dell’impianto di sollevamento reflui.",
+    "come_si_fa": null,
+    "fonti": [],
+    "da_verificare": [
+      "Verificare componenti e frequenze del fabbricante."
+    ]
+  },
+  {
+    "id": "9d6ed668",
+    "descrizione": "Le canne fumarie portano fuori i prodotti della combustione. Depositi e ostruzioni possono ostacolare il passaggio dei fumi.",
+    "perche_conta": "Aiuta a evitare ostruzioni e problemi di tiraggio, proteggendo il funzionamento degli apparecchi collegati.",
+    "chi_la_fa": "Tecnico specializzato in sistemi fumari incaricato dall’amministratore. Tu segnala odori di fumo o anomalie e non intervenire.",
+    "cosa_conservare": "Rapporto di pulizia e controllo della canna fumaria collettiva.",
+    "come_si_fa": null,
+    "fonti": [],
+    "da_verificare": [
+      "Verificare il tipo di canna fumaria, gli apparecchi collegati e la frequenza applicabile."
+    ]
+  }
+]
