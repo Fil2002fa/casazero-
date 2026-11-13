@@ -26,7 +26,7 @@ function LoadedIllustration({ asset }: { asset: MaintenanceIllustrationAsset }) 
         onLoad={() => setStatus('loaded')}
         onError={() => setStatus('failed')}
       />
-      <figcaption className="mt-2 text-xs leading-relaxed text-text-secondary">Illustrazione divulgativa</figcaption>
+      <figcaption className="mt-2 text-xs leading-relaxed text-text-secondary">Immagine illustrativa</figcaption>
     </figure>
   )
 }

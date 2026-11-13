@@ -109,7 +109,7 @@ export function ManutenzioniList({ items, today, residenceName, unitLabel }: {
             : attentionCount > 0 ? `${attentionCount === 1 ? 'C’è' : 'Ci sono'} ${pluralize(attentionCount, 'cosa', 'cose')} a cui pensare.`
             : awaitingCount > 0 ? 'Alcune voci attendono la consegna.'
             : progressCount > 0 ? 'Ci sono interventi in corso.'
-            : unitItems.length === 0 ? 'Consulta le manutenzioni comuni.' : 'Nessuna attività urgente, per ora.'}
+            : unitItems.length === 0 ? 'Consulta le manutenzioni comuni.' : 'Tutto in regola.'}
         </h2>
         <div className={styles.counts}>
           <span><strong>{overdueCount}</strong> {overdueCount === 1 ? 'scaduta' : 'scadute'}</span>

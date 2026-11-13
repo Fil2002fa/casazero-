@@ -7,7 +7,7 @@ import QRCode from 'qrcode'
 import { DEFAULT_NOTIFICATION_PREFS } from '@/types/database'
 import type { NotificationPrefs } from '@/types/database'
 
-export const metadata: Metadata = { title: 'Profilo' }
+export const metadata: Metadata = { title: 'Area personale' }
 
 export default async function ProfiloPage() {
   const supabase = await createClient()
@@ -16,7 +16,7 @@ export default async function ProfiloPage() {
 
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('notification_prefs')
+    .select('full_name, phone, notification_prefs')
     .eq('id', user.id)
     .single()
 
@@ -118,6 +118,9 @@ export default async function ProfiloPage() {
 
   return (
     <ProfiloClient
+      fullName={profile?.full_name ?? null}
+      phone={profile?.phone ?? null}
+      email={user.email ?? ''}
       unit={unit}
       members={members}
       invites={invitesWithQR}

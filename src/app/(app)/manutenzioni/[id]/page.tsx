@@ -18,6 +18,7 @@ import { formatFrequency } from '@/lib/formatFrequency'
 import { pluralize } from '@/lib/pluralize'
 import { isResidentGuideAvailable } from '../guide-eligibility'
 import { resolveMaintenanceIllustrations } from '../maintenance-illustrations'
+import { getResidentGuideContent } from './guida/guide-content'
 import { MaintenanceIllustration } from '../MaintenanceIllustration'
 import {
   isOverdueLive, isAwaitingDelivery, AWAITING_DELIVERY_LABEL, resolveCompletionMode, resolveFrequencyMonths, resolveLiveStatus,
@@ -132,7 +133,7 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
   // Unità attiva del client per il form di completamento residente
   const { data: membership, error: membershipError } = await supabase
     .from('unit_members')
-    .select('unit_id')
+    .select('unit_id, units(residence_id)')
     .eq('profile_id', profile.id)
     .is('ended_at', null)
     .maybeSingle()
@@ -147,28 +148,27 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
     !membershipError &&
     membership?.unit_id === item.unit_id
 
+  const membershipUnit = membership?.units as unknown as { residence_id: string } | null
   const canStartGuide = isResidentGuideAvailable({
+    templateId: item.template_id,
     isClient: profile.role === 'client',
     isOwnUnit: Boolean(item.unit_id && !membershipError && membership?.unit_id === item.unit_id),
     isApartmentItem: item.unit_id !== null,
+    isCommonItem: isCommon && tpl?.scope === 'condominium',
+    isOwnResidence: Boolean(!membershipError && membership?.unit_id && membershipUnit?.residence_id === item.residence_id),
     completionMode: mode,
     activationStatus: item.activation_status,
     templateActive: tpl?.is_active === true,
-    title: tpl?.title ?? null,
-    whoDoesIt: tpl?.who_does_it ?? null,
-    howTo: tpl?.how_to ?? null,
   })
 
   const isAdmin = profile.role === 'admin' || profile.role === 'super_admin'
   const illustrations = canStartGuide
-    ? resolveMaintenanceIllustrations(item.template_id, tpl?.title, tpl?.how_to)
+    ? resolveMaintenanceIllustrations(item.template_id)
     : null
   // Limita la presentazione della card ai template approvati, senza cambiare
   // i controlli di autorizzazione della guida o della registrazione.
-  const showGuideCard = canStartGuide && (
-    item.template_id === '010214e7-7058-4d5d-a70c-69654aa66fa0' ||
-    item.template_id === '132b0e68-61e1-420b-adc6-e54703f49415'
-  )
+  const guideContent = getResidentGuideContent(item.template_id)
+  const showGuideCard = canStartGuide && guideContent !== null
   const isAdminMode = mode === 'amministratore'
   const registeredBy = mode === 'promemoria' ? 'Nessuna registrazione prevista.'
     : mode === 'amministratore' ? "L'amministratore di condominio."
@@ -233,14 +233,14 @@ export default async function ItemDetailPage({ params }: { params: Params }) {
               <BookOpen aria-hidden="true" size={30} />
             </span>
             <div className="min-w-0 flex-1">
-              <h2 id="guide-available-title">Guida pratica disponibile</h2>
-              <p>Consulta i passaggi pratici per {tpl?.title?.toLocaleLowerCase('it-IT')}.</p>
+              <h2 id="guide-available-title">Guida informativa disponibile</h2>
+              <p>Leggi informazioni utili su {guideContent?.title.toLocaleLowerCase('it-IT')}.</p>
             </div>
           </div>
           <MaintenanceIllustration asset={illustrations?.overview} />
           <Link href={`/manutenzioni/${item.id}/guida`} className={`${styles.button} ${styles.detailGuideButton}`}>
             <BookOpen aria-hidden="true" className="h-4 w-4" />
-            Inizia la guida
+            Consulta la guida
             <ArrowRight aria-hidden="true" className="h-4 w-4" />
           </Link>
         </section>
