@@ -47,7 +47,8 @@
     "verify:pdftext": "node --experimental-strip-types --no-warnings scripts/verify-pdf-text.mjs",
     "verify:resdraftroute": "node --experimental-strip-types --no-warnings scripts/verify-residence-draft-route.mjs",
     "verify:maintconfig": "node --experimental-strip-types --no-warnings scripts/verify-maintenance-config.mjs",
-    "verify:saluto": "node --experimental-strip-types --no-warnings scripts/verify-greeting.mjs"
+    "verify:saluto": "node --experimental-strip-types --no-warnings scripts/verify-greeting.mjs",
+    "verify:homesummary": "node --experimental-strip-types --no-warnings scripts/verify-home-summary.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.4",

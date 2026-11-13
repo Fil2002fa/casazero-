@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import Image from 'next/image'
-import { BookOpen, CalendarClock, ChevronRight, FileText, Home as HomeIcon, Check } from 'lucide-react'
+import { BookOpen, CalendarClock, ChevronRight, Home as HomeIcon, Check } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireProfile, getUser } from '@/lib/auth'
 import { MaintenanceCard } from '@/components/MaintenanceCard'
@@ -11,6 +11,7 @@ import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import { pluralize } from '@/lib/pluralize'
 import { HomeRiepilogo } from './HomeRiepilogo'
 import { buildGreeting } from '@/lib/greeting'
+import { summarizeHome } from '@/lib/home-summary'
 import { deliveryChip, residenceInitials, usablePhotoUrl } from '@/lib/home-card'
 import styles from './home.module.css'
 import {
@@ -110,6 +111,7 @@ export default async function HomePage() {
   const urgent = ((rawUrgent ?? []) as unknown as ItemRow[])
     .filter(i => resolveCompletionMode(i) !== 'promemoria' && (isOverdueLive(i, today) || isInCorso(i)))
   const urgentCount = urgent.length
+  const summary = summarizeHome((rawUrgent ?? []) as unknown as ItemRow[], today)
 
   // Prossimo item DATATO futuro, escluse le promemoria: prima riga countable non-promemoria.
   const nextItem =
@@ -215,26 +217,19 @@ export default async function HomePage() {
       </section>
 
       <HomeRiepilogo
-        shown={primaryItem}
+        awaitingDelivery={riepilogoAwaiting}
+        overdue={summary.overdue}
+        soon={summary.soon}
+        top={summary.top && {
+          overdue: summary.top.overdue,
+          item: {
+            id: summary.top.item.id,
+            title: summary.top.item.maintenance_templates?.title ?? 'Manutenzione',
+            dueISO: summary.top.item.next_due_date,
+          },
+        }}
         today={today}
-        awaitingDelivery={riepilogoAwaiting && urgentCount === 0}
-        urgentCount={urgentCount}
       />
-
-      <nav aria-label="Accessi principali" className="grid grid-cols-1 min-[375px]:grid-cols-2 gap-3">
-        {[
-          { href: '/manutenzioni', title: 'Manutenzioni', subtitle: 'Scadenze e interventi', Icon: CalendarClock },
-          { href: '/documenti', title: 'Documenti', subtitle: 'Manuali e certificati', Icon: FileText },
-        ].map(({ href, title, subtitle, Icon }) => (
-          <Link key={href} href={href} className="min-w-0 rounded-xl border border-border bg-surface p-4 space-y-2 active:bg-background focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-dark/20">
-            <Icon className="w-5 h-5 text-brand-medium" strokeWidth={1.6} aria-hidden="true" />
-            <div className="break-words">
-              <p className="text-sm font-medium text-text-primary">{title}</p>
-              <p className="text-xs text-text-secondary mt-1">{subtitle}</p>
-            </div>
-          </Link>
-        ))}
-      </nav>
 
       {/* Prime card urgenti */}
       {urgentItems.length > 0 && (
