@@ -8,6 +8,7 @@ import { resolveCompletionMode, type LiveStatusItem } from '@/lib/maintenance-st
 import { isResidentGuideAvailable } from '../../guide-eligibility'
 import { GuideExperience } from './GuideExperience'
 import { resolveMaintenanceIllustrations } from '../../maintenance-illustrations'
+import { getResidentGuideContent } from './guide-content'
 
 export const metadata: Metadata = { title: 'Guida manutenzione' }
 
@@ -21,7 +22,7 @@ export default async function ResidentMaintenanceGuidePage({ params }: { params:
   const supabase = await createClient()
   const { data: item, error: itemError } = await supabase
     .from('maintenance_items')
-    .select('id, template_id, unit_id, completion_mode, activation_status, maintenance_templates!inner(title, description, who_does_it, how_to, completion_mode, is_active)')
+    .select('id, template_id, unit_id, completion_mode, activation_status, maintenance_templates!inner(completion_mode, is_active)')
     .eq('id', id)
     .maybeSingle()
 
@@ -44,28 +45,23 @@ export default async function ResidentMaintenanceGuidePage({ params }: { params:
   }
 
   const template = item.maintenance_templates as unknown as {
-    title: string
-    description: string | null
-    who_does_it: string | null
-    how_to: string[] | null
     completion_mode: 'residente' | 'amministratore' | 'promemoria' | null
     is_active: boolean
   } | null
   const liveItem = item as unknown as LiveStatusItem
   const eligible = isResidentGuideAvailable({
+    templateId: item.template_id,
     isClient: profile.role === 'client',
     isOwnUnit: Boolean(item.unit_id && membership?.unit_id === item.unit_id),
     isApartmentItem: item.unit_id !== null,
     completionMode: resolveCompletionMode(liveItem),
     activationStatus: item.activation_status,
     templateActive: template?.is_active === true,
-    title: template?.title ?? null,
-    whoDoesIt: template?.who_does_it ?? null,
-    howTo: template?.how_to ?? null,
   })
-  if (!eligible || !template?.how_to) notFound()
+  const guideContent = getResidentGuideContent(item.template_id)
+  if (!eligible || !template || !guideContent) notFound()
 
-  const illustrations = resolveMaintenanceIllustrations(item.template_id, template.title, template.how_to)
+  const illustrations = resolveMaintenanceIllustrations(item.template_id)
 
-  return <GuideExperience title={template.title} description={template.description} whoDoesIt={template.who_does_it!} steps={template.how_to} stepIllustrations={illustrations?.steps.map(step => [step.illustration, ...(step.additionalIllustrations ?? [])].filter((asset): asset is NonNullable<typeof asset> => Boolean(asset)))} detailHref={`/manutenzioni/${id}`} />
+  return <GuideExperience content={guideContent} stepIllustrations={illustrations?.steps} detailHref={`/manutenzioni/${id}`} />
 }
