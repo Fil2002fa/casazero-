@@ -7,7 +7,8 @@ import { reviewGroupKey } from './document-review'
 import { displayDate, type DocRow } from './document-rows'
 import { humanizeDocumentTitle } from './documentTitle'
 
-export type HomeDocGroup = { key: string; latest: DocRow; extra: number }
+// `docs`: tutte le versioni del gruppo, la più recente per prima (la pagina Documenti le elenca).
+export type HomeDocGroup = { key: string; latest: DocRow; docs: DocRow[]; extra: number }
 
 /** Un gruppo per file+tipo, col più recente (created_at, spareggio id); ordine: più recente prima. */
 export function groupHomeDocuments(docs: readonly DocRow[]): HomeDocGroup[] {
@@ -21,7 +22,7 @@ export function groupHomeDocuments(docs: readonly DocRow[]): HomeDocGroup[] {
   }
   return [...byKey].map(([key, list]) => {
     const sorted = [...list].sort(newest)
-    return { key, latest: sorted[0], extra: sorted.length - 1 }
+    return { key, latest: sorted[0], docs: sorted, extra: sorted.length - 1 }
   }).sort((a, b) => newest(a.latest, b.latest))
 }
 
