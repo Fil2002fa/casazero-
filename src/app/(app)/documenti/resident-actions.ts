@@ -22,6 +22,7 @@ import {
   RESIDENT_DOC_MAX_BYTES,
   RESIDENT_DOC_MAX_PER_UNIT,
   RESIDENT_DOC_TYPE_ERROR,
+  isLowerUuid,
   isResidentDocKind,
   isResidentDocPathFor,
   matchesMagicBytes,
@@ -167,6 +168,51 @@ export async function confirmResidentDocument(input: {
 
   revalidatePath('/documenti')
   return { ok: true, id }
+}
+
+/**
+ * Elimina un documento visibile (qualunque membro attivo dell'unità può, 059).
+ * Prima l'oggetto, poi la riga: la policy DELETE del bucket richiede che la
+ * riga esista, quindi l'ordine inverso lascerebbe un file non più eliminabile
+ * dal residente. Se l'oggetto non si toglie, la riga resta e si riprova.
+ */
+export async function deleteResidentDocument(input: { id: unknown }): Promise<{ ok: true } | Fail> {
+  const action = 'deleteResidentDocument'
+  const caller = await requireCaller(action, ['client'])
+  if ('error' in caller) return { ok: false, error: caller.error }
+  if (!isLowerUuid(input.id)) return { ok: false, error: 'Documento non trovato.' }
+  const id = input.id
+
+  const supabase = await createClient()
+  const { data: row, error: readError } = await supabase
+    .from('resident_documents')
+    .select('storage_path')
+    .eq('id', id)
+    .maybeSingle()
+  if (readError) {
+    console.error(`${action}: lettura riga fallita`, { userId: caller.userId, id, error: readError })
+    return { ok: false, error: 'Non è stato possibile eliminare il documento. Riprova tra poco.' }
+  }
+  if (!row) return { ok: false, error: 'Documento non trovato: forse è già stato eliminato.' }
+  const path = row.storage_path as string
+
+  const { error: removeError } = await supabase.storage.from(RESIDENT_DOC_BUCKET).remove([path])
+  if (removeError) {
+    console.error(`${action}: rimozione oggetto fallita, riga lasciata`, { userId: caller.userId, id, path, error: removeError })
+    return { ok: false, error: 'Non è stato possibile eliminare il documento. Riprova tra poco.' }
+  }
+
+  const { data: deleted, error: deleteError } = await supabase.from('resident_documents').delete().eq('id', id).select('id')
+  if (deleteError || !deleted || deleted.length !== 1) {
+    // Oggetto già tolto: la riga resta senza file. Un nuovo tentativo la toglie
+    // (remove su un oggetto che non c'è non è un errore).
+    console.error(`${action}: rimozione riga fallita dopo l'oggetto`, { userId: caller.userId, id, deleted: deleted?.length ?? null, error: deleteError })
+    revalidatePath('/documenti')
+    return { ok: false, error: 'Il file è stato tolto ma il documento è ancora in elenco. Riprova a eliminarlo.' }
+  }
+
+  revalidatePath('/documenti')
+  return { ok: true }
 }
 
 type ServerClient = Awaited<ReturnType<typeof createClient>>
