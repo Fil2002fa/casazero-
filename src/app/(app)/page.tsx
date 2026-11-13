@@ -1,8 +1,8 @@
 import Link from 'next/link'
 import Image from 'next/image'
-import { BookOpen, Building2, CalendarClock, ChevronRight, FileText } from 'lucide-react'
+import { BookOpen, CalendarClock, ChevronRight, FileText, Home as HomeIcon, Check } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
-import { requireProfile } from '@/lib/auth'
+import { requireProfile, getUser } from '@/lib/auth'
 import { MaintenanceCard } from '@/components/MaintenanceCard'
 import { AwaitingDeliveryHomeCard } from '@/components/AwaitingDelivery'
 import { OBLIGATION_LABELS } from '@/components/MaintenanceBadge'
@@ -10,6 +10,9 @@ import type { ObligationType } from '@/types/database'
 import { formatUnitLabel } from '@/lib/formatUnitLabel'
 import { pluralize } from '@/lib/pluralize'
 import { HomeRiepilogo } from './HomeRiepilogo'
+import { buildGreeting } from '@/lib/greeting'
+import { deliveryChip, residenceInitials, usablePhotoUrl } from '@/lib/home-card'
+import styles from './home.module.css'
 import {
   isCountable, isInCorso, isOverdueLive, isAwaitingDelivery, resolveCompletionMode,
   resolveFrequencyMonths, resolveLiveStatus, resolveObligationType, formatRelativeDue, todayISO,
@@ -50,6 +53,7 @@ type NextItemRow = LiveStatusItem & {
 
 export default async function HomePage() {
   const profile = await requireProfile()
+  const user = await getUser()
   const supabase = await createClient()
 
   const today = todayISO()
@@ -63,7 +67,7 @@ export default async function HomePage() {
   ] = await Promise.all([
     supabase
       .from('unit_members')
-      .select('unit_id, units(id, label, residence_id, residences(name, photo_url))')
+      .select('unit_id, units(id, label, delivery_date, residence_id, residences(name, photo_url, address))')
       .eq('profile_id', profile.id)
       .is('ended_at', null)
       .maybeSingle(),
@@ -97,8 +101,8 @@ export default async function HomePage() {
   ])
 
   const unit = membership?.units as unknown as {
-    id: string; label: string; residence_id: string
-    residences: { name: string; photo_url: string | null } | null
+    id: string; label: string; delivery_date: string | null; residence_id: string
+    residences: { name: string; photo_url: string | null; address: string | null } | null
   } | null
 
   // Banner e card leggono la STESSA lista filtrata: il conteggio non può
@@ -156,37 +160,59 @@ export default async function HomePage() {
     : null
 
   const residenceName = unit?.residences?.name ?? 'La tua residenza'
-  const photoUrl      = unit?.residences?.photo_url ?? null
+  const photoUrl      = usablePhotoUrl(unit?.residences?.photo_url)
+  const address       = unit?.residences?.address?.trim() || null
+  const greeting      = buildGreeting(profile.full_name, user?.email, new Date())
+  const delivery      = deliveryChip(unit?.delivery_date, today)
 
   return (
-    <div className="p-4 space-y-6 pb-safe">
-      {/* Header residenza */}
-      <header className="space-y-1 [overflow-wrap:anywhere]">
-        <h1 className="font-serif text-2xl font-semibold text-text-primary">{residenceName}</h1>
-        {unit && <p className="text-base text-text-secondary">{formatUnitLabel(unit.label)}</p>}
-      </header>
+    <div className={`${styles.home} space-y-6 pb-safe`}>
+      <div>
+        <div className={styles.eyebrow}>La tua casa</div>
+        <h1 className={styles.pageTitle}>
+          {greeting.name ? `${greeting.word}, ${greeting.name}` : greeting.word}
+          <span>.</span>
+        </h1>
+        <p className={styles.lead}>Cosa c&apos;è da fare, i documenti della casa e chi contattare. Tutto in un posto.</p>
+      </div>
 
-      {/* Card residenza */}
-      <div className="bg-surface rounded-xl border border-border overflow-hidden">
-        <div className={`relative bg-background flex items-center justify-center ${photoUrl ? 'h-36' : 'h-16'}`}>
-          {photoUrl ? (
-            // Elemento LCP della home (misurato 4,66s con <img> nudo): next/image
-            // ridimensiona/serve WebP e priority salta il lazy-loading e precarica.
-            // sizes: colonna max-w-lg (32rem) meno p-4 per lato = 480px; sotto,
-            // tutta la larghezza meno 2rem. Da ricalcolare se cambiano quei due valori.
+      {/* Card residenza: non cliccabile. Foto se valida, altrimenti iniziali. */}
+      <section className={styles.resCard} aria-label="La tua residenza">
+        {photoUrl ? (
+          <div className="relative h-[138px] bg-background">
+            {/* Elemento LCP della home: next/image + priority. sizes: colonna max-w-lg
+                (32rem) meno 20px di padding per lato = 472px; sotto, 100vw - 40px. */}
             <Image
               src={photoUrl}
               alt={residenceName}
               fill
-              sizes="(min-width: 560px) 480px, calc(100vw - 2rem)"
+              sizes="(min-width: 560px) 472px, calc(100vw - 2.5rem)"
               priority
               className="object-cover"
             />
-          ) : (
-            <Building2 className="h-6 w-6 text-brand-medium" strokeWidth={1.6} aria-hidden="true" />
-          )}
+          </div>
+        ) : (
+          <div className={styles.resVisual} aria-hidden="true">
+            <span className={styles.resInitials}>{residenceInitials(residenceName)}</span>
+            <HomeIcon className={styles.resIco} size={54} strokeWidth={1.4} />
+          </div>
+        )}
+        <div className={styles.resBody}>
+          <h2 className={styles.resName}>{residenceName}</h2>
+          <div className={styles.resAddr}>{address ?? 'Indirizzo non indicato'}</div>
+          <div className={styles.pillRow}>
+            {unit
+              ? <span className={`${styles.chip} ${styles.chipNeutral}`}>{formatUnitLabel(unit.label)}</span>
+              : <span className={`${styles.chip} ${styles.chipNeutral}`}>Nessuna unità associata</span>}
+            {unit && (
+              <span className={`${styles.chip} ${delivery.tone === 'done' ? styles.chipDone : styles.chipSoon}`}>
+                {delivery.tone === 'done' && <Check size={12} aria-hidden="true" />}
+                {delivery.text}
+              </span>
+            )}
+          </div>
         </div>
-      </div>
+      </section>
 
       <HomeRiepilogo
         shown={primaryItem}
