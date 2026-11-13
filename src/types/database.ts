@@ -210,6 +210,43 @@ export interface ActivityEvent {
 }
 
 /**
+ * Tipo di un documento del residente: allineato uno a uno al CHECK su
+ * `resident_documents.doc_kind` (059_resident_documents.sql). Etichette e
+ * ordine vivono in src/lib/resident-document-upload.ts.
+ */
+export type ResidentDocKind =
+  | 'ricevuta'
+  | 'rapporto_tecnico'
+  | 'garanzia'
+  | 'manuale'
+  | 'foto'
+  | 'altro'
+
+/** MIME ammessi, allineati al CHECK su `mime_type` e al bucket `resident-documents`. */
+export type ResidentDocMime = 'application/pdf' | 'image/jpeg' | 'image/png' | 'image/webp'
+
+/**
+ * Documento caricato dal residente (059_resident_documents.sql). Visibile solo
+ * se chi guarda E chi ha caricato sono membri attivi della stessa unità; solo
+ * ruolo client. Nessun UPDATE: si elimina e si ricarica.
+ *
+ * `storage_path` = `{unit_id}/{uuid}.{ext}` nel bucket privato
+ * `resident-documents`: il nome file dell'utente non entra mai né nel path né
+ * nella tabella. `uploaded_by` ha default auth.uid().
+ */
+export interface ResidentDocument {
+  id: string
+  unit_id: string
+  uploaded_by: string
+  doc_kind: ResidentDocKind
+  title: string
+  storage_path: string
+  mime_type: ResidentDocMime
+  size_bytes: number
+  created_at: string
+}
+
+/**
  * Correzione manuale di un campo estratto (048_document_field_overrides.sql).
  * Stato corrente, non storico: una riga = la correzione in vigore per quel
  * campo; "Ripristina valore AI" è una DELETE.
