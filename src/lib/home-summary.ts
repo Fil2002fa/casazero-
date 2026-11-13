@@ -34,3 +34,32 @@ export function summarizeHome<T extends LiveStatusItem>(items: readonly T[], tod
     top: topOverdue ? { item: topOverdue, overdue: true } : topSoon ? { item: topSoon, overdue: false } : null,
   }
 }
+
+// "In arrivo": le prossime voci del piano dopo quella già in evidenza nella card
+// verde. Stesso perimetro dei conteggi (countable, non promemoria, non completate),
+// stato per voce con gli stessi predicati di timedState (maintenance-list.ts) e le
+// stesse etichette (LIST_STATE_LABELS). L'ordine è quello d'ingresso: le query
+// ordinano per next_due_date crescente con le date nulle in fondo.
+import { LIST_STATE_LABELS, type ListState } from './maintenance-list'
+import { isAwaitingDelivery } from './maintenance-status'
+
+export type UpcomingRow<T> = { item: T; state: ListState; label: string }
+
+export function upcomingItems<T extends LiveStatusItem & { id: string }>(
+  items: readonly T[], today: string, excludeId: string | null, limit = 3,
+): UpcomingRow<T>[] {
+  const soonLimit = addDaysISO(today, SOON_WINDOW_DAYS)
+  const rows: UpcomingRow<T>[] = []
+  for (const i of items) {
+    if (i.id === excludeId) continue
+    if (!isCountable(i) || resolveCompletionMode(i) === 'promemoria' || i.status === 'completata') continue
+    const state: ListState = isOverdueLive(i, today) ? 'scaduta'
+      : isInCorso(i) ? 'in_corso'
+      : isAwaitingDelivery(i) ? 'in_attesa_consegna'
+      : i.next_due_date !== null && i.next_due_date <= soonLimit ? 'entro_30'
+      : 'piu_avanti'
+    rows.push({ item: i, state, label: LIST_STATE_LABELS[state] })
+    if (rows.length === limit) break
+  }
+  return rows
+}
