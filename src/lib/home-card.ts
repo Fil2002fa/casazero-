@@ -29,3 +29,9 @@ export function deliveryChip(deliveryDate: string | null | undefined, today: str
     ? { tone: 'done', text: `Consegnata il ${formatDateIT(d)}` }
     : { tone: 'pending', text: `Consegna prevista il ${formatDateIT(d)}` }
 }
+
+/** Tipo file dall'estensione di file_name, maiuscolo ("a.b.pdf" → "PDF"); stringa vuota se manca. */
+export function fileTypeLabel(fileName: string | null | undefined): string {
+  const m = /\.([A-Za-z0-9]{1,5})$/.exec((fileName ?? '').trim())
+  return m ? m[1].toUpperCase() : ''
+}

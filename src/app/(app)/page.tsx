@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import Image from 'next/image'
-import { ArrowRight, BookOpen, CalendarClock, ChevronRight, Home as HomeIcon, Check } from 'lucide-react'
+import { ArrowRight, BookOpen, CalendarClock, ChevronRight, FileText, Home as HomeIcon, Check } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requireProfile, getUser } from '@/lib/auth'
 import type { ObligationType } from '@/types/database'
@@ -11,7 +11,9 @@ import { pluralize } from '@/lib/pluralize'
 import { HomeRiepilogo } from './HomeRiepilogo'
 import { buildGreeting } from '@/lib/greeting'
 import { summarizeHome, upcomingItems } from '@/lib/home-summary'
-import { deliveryChip, residenceInitials, usablePhotoUrl } from '@/lib/home-card'
+import { loadResidenceDocumentRows } from '@/lib/document-rows.server'
+import { SISTEMA_LABELS } from '@/lib/document-classification'
+import { deliveryChip, fileTypeLabel, residenceInitials, usablePhotoUrl } from '@/lib/home-card'
 import styles from './home.module.css'
 import {
   isCountable, isAwaitingDelivery, resolveCompletionMode, formatRelativeDue, todayISO,
@@ -94,6 +96,13 @@ export default async function HomePage() {
   const riepilogoAwaiting =
     ((rawUrgent ?? []) as unknown as ItemRow[]).some(i => isAwaitingDelivery(i) && resolveCompletionMode(i) === 'residente') &&
     !((rawUrgent ?? []) as unknown as ItemRow[]).some(i => isCountable(i) && resolveCompletionMode(i) === 'residente' && i.next_due_date !== null)
+
+  // Documenti della casa: stesso loader di /documenti, client di sessione (RLS:
+  // documenti della mia unità e della residenza). I più recenti per caricamento.
+  const docsResult = unit
+    ? await loadResidenceDocumentRows(supabase, unit.residence_id)
+    : { docs: [], units: [], error: null }
+  const recentDocs = docsResult.docs.slice(0, 3)
 
   // Teaser fascicolo. Perimetro IDENTICO a /fascicolo tab "Tutti" per un client
   // (unità + parti condominiali): residence_id = mia residenza AND (unit_id = mia
@@ -219,6 +228,45 @@ export default async function HomePage() {
             ))}
             <div className={styles.listFoot}>
               <Link href="/manutenzioni" className={styles.ghostLink}>Apri il piano di manutenzione <ArrowRight size={15} aria-hidden="true" /></Link>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* Documenti della casa */}
+      <section aria-label="Documenti della casa">
+        <div className={styles.sectionHeader}>
+          <h2 className={styles.sectionTitle}>Documenti della casa</h2>
+          {docsResult.docs.length > 0 && <span className={styles.sectionCount}>{pluralize(docsResult.docs.length, 'documento', 'documenti')}</span>}
+        </div>
+        {docsResult.error ? (
+          <div className={styles.empty}>
+            <strong>Documenti non disponibili</strong>
+            Non è stato possibile caricarli. Riprova tra poco.
+          </div>
+        ) : recentDocs.length === 0 ? (
+          <div className={styles.empty}>
+            <strong>Nessun documento</strong>
+            I documenti della tua casa compariranno qui appena caricati.
+          </div>
+        ) : (
+          <div className={styles.listCard}>
+            {recentDocs.map(d => (
+              <Link key={d.id} href="/documenti" className={styles.listRow}>
+                <div className={`${styles.symbol} ${styles.docIco}`} aria-hidden="true"><FileText size={19} /></div>
+                <div className={styles.lrBody}>
+                  <div className={styles.lrTitle}>{d.title}</div>
+                  <div className={styles.lrSub}>
+                    {[d.sistema ? SISTEMA_LABELS[d.sistema] : null, formatDateIT(d.file_date ?? d.created_at)].filter(Boolean).join(' · ')}
+                  </div>
+                </div>
+                {fileTypeLabel(d.file_name) && (
+                  <div className={styles.lrEnd}><span className={styles.docType}>{fileTypeLabel(d.file_name)}</span></div>
+                )}
+              </Link>
+            ))}
+            <div className={styles.listFoot}>
+              <Link href="/documenti" className={styles.ghostLink}>Apri l&apos;archivio documenti <ArrowRight size={15} aria-hidden="true" /></Link>
             </div>
           </div>
         )}
