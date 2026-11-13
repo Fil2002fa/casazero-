@@ -1,0 +1,26 @@
+/* Barra in alto del residente — valori dal mockup v6 (docs/handoffs/
+   casazero-casa-manutenzioni-mockup-v6.html) e dal mockup Documenti v1.
+   Stessi valori di .appTop in manutenzioni/maintenance-v5.module.css, più il
+   margine per la tacca (safe-area-inset-top). globals.css non si tocca. */
+.appTop {
+  --petrol: #0b5149;
+  position: sticky;
+  top: 0;
+  z-index: var(--z-index-sticky);
+  background: #fff;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: calc(20px + env(safe-area-inset-top, 0px)) 20px 11px;
+  border-bottom: 1px solid #eef0eb;
+  color: #1c312d;
+  font-family: var(--font-inter), 'Aptos', 'Segoe UI', system-ui, sans-serif;
+  line-height: normal;
+}
+.brandMark { flex: 0 0 31px; height: 31px; border-radius: 11px; background: var(--petrol); color: white; display: grid; place-items: center; font-weight: 750; font-size: 11px; letter-spacing: -.07em; }
+.brandName { font-weight: 740; letter-spacing: -.04em; font-size: 17px; }
+.brandSub { font-size: 10px; color: #6f817b; font-weight: 600; margin: 1px 0 0; overflow-wrap: anywhere; }
+
+@media (max-width: 400px) {
+  .appTop { padding: calc(15px + env(safe-area-inset-top, 0px)) 18px 10px; }
+}
