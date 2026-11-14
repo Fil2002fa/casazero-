@@ -223,6 +223,10 @@ export async function createAdminInvite(
     },
   })
 
+  // Il token resta nello stato del client; si invalida per il registro
+  // attività (invito_inviato), mostrato su scheda residenza e pagina attività.
+  revalidatePath(`/admin/residences/${residenceId}`)
+  revalidatePath(`/admin/residences/${residenceId}/attivita`)
   return { token: invite.token }
 }
 

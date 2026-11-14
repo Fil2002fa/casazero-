@@ -146,5 +146,6 @@ export async function updateAdminNotificationPrefs(
     .eq('id', user.id)
 
   if (error) return { error: error.message }
+  revalidatePath('/admin/settings')
   return {}
 }
