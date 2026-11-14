@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import type { CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { safeNextPath } from '@/lib/safe-next-path'
+import { INVITE_COOKIE, INVITE_COOKIE_MAX_AGE, inviteTokenFromWelcomePath } from '@/lib/invite-cookie'
 
 type CookieToSet = { name: string; value: string; options: CookieOptions }
 
@@ -89,6 +90,20 @@ export async function middleware(request: NextRequest) {
     url.search = ''
     if (requested && requested !== '/') url.searchParams.set('next', requested)
     return NextResponse.redirect(url)
+  }
+
+  // Landing di un invito: si ricorda il token (solo se ha la forma attesa),
+  // cosi' un login che parte senza ?invite= lo puo' ritrovare. Non autorizza
+  // nulla: la validazione resta alla callback.
+  const inviteToken = inviteTokenFromWelcomePath(pathname)
+  if (inviteToken) {
+    supabaseResponse.cookies.set(INVITE_COOKIE, inviteToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: INVITE_COOKIE_MAX_AGE,
+    })
   }
 
   return supabaseResponse
