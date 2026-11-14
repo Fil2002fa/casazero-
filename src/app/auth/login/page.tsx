@@ -1,12 +1,21 @@
+import { cookies } from 'next/headers'
 import { LoginForm } from './LoginForm'
 import { ActiveSessionPanel } from '@/components/ActiveSessionPanel'
 import { getProfile, getUser } from '@/lib/auth'
 import { safeNextPath } from '@/lib/safe-next-path'
+import { INVITE_COOKIE, normalizeInviteToken } from '@/lib/invite-cookie'
 
 type SearchParams = Promise<{ invite?: string; error?: string; next?: string }>
 
 export default async function LoginPage({ searchParams }: { searchParams: SearchParams }) {
-  const { invite, error, next } = await searchParams
+  const { invite: inviteParam, error, next } = await searchParams
+  // Il ?invite= esplicito vince. Senza, si ricorda il token aperto su
+  // /welcome/<token> (cookie del middleware): l'app installata dalla pagina di
+  // benvenuto si riapre su `/` e arriva qui senza query. Il cookie e' solo un
+  // suggerimento di token con la forma attesa; la validazione resta alla
+  // callback (token esistente, non usato, non scaduto).
+  const cookieStore = await cookies()
+  const invite = inviteParam ?? normalizeInviteToken(cookieStore.get(INVITE_COOKIE)?.value) ?? undefined
   const [user, profile] = await Promise.all([getUser(), getProfile()])
 
   // Sessione gia' aperta: niente login silenzioso sopra l'account in uso. Si
