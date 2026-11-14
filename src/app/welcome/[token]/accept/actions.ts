@@ -2,6 +2,7 @@
 
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { clearInviteCookie } from '@/lib/invite-cookie-server'
 import {
   activateInvite,
   checkInviteForUser,
@@ -24,6 +25,8 @@ export async function confirmInvite(token: string): Promise<{ error?: string }> 
   const failed = await activateInvite(check.context, user.id)
   if (failed) return failed
 
+  // Invito consumato: il suggerimento di token non serve piu'.
+  await clearInviteCookie()
   redirect('/')
 }
 
@@ -31,5 +34,7 @@ export async function signOutForInvite(token: string): Promise<void> {
   const supabase = await createClient()
   const { error } = await supabase.auth.signOut()
   if (error) console.error('signOutForInvite: errore logout', error)
+  // Il token resta nella query del redirect: il cookie non serve piu'.
+  await clearInviteCookie()
   redirect(`/auth/login?invite=${encodeURIComponent(token)}`)
 }

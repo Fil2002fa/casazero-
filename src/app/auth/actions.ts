@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { safeNextPath } from '@/lib/safe-next-path'
+import { clearInviteCookie } from '@/lib/invite-cookie-server'
 
 // Logout unico per tutte le superfici (PWA, dashboard, pagine di accesso).
 // `returnTo` permette di tornare al login conservando invito o deep link
@@ -13,6 +14,10 @@ export async function signOut(returnTo: string | null): Promise<void> {
   const supabase = await createClient()
   const { error } = await supabase.auth.signOut()
   if (error) console.error('signOut: errore logout', error)
+
+  // Cambio account o logout: un invito eventualmente ricordato viaggia nella
+  // query di `returnTo` (la pagina di login la compone), il cookie non serve.
+  await clearInviteCookie()
 
   const safe = safeNextPath(returnTo)
   redirect(safe && (safe === '/auth/login' || safe.startsWith('/auth/login?')) ? safe : '/auth/login')
